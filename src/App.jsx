@@ -377,6 +377,7 @@ export default function App() {
         text: data.replyText,
         webSources: data.webSources || [],
         webType: data.webType || null,
+        widgets: data.widgets || [],
         timestamp: Date.now()
       };
 

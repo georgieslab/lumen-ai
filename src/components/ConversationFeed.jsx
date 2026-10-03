@@ -36,6 +36,119 @@ function parseFormattedText(text) {
   return parts;
 }
 
+export function LiveWeatherCard({ data }) {
+  if (!data) return null;
+  return (
+    <div className="live-widget-card weather-widget animate-fade-in">
+      <div className="widget-header">
+        <div className="widget-badge weather-badge">
+          <span className="live-pulse"></span>
+          <span>LIVE METEO</span>
+        </div>
+        <span className="widget-location">{data.city}</span>
+      </div>
+
+      <div className="weather-main-row">
+        <div className="weather-temp-wrap">
+          <span className="weather-icon">{data.icon}</span>
+          <span className="weather-temp">{data.temp}°</span>
+          <span className="weather-unit">C</span>
+        </div>
+        <div className="weather-details">
+          <span className="weather-condition">{data.condition}</span>
+          <span className="weather-hilo">H: {data.high}° • L: {data.low}°</span>
+        </div>
+      </div>
+
+      <div className="weather-metrics">
+        <div className="metric-pill">
+          <span className="metric-glyph">💧</span>
+          <span className="metric-label">Humidity</span>
+          <span className="metric-value">{data.humidity}%</span>
+        </div>
+        <div className="metric-pill">
+          <span className="metric-glyph">💨</span>
+          <span className="metric-label">Wind</span>
+          <span className="metric-value">{data.wind} km/h</span>
+        </div>
+        {data.feelsLike !== undefined && (
+          <div className="metric-pill">
+            <span className="metric-glyph">🌡️</span>
+            <span className="metric-label">Feels</span>
+            <span className="metric-value">{data.feelsLike}°C</span>
+          </div>
+        )}
+      </div>
+
+      {Array.isArray(data.forecast) && data.forecast.length > 0 && (
+        <div className="weather-forecast-row">
+          {data.forecast.map((f, idx) => (
+            <div key={idx} className="forecast-item">
+              <span className="forecast-day">{f.day}</span>
+              <span className="forecast-icon">{f.icon}</span>
+              <span className="forecast-temps">{f.max}°/{f.min}°</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function LiveCryptoCard({ data }) {
+  if (!data) return null;
+  const isPositive = data.isPositive ?? ((data.change24h || 0) >= 0);
+  const formattedPrice = typeof data.price === 'number'
+    ? data.price.toLocaleString(undefined, { minimumFractionDigits: data.price < 1 ? 4 : 2, maximumFractionDigits: data.price < 1 ? 4 : 2 })
+    : data.price;
+
+  let rangePercent = 50;
+  if (data.high24h && data.low24h && data.high24h > data.low24h && data.price) {
+    rangePercent = Math.min(100, Math.max(0, Math.round(((data.price - data.low24h) / (data.high24h - data.low24h)) * 100)));
+  }
+
+  return (
+    <div className="live-widget-card crypto-widget animate-fade-in">
+      <div className="widget-header">
+        <div className="widget-badge crypto-badge">
+          <span className="live-pulse"></span>
+          <span>LIVE MARKET</span>
+        </div>
+        <div className="crypto-asset-tag">
+          {data.image && <img src={data.image} alt={data.name} className="crypto-mini-icon" />}
+          <span className="crypto-name">{data.name}</span>
+          <span className="crypto-symbol">{data.symbol}</span>
+        </div>
+      </div>
+
+      <div className="crypto-main-row">
+        <div className="crypto-price-wrap">
+          <span className="currency-symbol">$</span>
+          <span className="crypto-price">{formattedPrice}</span>
+          <span className="crypto-currency">{data.currency || 'USD'}</span>
+        </div>
+
+        <div className={`crypto-change-pill ${isPositive ? 'positive' : 'negative'}`}>
+          <span>{isPositive ? '▲ +' : '▼ '}{Math.abs(data.change24h || 0).toFixed(2)}%</span>
+        </div>
+      </div>
+
+      {data.high24h !== undefined && data.low24h !== undefined && (
+        <div className="crypto-range-container">
+          <div className="range-labels">
+            <span>L: ${Number(data.low24h).toLocaleString()}</span>
+            <span>H: ${Number(data.high24h).toLocaleString()}</span>
+          </div>
+          <div className="range-bar-track">
+            <div className="range-bar-fill" style={{ width: `${rangePercent}%` }}></div>
+            <div className="range-bar-dot" style={{ left: `${rangePercent}%` }}></div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function FormattedBubbleText({ text }) {
   if (!text) return null;
   const parts = parseFormattedText(text);
@@ -136,6 +249,21 @@ export default function ConversationFeed({
             ) : null}
 
             <FormattedBubbleText text={msg.text} />
+
+            {/* Real-Time Interactive Live Data Widgets (Weather, Crypto/Markets) */}
+            {Array.isArray(msg.widgets) && msg.widgets.length > 0 && (
+              <div className="bubble-widgets-wrap">
+                {msg.widgets.map((widget, wIdx) => {
+                  if (widget.widgetType === 'weather') {
+                    return <LiveWeatherCard key={wIdx} data={widget} />;
+                  }
+                  if (widget.widgetType === 'crypto') {
+                    return <LiveCryptoCard key={wIdx} data={widget} />;
+                  }
+                  return null;
+                })}
+              </div>
+            )}
 
             {msg.webSources && msg.webSources.length > 0 && (
               <div className="bubble-web-sources">

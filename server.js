@@ -7,6 +7,7 @@ import { dirname, join } from 'path';
 import { existsSync } from 'fs';
 import dotenv from 'dotenv';
 import { getWebGroundingContext, searchDuckDuckGo, fetchUrlContent, searchWikipedia } from './services/webSearch.js';
+import { fetchLiveWeather, fetchCryptoPrices } from './services/liveData.js';
 
 dotenv.config();
 
@@ -43,6 +44,37 @@ const polly = new PollyClient({
 // Amazon Bedrock Native Tool Calling Definitions (Converse API toolConfig)
 // --------------------------------------------------------------------------
 const BEDROCK_TOOLS = [
+  {
+    toolSpec: {
+      name: 'get_live_weather',
+      description: 'Get current real-time weather and forecast for any city or location worldwide (temperature, conditions, humidity, wind, 3-day forecast).',
+      inputSchema: {
+        json: {
+          type: 'object',
+          properties: {
+            city: { type: 'string', description: 'The city or location name, e.g. London, Tokyo, New York, Paris, Berlin' }
+          },
+          required: ['city']
+        }
+      }
+    }
+  },
+  {
+    toolSpec: {
+      name: 'get_crypto_and_market_prices',
+      description: 'Get live real-time prices, 24h price changes, high/low ranges, and market stats for cryptocurrencies (Bitcoin, Ethereum, Solana, etc.) and fiat currencies.',
+      inputSchema: {
+        json: {
+          type: 'object',
+          properties: {
+            asset: { type: 'string', description: 'The crypto asset name or symbol, e.g. bitcoin, btc, ethereum, eth, solana, sol, cardano, xrp, doge' },
+            currency: { type: 'string', description: 'Comparison fiat currency, default usd' }
+          },
+          required: ['asset']
+        }
+      }
+    }
+  },
   {
     toolSpec: {
       name: 'live_web_search',
@@ -95,6 +127,21 @@ const BEDROCK_TOOLS = [
 async function executeBedrockTool(toolUse) {
   try {
     const { name, input = {} } = toolUse || {};
+    if (name === 'get_live_weather') {
+      const city = String(input?.city || input?.location || '').trim();
+      if (!city) return { error: 'No city or location provided.' };
+      const weatherData = await fetchLiveWeather(city);
+      return weatherData;
+    }
+
+    if (name === 'get_crypto_and_market_prices') {
+      const asset = String(input?.asset || input?.symbol || input?.coin || '').trim();
+      const currency = String(input?.currency || 'usd').trim();
+      if (!asset) return { error: 'No cryptocurrency asset or symbol provided.' };
+      const marketData = await fetchCryptoPrices(asset, currency);
+      return marketData;
+    }
+
     if (name === 'live_web_search') {
       const query = String(input?.query || '').trim();
       if (!query) return { error: 'No search query provided.' };
@@ -272,6 +319,31 @@ app.post('/api/converse', async (req, res) => {
       console.warn('Web grounding error:', webErr.message);
     }
 
+    // Proactive live data intent recognition (Weather, Crypto/Markets) for instant grounding & widgets
+    let liveDataWidget = null;
+    let liveDataGrounding = "";
+    if (webMode !== 'off' && rawPrompt) {
+      const weatherMatch = rawPrompt.match(/\bweather (?:in|for|at)?\s+([a-zA-Z\s\-]+)/i);
+      const cryptoMatch = rawPrompt.match(/\b(?:price of|crypto|ticker|how much is)?\s*(btc|bitcoin|eth|ethereum|sol|solana|doge|dogecoin|xrp|ripple|cardano|ada)\b/i);
+      if (weatherMatch && weatherMatch[1]) {
+        try {
+          const w = await fetchLiveWeather(weatherMatch[1].trim());
+          if (w && w.success) {
+            liveDataWidget = w;
+            liveDataGrounding = `\n- Real-Time Live Weather Data:\n${w.summary}`;
+          }
+        } catch (_) {}
+      } else if (cryptoMatch && cryptoMatch[1]) {
+        try {
+          const c = await fetchCryptoPrices(cryptoMatch[1].trim());
+          if (c && c.success) {
+            liveDataWidget = c;
+            liveDataGrounding = `\n- Real-Time Live Market Data:\n${c.summary}`;
+          }
+        } catch (_) {}
+      }
+    }
+
     const systemPrompt = `You are "Lumen", an ambient multimodal AI copilot powered by frontier intelligence.
 Identity & Persona:
 - You are Lumen, an intuitive, perceptive, and grounded voice & vision AI companion.
@@ -281,7 +353,7 @@ Tone & Guidelines:
 - Keep your answers conversational, concise, and structured.
 - When sharing web resources, job postings, articles, documentation, or links, ALWAYS provide the direct clickable markdown link format: [Descriptive Title](https://actual-url.com). Format multiple items as a clean bulleted list so the user can easily review and click each one.
 - Never output bare titles claiming to provide URLs without including the actual markdown link [Title](url).
-- The user's screen renders your markdown links visually as interactive buttons, while your voice audio is automatically streamlined for speech.${hasImage ? '\n- The user shared an image payload. Carefully inspect and describe key observations, document contents, or visual nuances with sharp precision.' : ''}${hasDocument ? '\n- The user shared a PDF document payload. Carefully inspect the document text and structure, summarize key points, or answer specific questions with sharp precision.' : ''}${webContext ? `\n- Real-Time Internet Data:\n${webContext.groundingText}` : ''}`;
+- The user's screen renders your markdown links visually as interactive buttons, while your voice audio is automatically streamlined for speech.${hasImage ? '\n- The user shared an image payload. Carefully inspect and describe key observations, document contents, or visual nuances with sharp precision.' : ''}${hasDocument ? '\n- The user shared a PDF document payload. Carefully inspect the document text and structure, summarize key points, or answer specific questions with sharp precision.' : ''}${webContext ? `\n- Real-Time Internet Data:\n${webContext.groundingText}` : ''}${liveDataGrounding}`;
 
     // Format conversation history for Bedrock ConverseCommand
     const incomingHistory = Array.isArray(req.body.history) ? req.body.history : [];
@@ -365,6 +437,7 @@ Tone & Guidelines:
 
     let replyText = "";
     const executedTools = [];
+    const executedWidgets = [];
 
     // 1. Try Amazon Bedrock models
     if (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) {
@@ -412,6 +485,7 @@ Tone & Guidelines:
         const supportsTools = targetModel.toLowerCase().includes('nova');
         const turnMessages = [...finalMessages];
         const currentModelTools = [];
+        const currentModelWidgets = [];
         let conversationReply = "";
         const maxTurns = 3;
 
@@ -440,13 +514,18 @@ Tone & Guidelines:
               const { toolUse } = toolUseBlock;
               console.log(`[Bedrock Tool Invoked] Model ${targetModel} called ${toolUse.name}:`, toolUse.input);
               const toolResult = await executeBedrockTool(toolUse);
+              if (toolResult && toolResult.widgetType) {
+                currentModelWidgets.push(toolResult);
+              }
               currentModelTools.push({
                 name: toolUse.name,
                 input: toolUse.input,
                 resultItems: Array.isArray(toolResult.results) ? toolResult.results : null,
                 resultSummary: toolUse.name === 'live_web_search'
                   ? `${Array.isArray(toolResult.results) ? toolResult.results.length : 0} items retrieved`
-                  : (toolResult.title || 'Completed')
+                  : (toolResult.widgetType === 'weather' ? `${toolResult.city} (${toolResult.temp}°C)`
+                  : (toolResult.widgetType === 'crypto' ? `${toolResult.symbol} ($${toolResult.price})`
+                  : (toolResult.title || 'Completed')))
               });
 
               turnMessages.push(response.output.message);
@@ -472,7 +551,8 @@ Tone & Guidelines:
         // Clean internal chain-of-thought XML tags (e.g. <thinking>...</thinking>)
         return {
           reply: String(conversationReply || '').replace(/<thinking>[\s\S]*?<\/thinking>/g, '').trim(),
-          tools: currentModelTools
+          tools: currentModelTools,
+          widgets: currentModelWidgets
         };
       };
 
@@ -484,12 +564,20 @@ Tone & Guidelines:
             if (Array.isArray(converseResult.tools)) {
               executedTools.push(...converseResult.tools);
             }
+            if (Array.isArray(converseResult.widgets)) {
+              executedWidgets.push(...converseResult.widgets);
+            }
             console.log(`Lumen responded via Bedrock model: ${model} (${hasDocument ? 'PDF document' : hasImage ? 'image' : 'text'}${executedTools.length ? ` + ${executedTools.length} tool(s)` : ''})`);
             break;
           }
         } catch (err) {
           console.warn(`Model ${model} failed: ${err.message}. Trying next candidate...`);
         }
+      }
+
+      // Merge proactive live data widget if triggered
+      if (liveDataWidget && !executedWidgets.some(w => w.widgetType === liveDataWidget.widgetType)) {
+        executedWidgets.unshift(liveDataWidget);
       }
     }
 
@@ -569,8 +657,9 @@ Tone & Guidelines:
       audioBase64,
       provider: audioBase64 ? 'bedrock-polly' : 'bedrock-webspeech',
       webSources: allSources,
-      webType: webContext ? webContext.type : (executedTools.length ? 'bedrock_tool' : null),
-      toolsUsed: executedTools
+      webType: webContext ? webContext.type : (executedTools.length ? 'bedrock_tool' : (executedWidgets.length ? 'live_widget' : null)),
+      toolsUsed: executedTools,
+      widgets: executedWidgets
     });
   } catch (error) {
     console.error('Lumen converse error:', error);
@@ -583,6 +672,7 @@ Tone & Guidelines:
       webSources: [],
       webType: null,
       toolsUsed: [],
+      widgets: [],
       recoveredFromError: true
     });
   }
