@@ -319,18 +319,39 @@ app.post('/api/converse', async (req, res) => {
       console.warn('Web grounding error:', webErr.message);
     }
 
-    // Proactive live data intent recognition (Weather, Crypto/Markets) for instant grounding & widgets
+    // Proactive live data intent recognition (Weather by City, Crypto/Markets) for instant grounding & widgets
     let liveDataWidget = null;
     let liveDataGrounding = "";
     if (webMode !== 'off' && rawPrompt) {
-      const weatherMatch = rawPrompt.match(/\bweather (?:in|for|at)?\s+([a-zA-Z\s\-]+)/i);
+      // Robust city extraction for weather queries in any phrasing (e.g. "Paris weather", "weather in London", "temperature in Tokyo")
+      const extractCityFromWeather = (text) => {
+        if (!text) return null;
+        const patterns = [
+          /(?:weather|forecast|temperature|climate)\s+(?:in|for|at|of|like\s+in)?\s+([a-zA-Z\s\-\.\'\u00C0-\u024F]+)/i,
+          /([a-zA-Z\s\-\.\'\u00C0-\u024F]+)\s+(?:weather|forecast|temperature)/i,
+          /(?:how\s+is|what\s+is)\s+(?:the\s+)?weather\s+(?:like\s+)?(?:in|at|for)?\s+([a-zA-Z\s\-\.\'\u00C0-\u024F]+)/i
+        ];
+        for (const pat of patterns) {
+          const m = text.match(pat);
+          if (m && m[1]) {
+            let city = m[1].replace(/\b(right now|today|tomorrow|this week|currently|outside|please|now|like)\b/gi, '').replace(/[?!.,;]+$/, '').trim();
+            if (city.length >= 2 && !/^(the|a|an|it|is|was|what|how)$/i.test(city)) {
+              return city;
+            }
+          }
+        }
+        return null;
+      };
+
+      const cityDetected = extractCityFromWeather(rawPrompt);
       const cryptoMatch = rawPrompt.match(/\b(?:price of|crypto|ticker|how much is)?\s*(btc|bitcoin|eth|ethereum|sol|solana|doge|dogecoin|xrp|ripple|cardano|ada)\b/i);
-      if (weatherMatch && weatherMatch[1]) {
+
+      if (cityDetected) {
         try {
-          const w = await fetchLiveWeather(weatherMatch[1].trim());
+          const w = await fetchLiveWeather(cityDetected);
           if (w && w.success) {
             liveDataWidget = w;
-            liveDataGrounding = `\n- Real-Time Live Weather Data:\n${w.summary}`;
+            liveDataGrounding = `\n- Real-Time Live Weather Data for ${w.city}:\n${w.summary}`;
           }
         } catch (_) {}
       } else if (cryptoMatch && cryptoMatch[1]) {

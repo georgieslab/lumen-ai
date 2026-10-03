@@ -59,7 +59,12 @@ export default function App() {
   // Fetch real-time ambient data (weather & crypto) for stage widgets on launch
   useEffect(() => {
     let isMounted = true;
-    fetchAmbientData('Tokyo', 'bitcoin').then((res) => {
+    let savedCity = 'Tokyo';
+    try {
+      savedCity = localStorage.getItem('lumen_preferred_weather_city') || 'Tokyo';
+    } catch (_) {}
+
+    fetchAmbientData(savedCity, 'bitcoin').then((res) => {
       if (isMounted && res) {
         setAmbientData({
           weather: res.weather?.success ? res.weather : null,
@@ -71,6 +76,18 @@ export default function App() {
 
     return () => { isMounted = false; };
   }, []);
+
+  const handleCityChange = (newWeather) => {
+    if (!newWeather) return;
+    setActiveStageWidget(newWeather);
+    setAmbientData(prev => ({ ...prev, weather: newWeather }));
+    try {
+      const cityName = newWeather.city?.split(',')[0]?.trim();
+      if (cityName) {
+        localStorage.setItem('lumen_preferred_weather_city', cityName);
+      }
+    } catch (_) {}
+  };
 
   const activeCircadian = circadianSetting === 'auto' ? currentHourPhase : circadianSetting;
 
@@ -731,17 +748,60 @@ export default function App() {
           <div className="ambient-starter-chips">
             <button
               type="button"
+              className="quick-chip search-city-chip"
+              onClick={() => {
+                setActiveStageWidget({
+                  widgetType: 'weather',
+                  city: ambientData.weather?.city || 'Search Any City',
+                  temp: ambientData.weather?.temp ?? '--',
+                  condition: ambientData.weather?.condition || 'Live Global Weather',
+                  icon: ambientData.weather?.icon || '🌤️',
+                  high: ambientData.weather?.high ?? '--',
+                  low: ambientData.weather?.low ?? '--',
+                  humidity: ambientData.weather?.humidity ?? '--',
+                  wind: ambientData.weather?.wind ?? '--',
+                  forecast: ambientData.weather?.forecast || [],
+                  initialSearching: true
+                });
+              }}
+              title="Search weather for any city worldwide"
+            >
+              🔍 Weather by City...
+            </button>
+            <button
+              type="button"
               className="quick-chip"
               onClick={() => handleSendMessage("What is the current live weather in Tokyo?")}
             >
-              🌤️ Tokyo Weather
+              🌤️ Tokyo
+            </button>
+            <button
+              type="button"
+              className="quick-chip"
+              onClick={() => handleSendMessage("What is the weather in London right now?")}
+            >
+              🌧️ London
+            </button>
+            <button
+              type="button"
+              className="quick-chip"
+              onClick={() => handleSendMessage("What is the weather in Paris today?")}
+            >
+              ☀️ Paris
+            </button>
+            <button
+              type="button"
+              className="quick-chip"
+              onClick={() => handleSendMessage("What is the weather in New York?")}
+            >
+              🗽 New York
             </button>
             <button
               type="button"
               className="quick-chip"
               onClick={() => handleSendMessage("What is the live price of Bitcoin right now?")}
             >
-              ₿ Bitcoin Price
+              ₿ Bitcoin
             </button>
             <button
               type="button"
@@ -749,20 +809,6 @@ export default function App() {
               onClick={() => handleSendMessage("What is the current price of Ethereum?")}
             >
               ⚡ Ethereum
-            </button>
-            <button
-              type="button"
-              className="quick-chip"
-              onClick={() => handleSendMessage("What is the weather in London right now?")}
-            >
-              🌧️ London Weather
-            </button>
-            <button
-              type="button"
-              className="quick-chip"
-              onClick={() => handleSendMessage("What is the price of Solana?")}
-            >
-              📈 Solana
             </button>
           </div>
         </div>
@@ -789,7 +835,11 @@ export default function App() {
 
             <div className="stage-widget-content">
               {activeStageWidget.widgetType === 'weather' ? (
-                <LiveWeatherCard data={activeStageWidget} />
+                <LiveWeatherCard 
+                  data={activeStageWidget} 
+                  onCityChange={handleCityChange}
+                  initialSearching={Boolean(activeStageWidget.initialSearching || activeStageWidget.city === 'Search Any City')}
+                />
               ) : activeStageWidget.widgetType === 'crypto' ? (
                 <LiveCryptoCard data={activeStageWidget} />
               ) : null}

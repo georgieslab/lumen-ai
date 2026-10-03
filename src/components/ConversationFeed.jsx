@@ -1,4 +1,5 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
+import { fetchLiveWeatherDirect } from '../services/api';
 
 function parseFormattedText(text) {
   if (!text) return [];
@@ -36,8 +37,41 @@ function parseFormattedText(text) {
   return parts;
 }
 
-export function LiveWeatherCard({ data }) {
-  if (!data) return null;
+export function LiveWeatherCard({ data, onCityChange, initialSearching = false }) {
+  const [weatherData, setWeatherData] = useState(data);
+  const [isSearching, setIsSearching] = useState(initialSearching);
+  const [cityInput, setCityInput] = useState('');
+  const [isLoadingCity, setIsLoadingCity] = useState(false);
+  const [searchError, setSearchError] = useState('');
+
+  useEffect(() => {
+    if (data) setWeatherData(data);
+  }, [data]);
+
+  const handleCitySearch = async (targetCity) => {
+    const query = (targetCity || cityInput).trim();
+    if (!query) return;
+    setIsLoadingCity(true);
+    setSearchError('');
+    try {
+      const res = await fetchLiveWeatherDirect(query);
+      if (res && res.success) {
+        setWeatherData(res);
+        setCityInput('');
+        setIsSearching(false);
+        if (onCityChange) onCityChange(res);
+      } else {
+        setSearchError(res?.error || `Could not locate weather for "${query}"`);
+      }
+    } catch (err) {
+      setSearchError("Failed to fetch weather data. Please try again.");
+    } finally {
+      setIsLoadingCity(false);
+    }
+  };
+
+  if (!weatherData) return null;
+
   return (
     <div className="live-widget-card weather-widget animate-fade-in">
       <div className="widget-header">
@@ -45,18 +79,78 @@ export function LiveWeatherCard({ data }) {
           <span className="live-pulse"></span>
           <span>LIVE METEO</span>
         </div>
-        <span className="widget-location">{data.city}</span>
+        <div className="widget-header-controls">
+          <span className="widget-location">{weatherData.city}</span>
+          <button
+            type="button"
+            className="btn-change-city"
+            onClick={() => setIsSearching(!isSearching)}
+            title="Search weather for another city"
+          >
+            {isSearching ? '✕ Close' : '🔍 Change City'}
+          </button>
+        </div>
       </div>
+
+      {/* Expandable City Search Bar */}
+      {isSearching && (
+        <div className="weather-city-search-panel animate-fade-in">
+          <form 
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleCitySearch();
+            }}
+            className="weather-city-search-form"
+          >
+            <input
+              type="text"
+              className="weather-city-input"
+              placeholder="Search city (e.g. Paris, Tokyo, Miami)..."
+              value={cityInput}
+              onChange={(e) => setCityInput(e.target.value)}
+              autoFocus
+            />
+            <button
+              type="submit"
+              className="weather-city-submit-btn"
+              disabled={!cityInput.trim() || isLoadingCity}
+            >
+              {isLoadingCity ? '...' : 'Search'}
+            </button>
+          </form>
+
+          {/* Quick city pills */}
+          <div className="weather-quick-cities">
+            {['Paris', 'Tokyo', 'London', 'New York', 'Dubai', 'Sydney', 'Rome'].map((city) => (
+              <button
+                key={city}
+                type="button"
+                className="quick-city-chip"
+                onClick={() => handleCitySearch(city)}
+                disabled={isLoadingCity}
+              >
+                📍 {city}
+              </button>
+            ))}
+          </div>
+
+          {searchError && (
+            <div className="weather-search-error">
+              {searchError}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="weather-main-row">
         <div className="weather-temp-wrap">
-          <span className="weather-icon">{data.icon}</span>
-          <span className="weather-temp">{data.temp}°</span>
+          <span className="weather-icon">{weatherData.icon}</span>
+          <span className="weather-temp">{weatherData.temp}°</span>
           <span className="weather-unit">C</span>
         </div>
         <div className="weather-details">
-          <span className="weather-condition">{data.condition}</span>
-          <span className="weather-hilo">H: {data.high}° • L: {data.low}°</span>
+          <span className="weather-condition">{weatherData.condition}</span>
+          <span className="weather-hilo">H: {weatherData.high}° • L: {weatherData.low}°</span>
         </div>
       </div>
 
@@ -64,25 +158,25 @@ export function LiveWeatherCard({ data }) {
         <div className="metric-pill">
           <span className="metric-glyph">💧</span>
           <span className="metric-label">Humidity</span>
-          <span className="metric-value">{data.humidity}%</span>
+          <span className="metric-value">{weatherData.humidity}%</span>
         </div>
         <div className="metric-pill">
           <span className="metric-glyph">💨</span>
           <span className="metric-label">Wind</span>
-          <span className="metric-value">{data.wind} km/h</span>
+          <span className="metric-value">{weatherData.wind} km/h</span>
         </div>
-        {data.feelsLike !== undefined && (
+        {weatherData.feelsLike !== undefined && (
           <div className="metric-pill">
             <span className="metric-glyph">🌡️</span>
             <span className="metric-label">Feels</span>
-            <span className="metric-value">{data.feelsLike}°C</span>
+            <span className="metric-value">{weatherData.feelsLike}°C</span>
           </div>
         )}
       </div>
 
-      {Array.isArray(data.forecast) && data.forecast.length > 0 && (
+      {Array.isArray(weatherData.forecast) && weatherData.forecast.length > 0 && (
         <div className="weather-forecast-row">
-          {data.forecast.map((f, idx) => (
+          {weatherData.forecast.map((f, idx) => (
             <div key={idx} className="forecast-item">
               <span className="forecast-day">{f.day}</span>
               <span className="forecast-icon">{f.icon}</span>
