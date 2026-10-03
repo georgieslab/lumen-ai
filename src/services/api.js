@@ -115,3 +115,46 @@ export async function converseWithLumen({ transcript, message, text, history = [
   return await response.json();
 }
 
+/**
+ * Fetch ambient real-time weather and crypto data snapshot for stage widgets
+ */
+export async function fetchAmbientData(city = 'Tokyo', asset = 'bitcoin') {
+  try {
+    const res = await fetch(`${API_URL}/api/live/ambient?city=${encodeURIComponent(city)}&asset=${encodeURIComponent(asset)}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } catch (err) {
+    console.warn("Failed to fetch ambient data:", err);
+    return null;
+  }
+}
+
+/**
+ * Fetch real-time weather for any city directly
+ */
+export async function fetchLiveWeatherDirect(city) {
+  try {
+    const res = await fetch(`${API_URL}/api/live/weather?city=${encodeURIComponent(city)}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } catch (err) {
+    console.warn("Failed to fetch weather directly:", err);
+    return null;
+  }
+}
+
+/**
+ * Fetch real-time crypto prices directly
+ */
+export async function fetchLiveCryptoDirect(asset, currency = 'usd') {
+  try {
+    const res = await fetch(`${API_URL}/api/live/crypto?asset=${encodeURIComponent(asset)}&currency=${encodeURIComponent(currency)}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } catch (err) {
+    console.warn("Failed to fetch crypto directly:", err);
+    return null;
+  }
+}
+
+

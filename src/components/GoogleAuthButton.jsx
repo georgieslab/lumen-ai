@@ -198,18 +198,31 @@ export default function GoogleAuthButton({
         /* 2. Logged out state */
         <div className="google-signin-container">
           {configuredClientId ? (
-            <GoogleOAuthProvider clientId={configuredClientId}>
-              <div className="google-login-box">
-                <GoogleLogin
-                  onSuccess={handleGoogleSuccess}
-                  onError={() => console.warn('Google Sign-In failed')}
-                  theme="filled_black"
-                  shape="pill"
-                  size="medium"
-                  text="signin_with"
-                />
-              </div>
-            </GoogleOAuthProvider>
+            <div className="google-oauth-row">
+              <GoogleOAuthProvider clientId={configuredClientId}>
+                <div className="google-login-box">
+                  <GoogleLogin
+                    onSuccess={handleGoogleSuccess}
+                    onError={() => {
+                      console.warn('Google Sign-In origin or client notice');
+                    }}
+                    theme="filled_black"
+                    shape="pill"
+                    size="medium"
+                    text="signin_with"
+                  />
+                </div>
+              </GoogleOAuthProvider>
+              <button
+                type="button"
+                className="google-help-pill-btn"
+                onClick={() => setShowConfigModal(true)}
+                title="Google Setup & Authorized Origins Guide / Demo Sign-In"
+                aria-label="Google Setup & Origins Guide"
+              >
+                ⚙️
+              </button>
+            </div>
           ) : (
             <button
               type="button"
@@ -231,7 +244,7 @@ export default function GoogleAuthButton({
             <div className="modal-header">
               <div className="modal-title-row">
                 <GoogleIcon size={24} />
-                <h3>Google Sign-In</h3>
+                <h3>Google Sign-In Setup</h3>
               </div>
               <button
                 type="button"
@@ -240,6 +253,26 @@ export default function GoogleAuthButton({
               >
                 ✕
               </button>
+            </div>
+
+            <div className="oauth-origin-alert">
+              <div className="alert-badge">Fix "no registered origin" (Error 401)</div>
+              <p className="alert-text">
+                In Google Cloud Console, your OAuth Client ID requires your exact browser URL under <strong>Authorized JavaScript origins</strong>:
+              </p>
+              <div className="origin-copy-box">
+                <code>{window.location.origin}</code>
+                <button
+                  type="button"
+                  className="btn-copy-origin"
+                  onClick={() => {
+                    navigator.clipboard?.writeText(window.location.origin);
+                    alert(`Copied "${window.location.origin}" to clipboard! Paste it into Authorized JavaScript origins in Google Cloud Console.`);
+                  }}
+                >
+                  📋 Copy
+                </button>
+              </div>
             </div>
 
             <p className="modal-description">

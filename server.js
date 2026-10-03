@@ -725,6 +725,49 @@ app.post('/api/auth/google', async (req, res) => {
   }
 });
 
+// Real-Time Live Weather API Endpoint
+app.get('/api/live/weather', async (req, res) => {
+  try {
+    const city = req.query.city || 'Tokyo';
+    const data = await fetchLiveWeather(city);
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Real-Time Live Crypto & Financial Markets API Endpoint
+app.get('/api/live/crypto', async (req, res) => {
+  try {
+    const asset = req.query.asset || 'bitcoin';
+    const currency = req.query.currency || 'usd';
+    const data = await fetchCryptoPrices(asset, currency);
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Ambient Real-Time Snapshot for Stage Widgets (Weather + Crypto)
+app.get('/api/live/ambient', async (req, res) => {
+  try {
+    const city = req.query.city || 'Tokyo';
+    const asset = req.query.asset || 'bitcoin';
+    const [weatherRes, cryptoRes] = await Promise.allSettled([
+      fetchLiveWeather(city),
+      fetchCryptoPrices(asset, 'usd')
+    ]);
+
+    res.json({
+      weather: weatherRes.status === 'fulfilled' ? weatherRes.value : null,
+      crypto: cryptoRes.status === 'fulfilled' ? cryptoRes.value : null,
+      timestamp: Date.now()
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ 

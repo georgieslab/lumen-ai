@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import AmbientSphere from './components/AmbientSphere';
 import VisionScanner, { SpatialMediaIcon } from './components/VisionScanner';
-import ConversationFeed from './components/ConversationFeed';
+import ConversationFeed, { LiveWeatherCard, LiveCryptoCard } from './components/ConversationFeed';
 import GoogleAuthButton from './components/GoogleAuthButton';
-import { converseWithLumen, processFile } from './services/api';
+import { converseWithLumen, processFile, fetchAmbientData } from './services/api';
 
 const DEFAULT_GREETING = "I am Lumen, your ambient voice and vision AI companion. Tap the sphere or upload an image to begin.";
 
@@ -26,6 +26,8 @@ export default function App() {
   const setSelectedImage = setSelectedFile; // Backward compatibility alias
   const [processingFile, setProcessingFile] = useState(null);
   const [isTaskComplete, setIsTaskComplete] = useState(false);
+  const [ambientData, setAmbientData] = useState({ weather: null, crypto: null, loading: true });
+  const [activeStageWidget, setActiveStageWidget] = useState(null);
   const [circadianSetting, setCircadianSetting] = useState(() => {
     try {
       return localStorage.getItem('lumen_circadian_setting') || 'auto';
@@ -52,6 +54,22 @@ export default function App() {
       setCurrentHourPhase(getCircadianPhase());
     }, 60000);
     return () => clearInterval(timer);
+  }, []);
+
+  // Fetch real-time ambient data (weather & crypto) for stage widgets on launch
+  useEffect(() => {
+    let isMounted = true;
+    fetchAmbientData('Tokyo', 'bitcoin').then((res) => {
+      if (isMounted && res) {
+        setAmbientData({
+          weather: res.weather?.success ? res.weather : null,
+          crypto: res.crypto?.success ? res.crypto : null,
+          loading: false
+        });
+      }
+    }).catch((err) => console.warn('Ambient live data notice:', err));
+
+    return () => { isMounted = false; };
   }, []);
 
   const activeCircadian = circadianSetting === 'auto' ? currentHourPhase : circadianSetting;
@@ -383,6 +401,11 @@ export default function App() {
 
       persistMessages([...nextMessages, assistantMessage]);
 
+      // If response includes a live widget, prominently display it on the main stage
+      if (Array.isArray(data.widgets) && data.widgets.length > 0) {
+        setActiveStageWidget(data.widgets[0]);
+      }
+
       // Trigger visual task complete cue
       setIsTaskComplete(true);
       setTimeout(() => {
@@ -647,6 +670,147 @@ export default function App() {
           isThinking={isThinking}
           externalInputRef={fileInputRef}
         />
+
+        {/* Real-Time Ambient Live Bar & Interactive Glanceable Pills */}
+        <div className="ambient-live-bar">
+          <div className="ambient-glance-row">
+            {ambientData.weather ? (
+              <button
+                type="button"
+                className={`ambient-glance-pill weather-glance ${activeStageWidget?.widgetType === 'weather' ? 'active' : ''}`}
+                onClick={() => setActiveStageWidget(activeStageWidget?.widgetType === 'weather' ? null : ambientData.weather)}
+                title="Click to expand full 3-day weather forecast"
+              >
+                <span className="glance-pulse"></span>
+                <span className="glance-icon">{ambientData.weather.icon}</span>
+                <span className="glance-title">{ambientData.weather.city?.split(',')[0]}</span>
+                <span className="glance-value">{ambientData.weather.temp}°C</span>
+                <span className="glance-sub">{ambientData.weather.condition}</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="ambient-glance-pill placeholder"
+                onClick={() => handleSendMessage("What is the current live weather in Tokyo?")}
+              >
+                <span className="glance-pulse"></span>
+                <span className="glance-icon">🌤️</span>
+                <span className="glance-title">Tokyo Weather</span>
+              </button>
+            )}
+
+            {ambientData.crypto ? (
+              <button
+                type="button"
+                className={`ambient-glance-pill crypto-glance ${activeStageWidget?.widgetType === 'crypto' ? 'active' : ''}`}
+                onClick={() => setActiveStageWidget(activeStageWidget?.widgetType === 'crypto' ? null : ambientData.crypto)}
+                title="Click to expand live market metrics and price range"
+              >
+                <span className={`glance-pulse ${ambientData.crypto.isPositive ? 'green' : 'rose'}`}></span>
+                <span className="glance-icon">₿</span>
+                <span className="glance-title">{ambientData.crypto.symbol}</span>
+                <span className="glance-value">${Number(ambientData.crypto.price).toLocaleString()}</span>
+                <span className={`glance-sub ${ambientData.crypto.isPositive ? 'positive' : 'negative'}`}>
+                  {ambientData.crypto.isPositive ? '▲ +' : '▼ '}{Math.abs(ambientData.crypto.change24h || 0).toFixed(1)}%
+                </span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="ambient-glance-pill placeholder"
+                onClick={() => handleSendMessage("What is the current price of Bitcoin?")}
+              >
+                <span className="glance-pulse green"></span>
+                <span className="glance-icon">₿</span>
+                <span className="glance-title">Bitcoin Live</span>
+              </button>
+            )}
+          </div>
+
+          {/* Quick-action 1-tap starter chips */}
+          <div className="ambient-starter-chips">
+            <button
+              type="button"
+              className="quick-chip"
+              onClick={() => handleSendMessage("What is the current live weather in Tokyo?")}
+            >
+              🌤️ Tokyo Weather
+            </button>
+            <button
+              type="button"
+              className="quick-chip"
+              onClick={() => handleSendMessage("What is the live price of Bitcoin right now?")}
+            >
+              ₿ Bitcoin Price
+            </button>
+            <button
+              type="button"
+              className="quick-chip"
+              onClick={() => handleSendMessage("What is the current price of Ethereum?")}
+            >
+              ⚡ Ethereum
+            </button>
+            <button
+              type="button"
+              className="quick-chip"
+              onClick={() => handleSendMessage("What is the weather in London right now?")}
+            >
+              🌧️ London Weather
+            </button>
+            <button
+              type="button"
+              className="quick-chip"
+              onClick={() => handleSendMessage("What is the price of Solana?")}
+            >
+              📈 Solana
+            </button>
+          </div>
+        </div>
+
+        {/* Active Floating VisionOS Stage Widget */}
+        {activeStageWidget && (
+          <div className="stage-active-widget animate-fade-in">
+            <div className="stage-widget-header">
+              <div className="stage-widget-title-wrap">
+                <span className="stage-widget-indicator"></span>
+                <span className="stage-widget-title">
+                  {activeStageWidget.widgetType === 'weather' ? 'Live Weather Radar' : 'Live Market Ticker'}
+                </span>
+              </div>
+              <button
+                type="button"
+                className="stage-widget-close-btn"
+                onClick={() => setActiveStageWidget(null)}
+                title="Dismiss widget"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="stage-widget-content">
+              {activeStageWidget.widgetType === 'weather' ? (
+                <LiveWeatherCard data={activeStageWidget} />
+              ) : activeStageWidget.widgetType === 'crypto' ? (
+                <LiveCryptoCard data={activeStageWidget} />
+              ) : null}
+            </div>
+
+            <div className="stage-widget-footer">
+              <button
+                type="button"
+                className="stage-widget-ask-btn"
+                onClick={() => {
+                  const q = activeStageWidget.widgetType === 'weather'
+                    ? `Give me a detailed forecast and outfit advice for ${activeStageWidget.city}`
+                    : `Provide technical analysis and market sentiment for ${activeStageWidget.name} (${activeStageWidget.symbol})`;
+                  handleSendMessage(q);
+                }}
+              >
+                💬 Ask Lumen for AI Analysis
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Conversation Feed Drawer (Toggleable) */}
         {showLogDrawer && (

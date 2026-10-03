@@ -2296,5 +2296,342 @@ body {
   box-shadow: 0 0 8px rgba(56, 189, 248, 0.8);
 }
 
+/* ==========================================================================
+   Ambient Live Bar & Glanceable VisionOS Stage Widgets
+   ========================================================================== */
+.ambient-live-bar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  max-width: 540px;
+  margin-top: 0.25rem;
+  z-index: 15;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.ambient-glance-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+  width: 100%;
+  flex-wrap: wrap;
+}
+
+.ambient-glance-pill {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.95rem;
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-full);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  user-select: none;
+}
+
+.ambient-glance-pill:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(56, 189, 248, 0.5);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35), 0 0 16px rgba(56, 189, 248, 0.2);
+}
+
+.ambient-glance-pill.active {
+  border-color: #38bdf8;
+  background: rgba(56, 189, 248, 0.15);
+  box-shadow: 0 0 24px rgba(56, 189, 248, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.glance-pulse {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #38bdf8;
+  box-shadow: 0 0 8px #38bdf8;
+  animation: pulseDot 1.8s infinite;
+}
+
+.glance-pulse.green {
+  background: #10b981;
+  box-shadow: 0 0 8px #10b981;
+}
+
+.glance-pulse.rose {
+  background: #f43f5e;
+  box-shadow: 0 0 8px #f43f5e;
+}
+
+.glance-icon {
+  font-size: 0.95rem;
+}
+
+.glance-title {
+  font-weight: 700;
+  color: #fff;
+}
+
+.glance-value {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: #38bdf8;
+}
+
+.glance-sub {
+  font-size: 0.7rem;
+  color: var(--text-tertiary);
+  font-weight: 500;
+}
+
+.glance-sub.positive {
+  color: #34d399;
+}
+
+.glance-sub.negative {
+  color: #fb7185;
+}
+
+/* Quick Action 1-Tap Starter Chips */
+.ambient-starter-chips {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+.quick-chip {
+  padding: 0.3rem 0.75rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  font-family: inherit;
+}
+
+.quick-chip:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(255, 255, 255, 0.24);
+  transform: translateY(-1.5px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+}
+
+.quick-chip:active {
+  transform: scale(0.96);
+}
+
+/* ==========================================================================
+   Active Floating VisionOS Stage Widget Modal
+   ========================================================================== */
+.stage-active-widget {
+  width: 100%;
+  max-width: 520px;
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.82), rgba(26, 18, 48, 0.82));
+  backdrop-filter: blur(36px) saturate(200%);
+  -webkit-backdrop-filter: blur(36px) saturate(200%);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.65), 0 0 32px rgba(56, 189, 248, 0.2), inset 0 1px 1.5px rgba(255, 255, 255, 0.3);
+  padding: 1rem 1.15rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  z-index: 25;
+  animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+}
+
+.stage-widget-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 0.5rem;
+}
+
+.stage-widget-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.stage-widget-indicator {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 8px #10b981;
+}
+
+.stage-widget-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.stage-widget-close-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--text-tertiary);
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.stage-widget-close-btn:hover {
+  background: rgba(239, 68, 68, 0.25);
+  border-color: rgba(239, 68, 68, 0.5);
+  color: #fff;
+  transform: scale(1.1);
+}
+
+.stage-widget-content {
+  width: 100%;
+}
+
+.stage-widget-content .live-widget-card {
+  box-shadow: none;
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.stage-widget-footer {
+  display: flex;
+  justify-content: flex-end;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 0.5rem;
+}
+
+.stage-widget-ask-btn {
+  font-family: inherit;
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.1);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  border-radius: var(--radius-full);
+  padding: 0.35rem 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.stage-widget-ask-btn:hover {
+  background: rgba(56, 189, 248, 0.2);
+  border-color: rgba(56, 189, 248, 0.5);
+  color: #fff;
+  transform: translateY(-1px);
+}
+
+/* ==========================================================================
+   Google Auth Helper & Origin Troubleshooting UI
+   ========================================================================== */
+.google-oauth-row {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.google-help-pill-btn {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-full);
+  padding: 0.4rem 0.55rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.google-help-pill-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  transform: scale(1.08);
+}
+
+.oauth-origin-alert {
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  border-radius: var(--radius-md);
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin-bottom: 0.85rem;
+}
+
+.alert-badge {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #fbbf24;
+  letter-spacing: 0.05em;
+}
+
+.alert-text {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  margin: 0;
+}
+
+.origin-copy-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  background: rgba(0, 0, 0, 0.35);
+  padding: 0.4rem 0.6rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.origin-copy-box code {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: #38bdf8;
+  word-break: break-all;
+}
+
+.btn-copy-origin {
+  font-family: inherit;
+  font-size: 0.72rem;
+  font-weight: 600;
+  background: rgba(56, 189, 248, 0.18);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  color: #38bdf8;
+  padding: 0.25rem 0.6rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.btn-copy-origin:hover {
+  background: #38bdf8;
+  color: #000;
+}
+
+
 
 
