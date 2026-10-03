@@ -26,3 +26,7 @@ dist-ssr
 # Environment Variables
 .env
 .env.production
+
+# Scratch & temporary test files
+scratch/
+

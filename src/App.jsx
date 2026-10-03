@@ -1,10 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
 import AmbientSphere from './components/AmbientSphere';
-import VisionScanner from './components/VisionScanner';
+import VisionScanner, { SpatialMediaIcon } from './components/VisionScanner';
 import ConversationFeed from './components/ConversationFeed';
-import { converseWithLumen } from './services/api';
+import { converseWithLumen, processFile } from './services/api';
 
 const DEFAULT_GREETING = "I am Lumen, your ambient voice and vision AI companion. Tap the sphere or upload an image to begin.";
+
+function getCircadianPhase() {
+  const h = new Date().getHours();
+  if (h >= 5 && h < 12) return 'morning';   // Dawn / Morning Aurora
+  if (h >= 12 && h < 18) return 'day';       // Solar Zenith
+  if (h >= 18 && h < 22) return 'evening';   // Twilight Dusk
+  return 'night';                            // Midnight Nebula
+}
 
 export default function App() {
   const [isListening, setIsListening] = useState(false);
@@ -12,8 +20,51 @@ export default function App() {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [liveTranscript, setLiveTranscript] = useState('');
   const [textInput, setTextInput] = useState('');
-  const [selectedImage, setSelectedImage] = useState(null);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const selectedImage = selectedFile; // Backward compatibility alias
+  const setSelectedImage = setSelectedFile; // Backward compatibility alias
+  const [processingFile, setProcessingFile] = useState(null);
+  const [isTaskComplete, setIsTaskComplete] = useState(false);
+  const [circadianSetting, setCircadianSetting] = useState(() => {
+    try {
+      return localStorage.getItem('lumen_circadian_setting') || 'auto';
+    } catch (_) {
+      return 'auto';
+    }
+  });
+  const [currentHourPhase, setCurrentHourPhase] = useState(getCircadianPhase());
+  const [webMode, setWebMode] = useState('auto'); // 'auto' | 'always' | 'off'
   const [showLogDrawer, setShowLogDrawer] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // Periodically refresh local circadian phase for auto mode
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentHourPhase(getCircadianPhase());
+    }, 60000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const activeCircadian = circadianSetting === 'auto' ? currentHourPhase : circadianSetting;
+
+  const handleCycleCircadian = () => {
+    const sequence = ['auto', 'morning', 'day', 'evening', 'night'];
+    const next = sequence[(sequence.indexOf(circadianSetting) + 1) % sequence.length];
+    setCircadianSetting(next);
+    try {
+      localStorage.setItem('lumen_circadian_setting', next);
+    } catch (_) {}
+  };
+
+  const getCircadianInfo = () => {
+    const icons = { morning: '🌅', day: '☀️', evening: '🌇', night: '🌌' };
+    const labels = { morning: 'Dawn', day: 'Solar', evening: 'Dusk', night: 'Midnight' };
+    const phaseLabel = labels[activeCircadian] || 'Cosmic';
+    return {
+      icon: icons[activeCircadian] || '✨',
+      label: circadianSetting === 'auto' ? `Auto: ${phaseLabel}` : phaseLabel
+    };
+  };
   const [messages, setMessages] = useState([
     {
       id: 'lumen-welcome',
@@ -23,8 +74,102 @@ export default function App() {
     }
   ]);
 
+  const handleCycleWebMode = () => {
+    setWebMode(prev => {
+      if (prev === 'auto') return 'always';
+      if (prev === 'always') return 'off';
+      return 'auto';
+    });
+  };
+
+  const handleToggleFullscreen = async () => {
+    try {
+      if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+        if (document.documentElement.requestFullscreen) {
+          await document.documentElement.requestFullscreen();
+        } else if (document.documentElement.webkitRequestFullscreen) {
+          await document.documentElement.webkitRequestFullscreen();
+        }
+      } else {
+        if (document.exitFullscreen) {
+          await document.exitFullscreen();
+        } else if (document.webkitExitFullscreen) {
+          await document.webkitExitFullscreen();
+        }
+      }
+    } catch (err) {
+      console.warn("Fullscreen toggle error:", err);
+    }
+  };
+
+  // Sync fullscreen state with browser changes (e.g. Esc key or F11)
+  useEffect(() => {
+    const onFullscreenChange = () => {
+      setIsFullscreen(Boolean(document.fullscreenElement || document.webkitFullscreenElement));
+    };
+
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', onFullscreenChange);
+
+    return () => {
+      document.removeEventListener('fullscreenchange', onFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', onFullscreenChange);
+    };
+  }, []);
+
   const recognitionRef = useRef(null);
   const currentAudioRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const [isGlobalDragging, setIsGlobalDragging] = useState(false);
+  const dragCounterRef = useRef(0);
+
+  const handleGlobalFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const processed = await processFile(file);
+      setSelectedFile(processed);
+    } catch (err) {
+      console.warn("Could not process attached file:", err);
+    } finally {
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleGlobalDragEnter = (e) => {
+    e.preventDefault();
+    dragCounterRef.current += 1;
+    if (e.dataTransfer?.items && e.dataTransfer.items.length > 0) {
+      setIsGlobalDragging(true);
+    }
+  };
+
+  const handleGlobalDragLeave = (e) => {
+    e.preventDefault();
+    dragCounterRef.current -= 1;
+    if (dragCounterRef.current <= 0) {
+      setIsGlobalDragging(false);
+      dragCounterRef.current = 0;
+    }
+  };
+
+  const handleGlobalDragOver = (e) => {
+    e.preventDefault();
+  };
+
+  const handleGlobalDrop = async (e) => {
+    e.preventDefault();
+    setIsGlobalDragging(false);
+    dragCounterRef.current = 0;
+    const file = e.dataTransfer?.files?.[0];
+    if (!file) return;
+    try {
+      const processed = await processFile(file);
+      setSelectedFile(processed);
+    } catch (err) {
+      console.warn("Could not process dropped file:", err);
+    }
+  };
 
   // Load history from localStorage
   useEffect(() => {
@@ -55,18 +200,26 @@ export default function App() {
     }
   };
 
+  const transcriptRef = useRef('');
+  const sendRef = useRef(null);
+
+  useEffect(() => {
+    sendRef.current = handleSendMessage;
+  });
+
   // Initialize Web Speech Recognition
   useEffect(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (SpeechRecognition) {
       const recognizer = new SpeechRecognition();
-      recognizer.continuous = false;
+      recognizer.continuous = false; // Automatically stops when user finishes speaking
       recognizer.interimResults = true;
       recognizer.lang = 'en-US';
 
       recognizer.onstart = () => {
         setIsListening(true);
         setLiveTranscript('');
+        transcriptRef.current = '';
       };
 
       recognizer.onresult = (e) => {
@@ -75,16 +228,27 @@ export default function App() {
           transcript += e.results[i][0].transcript;
         }
         setLiveTranscript(transcript);
+        transcriptRef.current = transcript;
       };
 
       recognizer.onerror = (e) => {
-        console.warn('Speech recognition error:', e.error);
+        if (e.error !== 'no-speech') {
+          console.warn('Speech recognition error:', e.error);
+        }
         setIsListening(false);
         setLiveTranscript('');
+        transcriptRef.current = '';
       };
 
       recognizer.onend = () => {
         setIsListening(false);
+        // Auto-send when silence is detected and recognizer ends naturally
+        if (transcriptRef.current.trim()) {
+          const text = transcriptRef.current;
+          transcriptRef.current = ''; // Clear to prevent double send
+          setLiveTranscript('');
+          if (sendRef.current) sendRef.current(text);
+        }
       };
 
       recognitionRef.current = recognizer;
@@ -101,9 +265,10 @@ export default function App() {
   }, []);
 
   // Dispatch message to backend
-  const handleSendMessage = async (textToSend, imgPayload = selectedImage) => {
+  const handleSendMessage = async (textToSend, filePayload = selectedFile) => {
+    unlockAudio();
     const userPrompt = (textToSend || liveTranscript || textInput).trim();
-    if (!userPrompt && !imgPayload) return;
+    if (!userPrompt && !filePayload) return;
 
     if (currentAudioRef.current) {
       currentAudioRef.current.pause();
@@ -114,7 +279,9 @@ export default function App() {
       id: `usr-${Date.now()}`,
       role: 'user',
       text: userPrompt,
-      image: imgPayload ? imgPayload.dataUrl : null,
+      image: filePayload && !filePayload.isPdf ? filePayload.dataUrl : null,
+      fileName: filePayload?.name,
+      isPdf: Boolean(filePayload?.isPdf),
       timestamp: Date.now()
     };
 
@@ -123,24 +290,38 @@ export default function App() {
 
     setLiveTranscript('');
     setTextInput('');
-    setSelectedImage(null);
+    if (filePayload) {
+      setProcessingFile(filePayload);
+    }
+    setSelectedFile(null);
     setIsThinking(true);
+    setIsTaskComplete(false);
 
     try {
       const data = await converseWithLumen({
         transcript: userPrompt,
         history: nextMessages,
-        image: imgPayload
+        file: filePayload,
+        webMode
       });
 
       const assistantMessage = {
         id: `ast-${Date.now()}`,
         role: 'assistant',
         text: data.replyText,
+        webSources: data.webSources || [],
+        webType: data.webType || null,
         timestamp: Date.now()
       };
 
       persistMessages([...nextMessages, assistantMessage]);
+
+      // Trigger visual task complete cue
+      setIsTaskComplete(true);
+      setTimeout(() => {
+        setIsTaskComplete(false);
+        setProcessingFile(null);
+      }, 2800);
 
       // Play synthesized audio
       if (data.audioBase64) {
@@ -157,6 +338,8 @@ export default function App() {
         timestamp: Date.now()
       };
       persistMessages([...nextMessages, errorMessage]);
+      setIsTaskComplete(false);
+      setProcessingFile(null);
     } finally {
       setIsThinking(false);
     }
@@ -169,9 +352,10 @@ export default function App() {
         currentAudioRef.current.pause();
       }
       const audioUrl = `data:audio/mp3;base64,${base64Audio}`;
-      const audio = new Audio(audioUrl);
-      currentAudioRef.current = audio;
-
+      const audio = currentAudioRef.current || new Audio();
+      if (!currentAudioRef.current) currentAudioRef.current = audio;
+      
+      audio.src = audioUrl;
       audio.onplay = () => setIsSpeaking(true);
       audio.onended = () => setIsSpeaking(false);
       audio.onerror = () => setIsSpeaking(false);
@@ -199,12 +383,34 @@ export default function App() {
     window.speechSynthesis.speak(utterance);
   };
 
+  // Unlock audio engine to satisfy browser autoplay policies
+  function unlockAudio() {
+    if (!currentAudioRef.current) {
+      currentAudioRef.current = new Audio();
+    }
+    const audio = currentAudioRef.current;
+    if (audio.src === '' || audio.src === location.href) {
+      // Tiny silent mp3 base64 to unlock audio context
+      audio.src = 'data:audio/mp3;base64,//NExAAAAANIAAAAAExBTUUzLjEwMKqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq';
+    }
+    audio.play().then(() => {
+      // Intentionally don't pause immediately here if we want to let it unlock properly, 
+      // but the silent audio will end quickly.
+    }).catch(e => console.warn("Audio unlock pending:", e));
+  };
+
   // Toggle voice listening
   const handleToggleListen = () => {
+    unlockAudio();
+
     if (isListening) {
       if (recognitionRef.current) recognitionRef.current.stop();
-      if (liveTranscript.trim() || selectedImage) {
-        handleSendMessage(liveTranscript, selectedImage);
+      
+      const textToSubmit = liveTranscript || transcriptRef.current;
+      transcriptRef.current = ''; // Clear to prevent onend from double sending
+      
+      if (textToSubmit.trim() || selectedFile) {
+        handleSendMessage(textToSubmit, selectedFile);
       }
     } else {
       if (currentAudioRef.current) {
@@ -237,7 +443,26 @@ export default function App() {
   };
 
   return (
-    <div className="lumen-app-stage">
+    <div 
+      className={`lumen-app-stage ${selectedFile || processingFile ? 'has-active-doc' : ''} ${textInput.trim() ? 'has-typing' : ''} ${isThinking ? 'is-thinking' : ''} ${isListening ? 'is-listening' : ''} ${isSpeaking ? 'is-speaking' : ''} ${isTaskComplete ? 'is-complete' : ''}`}
+      data-circadian={activeCircadian}
+      onDragEnter={handleGlobalDragEnter}
+      onDragLeave={handleGlobalDragLeave}
+      onDragOver={handleGlobalDragOver}
+      onDrop={handleGlobalDrop}
+    >
+      {/* Invisible file input for spatial triggers */}
+      <input 
+        type="file" 
+        ref={fileInputRef}
+        accept="image/*,application/pdf,.pdf"
+        style={{ display: 'none' }}
+        onChange={handleGlobalFileChange}
+      />
+
+      {/* Invisible audio element for strict autoplay policies */}
+      <audio ref={currentAudioRef} style={{ display: 'none' }} />
+
       {/* Background ambient orbs & visionOS glass mesh */}
       <div className="ambient-mesh-glow m1"></div>
       <div className="ambient-mesh-glow m2"></div>
@@ -248,18 +473,57 @@ export default function App() {
         <div className="header-brand">
           <div className="brand-dot"></div>
           <h1 className="brand-title">LUMEN</h1>
-          <span className="brand-badge">Ambient Copilot</span>
         </div>
 
         <div className="header-actions">
           <button 
             type="button" 
+            className={`circadian-toggle-btn phase-${activeCircadian}`}
+            onClick={handleCycleCircadian}
+            title={`Atmosphere: ${getCircadianInfo().label} (Click to change circadian mood)`}
+            aria-label={`Circadian atmosphere: ${getCircadianInfo().label}`}
+          >
+            <span className="circadian-icon">{getCircadianInfo().icon}</span>
+            <span className="circadian-label">{getCircadianInfo().label}</span>
+          </button>
+
+          <button 
+            type="button" 
+            className={`web-toggle-btn mode-${webMode}`}
+            onClick={handleCycleWebMode}
+            title={`Internet Access: ${webMode.toUpperCase()} (Click to toggle)`}
+          >
+            <span className="web-icon">🌐</span>
+            <span className="web-label">Web: {webMode === 'auto' ? 'Auto' : webMode === 'always' ? 'Always' : 'Off'}</span>
+          </button>
+
+          <button 
+            type="button" 
             className={`log-toggle-btn ${showLogDrawer ? 'active' : ''}`}
             onClick={() => setShowLogDrawer(!showLogDrawer)}
-            title="Toggle conversation log"
+            title="Toggle conversation transcript"
           >
-            💬 {showLogDrawer ? 'Hide Log' : 'Log'}
+            {showLogDrawer ? '✕ Close' : '💬 Transcript'}
           </button>
+
+          <button
+            type="button"
+            className={`fullscreen-btn ${isFullscreen ? 'active' : ''}`}
+            onClick={handleToggleFullscreen}
+            title={isFullscreen ? "Exit Full Screen" : "Go Full Screen"}
+            aria-label={isFullscreen ? "Exit Full Screen" : "Go Full Screen"}
+          >
+            {isFullscreen ? (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/>
+              </svg>
+            ) : (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
+              </svg>
+            )}
+          </button>
+
           <a 
             href="https://github.com/georgieslab" 
             target="_blank" 
@@ -281,6 +545,9 @@ export default function App() {
           isListening={isListening}
           isThinking={isThinking}
           isSpeaking={isSpeaking}
+          isTaskComplete={isTaskComplete}
+          isProcessingDoc={Boolean(isThinking && processingFile?.isPdf)}
+          isProcessingImg={Boolean(isThinking && processingFile && !processingFile?.isPdf)}
           onToggleListen={handleToggleListen}
         />
 
@@ -292,12 +559,18 @@ export default function App() {
           </div>
         )}
 
-        {/* Vision Scanner Drop Zone */}
+        {/* Vision & Document Scanner Drop Zone */}
         <VisionScanner 
-          selectedImage={selectedImage}
-          onImageSelected={(img) => setSelectedImage(img)}
-          onImageCleared={() => setSelectedImage(null)}
+          selectedFile={selectedFile}
+          processingFile={processingFile}
+          isComplete={isTaskComplete}
+          onFileSelected={(file) => setSelectedFile(file)}
+          onFileCleared={() => {
+            setSelectedFile(null);
+            setProcessingFile(null);
+          }}
           isThinking={isThinking}
+          externalInputRef={fileInputRef}
         />
 
         {/* Conversation Feed Drawer (Toggleable) */}
@@ -311,7 +584,7 @@ export default function App() {
         )}
       </main>
 
-      {/* Bottom Quiet Input Controls */}
+      {/* Bottom Spatial Command Bar */}
       <footer className="lumen-footer">
         <form 
           className="bottom-input-form"
@@ -320,17 +593,33 @@ export default function App() {
             handleSendMessage();
           }}
         >
+          {/* Spatial Media Attachment Trigger */}
+          <button
+            type="button"
+            className="bottom-spatial-attach-btn"
+            onClick={() => fileInputRef.current?.click()}
+            title="Attach photo or document (PDF)"
+            disabled={isThinking}
+            aria-label="Attach photo or document"
+          >
+            <SpatialMediaIcon size={19} />
+          </button>
+
           <input 
             type="text"
             className="bottom-text-field"
-            placeholder={selectedImage ? "Ask Lumen about this image..." : "Speak or type your thoughts to Lumen..."}
+            placeholder={
+              selectedFile 
+                ? (selectedFile.isPdf ? "Ask Lumen about this PDF document..." : "Ask Lumen about this image...") 
+                : "Speak or type your thoughts to Lumen..."
+            }
             value={textInput}
             onChange={(e) => setTextInput(e.target.value)}
           />
           <button 
             type="submit" 
             className="bottom-submit-btn"
-            disabled={(!textInput.trim() && !selectedImage) || isThinking}
+            disabled={(!textInput.trim() && !selectedFile) || isThinking}
             aria-label="Send message"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -340,6 +629,21 @@ export default function App() {
           </button>
         </form>
       </footer>
+
+      {/* Full-screen Spatial Glass Drag Portal Overlay */}
+      {isGlobalDragging && (
+        <div className="spatial-drag-portal-overlay">
+          <div className="spatial-drag-portal-card">
+            <div className="portal-icon-aperture">
+              <SpatialMediaIcon size={42} />
+              <div className="portal-ambient-ring"></div>
+            </div>
+            <h3 className="portal-title">Drop to Inspect with Lumen</h3>
+            <p className="portal-subtitle">Multimodal analysis for Photos, Diagrams & PDF Documents</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+

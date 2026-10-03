@@ -5,11 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "dev:server": "node server.js",
+    "dev:server": "node --watch server.js",
     "dev:all": "npx concurrently \"npm run dev\" \"npm run dev:server\"",
-    "build": "node build.js",
+    "build": "vite build",
     "preview": "vite preview",
-    "start": "NODE_ENV=production node server.js"
+    "start": "node server.js"
   },
   "dependencies": {
     "@aws-sdk/client-bedrock": "^3.1143.0",
@@ -22,12 +22,14 @@
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@rollup/rollup-win32-x64-msvc": "^4.64.0",
     "@vitejs/plugin-react": "^4.3.4",
     "concurrently": "^9.2.4",
     "esbuild": "^0.24.2",
+    "sass": "^1.105.1",
     "vite": "^6.0.5"
   },
   "optionalDependencies": {
-    "@rollup/rollup-win32-x64-msvc": "^4.55.1"
+    "@rollup/rollup-win32-x64-msvc": "^4.63.6"
   }
 }

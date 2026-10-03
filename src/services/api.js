@@ -45,18 +45,57 @@ export function compressImage(file, maxDim = 640, quality = 0.6) {
 }
 
 /**
- * Send voice transcript or text query along with optional compressed image payload to Lumen backend
+ * Unified file processor supporting both images (with canvas downscaling) and PDF documents
  */
-export async function converseWithLumen({ transcript, message, text, history = [], image = null }) {
+export function processFile(file) {
+  if (!file) return Promise.reject(new Error("No file provided"));
+  const fileName = (file.name || '').toLowerCase();
+  const fileType = (file.type || '').toLowerCase();
+  const isPdf = fileType.includes('pdf') || fileName.endsWith('.pdf');
+
+  if (isPdf) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        resolve({
+          dataUrl: e.target.result,
+          base64: e.target.result,
+          mimeType: 'application/pdf',
+          name: file.name || 'document.pdf',
+          isPdf: true,
+          size: file.size
+        });
+      };
+      reader.onerror = (err) => reject(err);
+      reader.readAsDataURL(file);
+    });
+  } else {
+    return compressImage(file);
+  }
+}
+
+/**
+ * Send voice transcript or text query along with optional image or PDF payload to Lumen backend
+ */
+export async function converseWithLumen({ transcript, message, text, history = [], file = null, image = null, webMode = 'auto' }) {
+  const targetFile = file || image;
   const payload = {
     transcript: transcript || message || text || '',
     history: history.slice(-8).map(h => ({
       role: h.role,
       text: h.text || ''
     })),
-    image: image ? {
-      base64: image.base64,
-      mimeType: image.mimeType || 'image/jpeg'
+    webMode,
+    file: targetFile ? {
+      base64: targetFile.base64,
+      mimeType: targetFile.mimeType || (targetFile.isPdf ? 'application/pdf' : 'image/jpeg'),
+      name: targetFile.name,
+      isPdf: Boolean(targetFile.isPdf)
+    } : null,
+    image: targetFile ? {
+      base64: targetFile.base64,
+      mimeType: targetFile.mimeType || (targetFile.isPdf ? 'application/pdf' : 'image/jpeg'),
+      name: targetFile.name
     } : null
   };
 
@@ -75,3 +114,4 @@ export async function converseWithLumen({ transcript, message, text, history = [
 
   return await response.json();
 }
+

@@ -1,19 +1,34 @@
-import React from 'react';
+import React, { useMemo } from 'react';
+import './ParticleOrb.css';
+
+const TOTAL_PARTICLES = 300;
 
 export default function AmbientSphere({
   isListening,
   isThinking,
   isSpeaking,
+  isTaskComplete,
+  isProcessingDoc,
+  isProcessingImg,
   onToggleListen
 }) {
+  const particles = useMemo(() => Array.from({ length: TOTAL_PARTICLES }), []);
+
   const getStatusText = () => {
+    if (isTaskComplete) return "Task Complete ✓";
+    if (isProcessingDoc) return "Inspecting document contents...";
+    if (isProcessingImg) return "Analyzing visual features...";
     if (isListening) return "Listening to your voice...";
     if (isThinking) return "Lumen is reflecting...";
     if (isSpeaking) return "Lumen is speaking...";
     return "Tap sphere to converse";
   };
 
-  const stateClass = isListening 
+  const stateClass = isTaskComplete
+    ? 'complete'
+    : isProcessingDoc
+    ? 'processing-doc'
+    : isListening 
     ? 'listening' 
     : isThinking 
     ? 'thinking' 
@@ -26,14 +41,14 @@ export default function AmbientSphere({
       {/* Outer ambient radiant glow */}
       <div className="ambient-radiance"></div>
 
-      {/* Main interactive neural sphere */}
+      {/* Main interactive neural 3D particle sphere */}
       <div 
-        className="siri-sphere-wrap"
+        className="siri-sphere-wrap particle-orb-wrap"
         onClick={onToggleListen}
         role="button"
         tabIndex={0}
         aria-label={getStatusText()}
-        title="Tap to start or stop listening"
+        title="Tap to converse"
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();
@@ -41,36 +56,29 @@ export default function AmbientSphere({
           }
         }}
       >
-        <div className="siri-core loader">
-          <div className="loader-inner">
-            <div className="blob b1"></div>
-            <div className="blob b2"></div>
-            <div className="blob b3"></div>
-            <div className="blob b4"></div>
-            <div className="blob b5"></div>
-            <div className="blob b6"></div>
+        <div className="siri-core">
+          {/* Inner ambient glow nucleus */}
+          <div className="orb-center-nucleus"></div>
+
+          {/* 3D Particle Orb Scene */}
+          <div className={`orb-3d-scene ${stateClass}`}>
+            <div className="orb-3d-wrap">
+              {particles.map((_, i) => (
+                <div key={i} className="c" />
+              ))}
+            </div>
           </div>
+
           {/* visionOS Specular Lens Refraction */}
           <div className="siri-specular-lens"></div>
         </div>
       </div>
 
-      {/* Audio Waveform Equalizer Bars */}
-      <div className={`waveform-container ${isSpeaking || isListening ? 'active' : ''}`}>
-        <span className="wave-bar w1"></span>
-        <span className="wave-bar w2"></span>
-        <span className="wave-bar w3"></span>
-        <span className="wave-bar w4"></span>
-        <span className="wave-bar w5"></span>
-        <span className="wave-bar w6"></span>
-        <span className="wave-bar w7"></span>
-      </div>
-
       {/* Spoken / Listening Status Badge */}
       <div className="status-pill">
-        <span className={`status-dot ${stateClass}`}></span>
         <span className="status-label">{getStatusText()}</span>
       </div>
     </div>
   );
 }
+

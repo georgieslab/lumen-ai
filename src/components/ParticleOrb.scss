@@ -1,0 +1,186 @@
+@use "sass:math";
+
+// ============================================================================
+// 3D PARTICLE ORB ENGINE
+// 300 Particle Spherical Projection Matrix (Optimized for Chrome GPU)
+// ============================================================================
+
+$total: 300;            // Total particles
+$orb-size: 75px;        // Spheroid radius (diameter = 150px - refined compact scale)
+$particle-size: 2px;    // Particle dimension
+$time: 14s;             // Base rotation period
+$base-hue: 180;         // 180 for tranquil cyan/azure baseline
+
+// Reactive state tokens mapped to sphere-stage
+.sphere-stage {
+  --time: 14s;
+  --orb-scale: 1;
+  --orb-hue-shift: 0deg;
+
+  &.listening {
+    --time: 8s;
+    --orb-scale: 1.06;
+    --orb-hue-shift: 145deg; // Vibrant magenta / electric neon pink
+  }
+
+  &.thinking {
+    --time: 3.5s;           // High-speed quantum spin
+    --orb-scale: 0.72;      // Gravitational collapse into dense core
+    --orb-hue-shift: 95deg; // Cosmic deep violet / ultraviolet
+  }
+
+  &.speaking {
+    --time: 6.5s;
+    --orb-scale: 1.12;      // Acoustic expansion
+    --orb-hue-shift: -35deg;// Radiant neural emerald / turquoise
+  }
+
+  &.processing-doc {
+    --time: 3.2s;           // Focused scanning matrix
+    --orb-scale: 0.82;      // Concentrated aperture
+    --orb-hue-shift: 80deg; // Electric ultraviolet & cyan scan
+  }
+
+  &.complete {
+    --time: 5.5s;
+    --orb-scale: 1.15;      // Satisfying ripple expansion
+    --orb-hue-shift: -60deg;// Emerald success bloom
+  }
+}
+
+// 3D Scene Root - establishes 3D coordinate space & perspective
+.orb-3d-scene {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0; 
+  height: 0; 
+  transform-style: preserve-3d;
+  perspective: 1000px;
+  filter: hue-rotate(calc(var(--circadian-orb-hue, 0deg) + var(--orb-hue-shift, 0deg)));
+  transform: scale(var(--orb-scale, 1));
+  transition: filter 0.8s ease, transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+  pointer-events: none;
+
+  // Thinking state: add high-energy quantum jitter
+  &.thinking {
+    animation: quantumPulse 1.8s infinite ease-in-out;
+  }
+
+  // Speaking state: harmonic voice acoustic breathing
+  &.speaking {
+    animation: voiceBreathing 2.2s infinite ease-in-out;
+  }
+
+  // Processing doc: high-focus scanner pulse
+  &.processing-doc {
+    animation: docScanPulse 1.6s infinite ease-in-out;
+  }
+
+  // Complete state: triumphant emerald success pulse
+  &.complete {
+    animation: completeSuccessPulse 1.4s infinite alternate ease-in-out;
+  }
+}
+
+@keyframes docScanPulse {
+  0%, 100% {
+    transform: scale(0.80);
+    filter: hue-rotate(75deg) brightness(1.1);
+  }
+  50% {
+    transform: scale(0.86);
+    filter: hue-rotate(90deg) brightness(1.4);
+  }
+}
+
+@keyframes completeSuccessPulse {
+  0% {
+    transform: scale(1.12);
+    filter: hue-rotate(-60deg) brightness(1.2);
+  }
+  100% {
+    transform: scale(1.20);
+    filter: hue-rotate(-45deg) brightness(1.45);
+  }
+}
+
+@keyframes quantumPulse {
+  0%, 100% {
+    transform: scale(0.70);
+    filter: hue-rotate(95deg) brightness(1);
+  }
+  50% {
+    transform: scale(0.76);
+    filter: hue-rotate(110deg) brightness(1.35);
+  }
+}
+
+@keyframes voiceBreathing {
+  0%, 100% {
+    transform: scale(1.08);
+    filter: hue-rotate(-35deg) brightness(1.05);
+  }
+  50% {
+    transform: scale(1.18);
+    filter: hue-rotate(-20deg) brightness(1.3);
+  }
+}
+
+// 3D Rotation Gimbal - rotates on both Y and X axes
+.orb-3d-wrap {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0; 
+  height: 0; 
+  transform-style: preserve-3d;
+  animation: rotateOrb var(--time, #{$time}) infinite linear;
+}
+
+@keyframes rotateOrb {
+  100% {
+    transform: rotateY(360deg) rotateX(360deg);
+  }
+}
+
+// Base particle styles
+.c {
+  position: absolute;
+  width: $particle-size;
+  height: $particle-size;
+  border-radius: 50%;
+  opacity: 0; 
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+
+// Generate unique 3D trajectories for all 300 particles
+@for $i from 1 through $total {
+  $z: (math.random(360) * 1deg); // random angle to rotateZ
+  $y: (math.random(360) * 1deg); // random to rotateX
+  $hue: ((math.div(40, $total) * $i) + $base-hue); // set hue
+  
+  .c:nth-child(#{$i}){
+    animation: orbit#{$i} var(--time, #{$time}) infinite;
+    animation-delay: ($i * 0.01s); 
+    background-color: hsla($hue, 100%, 55%, 1);
+  }
+
+  @keyframes orbit#{$i}{ 
+    20% {
+      opacity: 1; // fade in
+    }
+    30% {
+      transform: rotateZ(-$z) rotateY($y) translateX($orb-size) rotateZ($z); // form orb
+    }
+    80% {
+      transform: rotateZ(-$z) rotateY($y) translateX($orb-size) rotateZ($z); // hold orb state 30-80
+      opacity: 1; // hold opacity 20-80
+    }
+    100% {
+      transform: rotateZ(-$z) rotateY($y) translateX(($orb-size * 3)) rotateZ($z); // translateX * 3
+      opacity: 0;
+    }
+  }
+}

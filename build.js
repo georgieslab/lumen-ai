@@ -45,3 +45,4 @@ try {
 } catch (err) {
   console.log('✅ Build complete! Assets bundled! (No public assets)');
 }
+
