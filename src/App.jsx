@@ -3,6 +3,7 @@ import AmbientSphere from './components/AmbientSphere';
 import VisionScanner, { SpatialMediaIcon } from './components/VisionScanner';
 import ConversationFeed, { LiveWeatherCard, LiveCryptoCard } from './components/ConversationFeed';
 import GoogleAuthButton from './components/GoogleAuthButton';
+import LumenLogo from './components/LumenLogo';
 import { converseWithLumen, processFile, fetchAmbientData } from './services/api';
 
 const DEFAULT_GREETING = "I am Lumen, your ambient voice and vision AI companion. Tap the sphere or upload an image to begin.";
@@ -570,15 +571,17 @@ export default function App() {
       {/* Invisible audio element for strict autoplay policies */}
       <audio ref={currentAudioRef} style={{ display: 'none' }} />
 
-      {/* Background ambient orbs & visionOS glass mesh */}
+      {/* Background ambient moving & dimming atmosphere light mesh */}
       <div className="ambient-mesh-glow m1"></div>
       <div className="ambient-mesh-glow m2"></div>
       <div className="ambient-mesh-glow m3"></div>
+      <div className="ambient-mesh-glow m4"></div>
+      <div className="ambient-mesh-glow m5"></div>
 
       {/* Top Header Navigation */}
       <header className="lumen-header">
         <div className="header-brand">
-          <div className="brand-dot"></div>
+          <LumenLogo size={28} />
           <h1 className="brand-title">LUMEN</h1>
         </div>
 

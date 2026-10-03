@@ -122,48 +122,194 @@ body {
   --circadian-glow-2: #38bdf8;
 }
 
-/* Ambient Background Light Mesh */
+/* ==========================================================================
+   Dynamic Moving & Dimming Atmosphere Ambient Light Mesh
+   ========================================================================== */
 .ambient-mesh-glow {
   position: absolute;
   border-radius: 50%;
-  filter: blur(100px);
+  filter: blur(110px);
   pointer-events: none;
-  opacity: 0.38;
-  animation: floatOrb 12s infinite alternate ease-in-out;
-  transition: background 1.2s cubic-bezier(0.16, 1, 0.3, 1);
+  mix-blend-mode: screen;
+  will-change: transform, opacity;
+  transition: background 1.5s cubic-bezier(0.16, 1, 0.3, 1), filter 0.8s ease;
 }
 
+/* Light 1: Primary Cosmic Cyan / Amber / Dawn Luminescence */
 .ambient-mesh-glow.m1 {
-  width: 520px;
-  height: 520px;
-  background: radial-gradient(circle, var(--circadian-glow-1, #38bdf8) 0%, transparent 70%);
-  top: 8%;
-  left: 18%;
+  width: 580px;
+  height: 580px;
+  background: radial-gradient(circle at 40% 40%, var(--circadian-glow-1, #38bdf8) 0%, rgba(56, 189, 248, 0.4) 35%, transparent 72%);
+  top: 5%;
+  left: 12%;
+  animation: driftAndDimM1 22s infinite ease-in-out;
 }
 
+/* Light 2: Deep Violet / Indigo / Solar Radiance */
 .ambient-mesh-glow.m2 {
-  width: 620px;
-  height: 620px;
-  background: radial-gradient(circle, var(--circadian-glow-2, #8b5cf6) 0%, transparent 70%);
-  bottom: 8%;
-  right: 14%;
-  animation-duration: 16s;
-  animation-direction: alternate-reverse;
+  width: 680px;
+  height: 680px;
+  background: radial-gradient(circle at 50% 50%, var(--circadian-glow-2, #8b5cf6) 0%, rgba(139, 92, 246, 0.35) 40%, transparent 75%);
+  bottom: 5%;
+  right: 10%;
+  animation: driftAndDimM2 28s infinite ease-in-out;
 }
 
+/* Light 3: Center Neural Pulse / Twilight Rose Aurora */
 .ambient-mesh-glow.m3 {
-  width: 440px;
-  height: 440px;
-  background: radial-gradient(circle, var(--circadian-glow-3, #ec4899) 0%, transparent 70%);
-  top: 50%;
-  left: 50%;
+  width: 480px;
+  height: 480px;
+  background: radial-gradient(circle at 50% 50%, var(--circadian-glow-3, #ec4899) 0%, rgba(236, 72, 153, 0.3) 45%, transparent 70%);
+  top: 45%;
+  left: 48%;
   transform: translate(-50%, -50%);
-  opacity: 0.25;
+  animation: driftAndDimM3 18s infinite ease-in-out;
 }
 
-@keyframes floatOrb {
-  0% { transform: translateY(0) scale(1); }
-  100% { transform: translateY(-40px) scale(1.15); }
+/* Light 4: Wandering Cyan / Emerald Peripheral Shimmer */
+.ambient-mesh-glow.m4 {
+  width: 460px;
+  height: 460px;
+  background: radial-gradient(circle at 45% 45%, var(--brand-accent, #06b6d4) 0%, rgba(6, 182, 212, 0.28) 40%, transparent 70%);
+  top: 40%;
+  left: 8%;
+  animation: driftAndDimM4 25s infinite ease-in-out;
+}
+
+/* Light 5: Warm Lower Starlight / Midnight Horizon Halo */
+.ambient-mesh-glow.m5 {
+  width: 540px;
+  height: 540px;
+  background: radial-gradient(circle at 50% 50%, var(--circadian-glow-1, #6366f1) 0%, rgba(99, 102, 241, 0.25) 35%, transparent 72%);
+  bottom: 12%;
+  left: 28%;
+  animation: driftAndDimM5 32s infinite ease-in-out;
+}
+
+/* Dynamic State-driven Luminescence */
+.lumen-app-stage.is-listening .ambient-mesh-glow {
+  filter: blur(95px) brightness(1.2);
+}
+
+.lumen-app-stage.is-thinking .ambient-mesh-glow {
+  filter: blur(105px) brightness(1.35) saturate(1.4);
+}
+
+.lumen-app-stage.is-speaking .ambient-mesh-glow {
+  animation-duration: 12s !important;
+  filter: blur(100px) brightness(1.25);
+}
+
+/* Motion & Dimming Choreography */
+@keyframes driftAndDimM1 {
+  0% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.42;
+  }
+  24% {
+    transform: translate(140px, 90px) scale(1.18);
+    opacity: 0.18; /* Dimmed */
+  }
+  48% {
+    transform: translate(60px, 210px) scale(0.92);
+    opacity: 0.52; /* Brightened */
+  }
+  72% {
+    transform: translate(-90px, 110px) scale(1.12);
+    opacity: 0.22; /* Dimmed */
+  }
+  100% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.42;
+  }
+}
+
+@keyframes driftAndDimM2 {
+  0% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.38;
+  }
+  28% {
+    transform: translate(-170px, -120px) scale(1.22);
+    opacity: 0.56; /* Brightened */
+  }
+  55% {
+    transform: translate(-90px, 80px) scale(0.85);
+    opacity: 0.15; /* Dimmed */
+  }
+  80% {
+    transform: translate(130px, -50px) scale(1.08);
+    opacity: 0.45; /* Soft glow */
+  }
+  100% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.38;
+  }
+}
+
+@keyframes driftAndDimM3 {
+  0% {
+    transform: translate(-50%, -50%) scale(1) rotate(0deg);
+    opacity: 0.28;
+  }
+  30% {
+    transform: translate(-30%, -70%) scale(1.28) rotate(45deg);
+    opacity: 0.48; /* Brightened */
+  }
+  60% {
+    transform: translate(-70%, -30%) scale(0.8) rotate(90deg);
+    opacity: 0.12; /* Deep dim */
+  }
+  85% {
+    transform: translate(-45%, -45%) scale(1.15) rotate(140deg);
+    opacity: 0.35;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1) rotate(180deg);
+    opacity: 0.28;
+  }
+}
+
+@keyframes driftAndDimM4 {
+  0% {
+    transform: translate(0, 0) scale(0.95);
+    opacity: 0.22;
+  }
+  35% {
+    transform: translate(190px, -130px) scale(1.25);
+    opacity: 0.48; /* Brightened */
+  }
+  68% {
+    transform: translate(80px, -220px) scale(0.9);
+    opacity: 0.14; /* Dimmed */
+  }
+  100% {
+    transform: translate(0, 0) scale(0.95);
+    opacity: 0.22;
+  }
+}
+
+@keyframes driftAndDimM5 {
+  0% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.32;
+  }
+  32% {
+    transform: translate(-140px, -80px) scale(1.15);
+    opacity: 0.16; /* Dimmed */
+  }
+  65% {
+    transform: translate(110px, -160px) scale(0.9);
+    opacity: 0.48; /* Brightened */
+  }
+  85% {
+    transform: translate(50px, -40px) scale(1.05);
+    opacity: 0.24;
+  }
+  100% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.32;
+  }
 }
 
 /* Floating Spatial Glass Header Navigation */
@@ -2769,6 +2915,74 @@ body {
   border-color: #38bdf8;
   color: #fff;
 }
+
+/* ==========================================================================
+   Lumen AI Brand Logo & Animated Neural Aperture
+   ========================================================================== */
+.lumen-logo-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  filter: drop-shadow(0 0 10px rgba(56, 189, 248, 0.45));
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), filter 0.35s ease;
+  flex-shrink: 0;
+}
+
+.lumen-logo-wrap:hover {
+  transform: scale(1.12) rotate(6deg);
+  filter: drop-shadow(0 0 16px rgba(56, 189, 248, 0.75)) drop-shadow(0 0 24px rgba(236, 72, 153, 0.4));
+}
+
+.lumen-logo-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.is-animated .logo-outer-ring {
+  transform-origin: 50px 50px;
+  animation: logoSpinRing 24s linear infinite;
+}
+
+.is-animated .logo-inner-core {
+  transform-origin: 50px 50px;
+  animation: logoCorePulse 3.5s ease-in-out infinite alternate;
+}
+
+.is-animated .logo-ambient-aura {
+  transform-origin: 50px 50px;
+  animation: logoAuraPulse 4.5s ease-in-out infinite alternate;
+}
+
+.is-animated .logo-bright-spark {
+  transform-origin: 50px 50px;
+  animation: logoSparkle 2.2s ease-in-out infinite alternate;
+}
+
+@keyframes logoSpinRing {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes logoCorePulse {
+  0% { transform: scale(0.92); opacity: 0.85; }
+  50% { transform: scale(1.08); opacity: 1; filter: brightness(1.2); }
+  100% { transform: scale(0.92); opacity: 0.85; }
+}
+
+@keyframes logoAuraPulse {
+  0% { opacity: 0.15; transform: scale(0.95); }
+  100% { opacity: 0.35; transform: scale(1.1); }
+}
+
+@keyframes logoSparkle {
+  0% { opacity: 0.8; transform: scale(0.9); }
+  50% { opacity: 1; transform: scale(1.25); filter: drop-shadow(0 0 6px #fff); }
+  100% { opacity: 0.8; transform: scale(0.9); }
+}
+
 
 
 
