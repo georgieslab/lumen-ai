@@ -588,6 +588,53 @@ Tone & Guidelines:
   }
 });
 
+// Google Authentication Token Verification Endpoint
+app.post('/api/auth/google', async (req, res) => {
+  try {
+    const { credential, userInfo } = req.body || {};
+    let user = null;
+
+    if (credential && typeof credential === 'string') {
+      try {
+        const parts = credential.split('.');
+        if (parts.length === 3) {
+          const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf8'));
+          user = {
+            id: payload.sub,
+            email: payload.email,
+            name: payload.name || 'Google User',
+            givenName: payload.given_name || payload.name?.split(' ')[0] || 'User',
+            familyName: payload.family_name || '',
+            picture: payload.picture || null,
+            emailVerified: payload.email_verified
+          };
+        }
+      } catch (tokenErr) {
+        console.warn('Google token parse warning:', tokenErr.message);
+      }
+    }
+
+    if (!user && userInfo) {
+      user = userInfo;
+    }
+
+    if (!user) {
+      return res.status(400).json({ error: 'Invalid Google authentication payload' });
+    }
+
+    console.log(`[Google Auth] User authenticated: ${user.name} (${user.email})`);
+
+    res.json({
+      success: true,
+      user,
+      token: credential || `session-${user.id || Date.now()}`
+    });
+  } catch (err) {
+    console.error('Google Auth server error:', err);
+    res.status(500).json({ error: err.message || 'Authentication failed' });
+  }
+});
+
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ 

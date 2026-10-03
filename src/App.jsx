@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import AmbientSphere from './components/AmbientSphere';
 import VisionScanner, { SpatialMediaIcon } from './components/VisionScanner';
 import ConversationFeed from './components/ConversationFeed';
+import GoogleAuthButton from './components/GoogleAuthButton';
 import { converseWithLumen, processFile } from './services/api';
 
 const DEFAULT_GREETING = "I am Lumen, your ambient voice and vision AI companion. Tap the sphere or upload an image to begin.";
@@ -36,6 +37,14 @@ export default function App() {
   const [webMode, setWebMode] = useState('auto'); // 'auto' | 'always' | 'off'
   const [showLogDrawer, setShowLogDrawer] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [currentUser, setCurrentUser] = useState(() => {
+    try {
+      const saved = localStorage.getItem('lumen_google_user');
+      return saved ? JSON.parse(saved) : null;
+    } catch (_) {
+      return null;
+    }
+  });
 
   // Periodically refresh local circadian phase for auto mode
   useEffect(() => {
@@ -171,20 +180,30 @@ export default function App() {
     }
   };
 
-  // Load history from localStorage
+  // Load history from localStorage (scoped to current user account if signed in)
   useEffect(() => {
     try {
-      const saved = localStorage.getItem('lumen_standalone_history');
+      const storageKey = currentUser?.email ? `lumen_history_${currentUser.email}` : 'lumen_standalone_history';
+      const saved = localStorage.getItem(storageKey);
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
           setMessages(parsed);
+          return;
         }
+      }
+      if (currentUser?.givenName || currentUser?.name) {
+        setMessages([{
+          id: 'lumen-welcome',
+          role: 'assistant',
+          text: `Welcome back, ${currentUser.givenName || currentUser.name}. Your personal neural workspace is connected. How can I assist you today?`,
+          timestamp: Date.now()
+        }]);
       }
     } catch (err) {
       console.warn("Could not load saved conversation:", err);
     }
-  }, []);
+  }, [currentUser?.email]);
 
   // Save history to localStorage
   const persistMessages = (newMsgs) => {
@@ -194,10 +213,57 @@ export default function App() {
         ...m,
         image: m.image && m.image.length > 10000 ? null : m.image
       }));
-      localStorage.setItem('lumen_standalone_history', JSON.stringify(sanitised));
+      const storageKey = currentUser?.email ? `lumen_history_${currentUser.email}` : 'lumen_standalone_history';
+      localStorage.setItem(storageKey, JSON.stringify(sanitised));
     } catch (err) {
       console.warn("Storage write error:", err);
     }
+  };
+
+  const handleUserLogin = (user) => {
+    setCurrentUser(user);
+    try {
+      localStorage.setItem('lumen_google_user', JSON.stringify(user));
+      const userKey = `lumen_history_${user.email}`;
+      const saved = localStorage.getItem(userKey);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setMessages(parsed);
+          return;
+        }
+      }
+      const welcome = [{
+        id: `welcome-${Date.now()}`,
+        role: 'assistant',
+        text: `Welcome, ${user.givenName || user.name}. Your personal neural profile is active. How can I assist you today?`,
+        timestamp: Date.now()
+      }];
+      setMessages(welcome);
+      localStorage.setItem(userKey, JSON.stringify(welcome));
+      playBrowserSpeech(`Welcome, ${user.givenName || user.name}. How can I assist you today?`);
+    } catch (err) {
+      console.warn("Error on user login:", err);
+    }
+  };
+
+  const handleUserLogout = () => {
+    setCurrentUser(null);
+    try {
+      localStorage.removeItem('lumen_google_user');
+      const saved = localStorage.getItem('lumen_standalone_history');
+      if (saved) {
+        setMessages(JSON.parse(saved));
+      } else {
+        setMessages([{
+          id: 'lumen-welcome',
+          role: 'assistant',
+          text: DEFAULT_GREETING,
+          timestamp: Date.now()
+        }]);
+      }
+      playBrowserSpeech("You have signed out. Switching to guest session.");
+    } catch (_) {}
   };
 
   const transcriptRef = useRef('');
@@ -535,6 +601,14 @@ export default function App() {
               <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
             </svg>
           </a>
+
+          {/* Google Account Authentication */}
+          <GoogleAuthButton
+            currentUser={currentUser}
+            onLoginSuccess={handleUserLogin}
+            onLogout={handleUserLogout}
+            conversationCount={messages.length}
+          />
         </div>
       </header>
 
