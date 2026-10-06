@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { processFile } from '../services/api';
+import { getTranslations } from '../utils/translations';
 
 /**
  * High-Aesthetic Apple visionOS Spatial Media & Vision Icon
@@ -108,8 +109,10 @@ export default function VisionScanner({
   onFileCleared,
   onImageCleared, // backward compatibility
   isThinking,
-  externalInputRef
+  externalInputRef,
+  activeLanguage = 'en-US'
 }) {
+  const t = getTranslations(activeLanguage).scanner;
   const currentFile = selectedFile || processingFile || selectedImage;
   const isAnalyzing = Boolean((processingFile || selectedFile) && isThinking);
   const isFinished = Boolean(isComplete && !selectedFile && (processingFile || currentFile));
@@ -216,18 +219,18 @@ export default function VisionScanner({
               </span>
               <span className={`spatial-status-tag ${isFinished ? 'complete' : isAnalyzing ? 'processing' : isPdf ? 'pdf' : 'vision'}`}>
                 {isFinished 
-                  ? '✓ Analysis Complete' 
+                  ? t.analysisComplete 
                   : isAnalyzing 
-                  ? (isPdf ? '⚡ Analyzing Document...' : '👁️ Inspecting Pixels...') 
-                  : (isPdf ? 'Document Attached' : 'Vision Ready')}
+                  ? (isPdf ? t.analyzingDoc : t.analyzingImg) 
+                  : (isPdf ? t.docAttached : t.visionReady)}
               </span>
             </div>
             <span className="spatial-preview-sub">
               {isFinished
-                ? 'Synthesized into response knowledge'
+                ? t.completeSub
                 : isAnalyzing 
-                ? 'Amazon Bedrock Nova Multimodal processing contents...' 
-                : (isPdf ? 'Amazon Bedrock Native PDF Analysis' : 'Nova Multimodal Visual Inspection')}
+                ? t.analyzingSub 
+                : (isPdf ? t.pdfSub : t.visionSub)}
             </span>
           </div>
 
@@ -237,8 +240,8 @@ export default function VisionScanner({
               className="spatial-clear-btn" 
               onClick={handleClear}
               disabled={isThinking}
-              title="Remove attachment"
-              aria-label="Remove attachment"
+              title={t.removeTooltip}
+              aria-label={t.removeTooltip}
             >
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -254,7 +257,7 @@ export default function VisionScanner({
           )}
 
           {isFinished && (
-            <div className="spatial-complete-check" title="Analysis complete">
+            <div className="spatial-complete-check" title={t.analysisComplete}>
               ✓
             </div>
           )}
@@ -264,15 +267,15 @@ export default function VisionScanner({
           type="button"
           className="spatial-scanner-btn"
           onClick={() => fileInputRef.current?.click()}
-          title="Attach photo or drop document (PDF) for AI inspection"
+          title={t.inspectSub}
         >
           <div className="spatial-lens-aperture">
             <SpatialMediaIcon size={20} />
             <div className="spatial-lens-ambient-glow"></div>
           </div>
           <div className="spatial-scanner-text-block">
-            <span className="spatial-scanner-title">Inspect Photo / Document</span>
-            <span className="spatial-scanner-hint">Tap or drop file for multimodal analysis</span>
+            <span className="spatial-scanner-title">{t.inspectTitle}</span>
+            <span className="spatial-scanner-hint">{t.inspectSub}</span>
           </div>
           <div className="spatial-format-pill">
             <span>PDF</span>

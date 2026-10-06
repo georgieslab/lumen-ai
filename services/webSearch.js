@@ -1,11 +1,50 @@
 /**
- * Zero-Setup Internet Access Engine for Lumen AI
+ * Zero-Setup Internet Access & Web Browsing Engine for Lumen AI
+ * - Programmatic Live Web Browsing & Extraction Tool (SSRF-Protected)
  * - Free DuckDuckGo HTML Search Scraper (No API key required)
+ * - Wikipedia Knowledge Base API Fallback
  * - Real-Time URL Reader & Text Content Extractor
  * - Smart Intent Detection for Live Web Queries
  */
 
-function cleanHtmlEntities(str) {
+import { URL } from 'url';
+
+/**
+ * SSRF Guard: Validates that target URL is a public web resource
+ * Blocks access to localhost, private networks (RFC 1918), link-local, and cloud metadata
+ */
+export function isSafeUrl(urlString) {
+  if (!urlString || typeof urlString !== 'string') return false;
+  try {
+    const parsed = new URL(urlString.trim());
+    if (!['http:', 'https:'].includes(parsed.protocol)) return false;
+
+    const host = parsed.hostname.toLowerCase();
+
+    // Block localhost, link-local, loopback, and cloud metadata services
+    if (
+      host === 'localhost' ||
+      host === '127.0.0.1' ||
+      host === '::1' ||
+      host === '169.254.169.254' || // AWS/GCP instance metadata endpoint
+      host === 'metadata.google.internal' ||
+      /^10\./.test(host) ||
+      /^192\.168\./.test(host) ||
+      /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(host) ||
+      /^127\./.test(host) ||
+      host.endsWith('.internal') ||
+      host.endsWith('.local') ||
+      host.endsWith('.localhost')
+    ) {
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function cleanHtmlEntities(str) {
   if (!str) return '';
   return str
     .replace(/<[^>]+>/g, '')
@@ -19,7 +58,7 @@ function cleanHtmlEntities(str) {
     .trim();
 }
 
-function extractActualUrl(rawHref) {
+export function extractActualUrl(rawHref) {
   if (!rawHref) return '';
   try {
     if (rawHref.includes('uddg=')) {
@@ -32,6 +71,46 @@ function extractActualUrl(rawHref) {
     return rawHref;
   }
 }
+
+/**
+ * Programmatic Web Browsing & Extraction Tool
+ */
+export class WebBrowserTool {
+  constructor(options = {}) {
+    this.timeoutMs = options.timeoutMs || 8000;
+    this.maxContentLength = options.maxContentLength || 3500;
+    this.userAgent = options.userAgent || 
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+  }
+
+  isSafeUrl(url) {
+    return isSafeUrl(url);
+  }
+
+  cleanText(raw) {
+    return cleanHtmlEntities(raw);
+  }
+
+  /**
+   * Search the live web (DuckDuckGo fallback to Wikipedia)
+   */
+  async search(query, maxResults = 4) {
+    return searchDuckDuckGo(query, maxResults);
+  }
+
+  /**
+   * Navigate to a URL and extract clean text, headings, and metadata
+   */
+  async navigateAndExtract(targetUrl) {
+    return fetchUrlContent(targetUrl, {
+      timeoutMs: this.timeoutMs,
+      maxContentLength: this.maxContentLength,
+      userAgent: this.userAgent
+    });
+  }
+}
+
+export const webBrowser = new WebBrowserTool();
 
 /**
  * Perform a DuckDuckGo web search without any API keys
@@ -58,7 +137,7 @@ export async function searchDuckDuckGo(query, maxResults = 4) {
 
     if (!res.ok) {
       console.warn(`DuckDuckGo returned status ${res.status}`);
-      return [];
+      return await searchWikipedia(cleanQuery, maxResults);
     }
 
     const html = await res.text();
@@ -76,7 +155,7 @@ export async function searchDuckDuckGo(query, maxResults = 4) {
         const snippet = snippetMatch ? cleanHtmlEntities(snippetMatch[1]) : '';
         const actualUrl = extractActualUrl(rawUrl);
 
-        if (title || snippet) {
+        if ((title || snippet) && isSafeUrl(actualUrl)) {
           results.push({
             title: title || 'Web Result',
             snippet: snippet || '',
@@ -91,11 +170,10 @@ export async function searchDuckDuckGo(query, maxResults = 4) {
     }
 
     // Fallback to Wikipedia search API if DuckDuckGo HTML is challenged/empty
-    const wikiFallback = await searchWikipedia(cleanQuery, maxResults);
-    return wikiFallback;
+    return await searchWikipedia(cleanQuery, maxResults);
   } catch (err) {
     clearTimeout(timeout);
-    console.warn('DuckDuckGo search error:', err.message);
+    console.warn('DuckDuckGo search fallback to Wikipedia:', err.message);
     return await searchWikipedia(cleanQuery, maxResults);
   }
 }
@@ -122,23 +200,47 @@ export async function searchWikipedia(query, maxResults = 4) {
 }
 
 /**
- * Fetch and extract the text content from a web page URL
+ * Fetch and extract the readable text content from a web page URL with SSRF protection
  */
-export async function fetchUrlContent(targetUrl) {
+export async function fetchUrlContent(targetUrl, options = {}) {
+  const cleanUrl = String(targetUrl || '').trim();
+  if (!cleanUrl) {
+    return { success: false, error: 'No URL provided.', url: cleanUrl };
+  }
+
+  // Security SSRF check
+  if (!isSafeUrl(cleanUrl)) {
+    return {
+      success: false,
+      error: 'URL blocked by security guard (only public HTTP/HTTPS endpoints allowed).',
+      url: cleanUrl
+    };
+  }
+
+  const timeoutMs = options.timeoutMs || 8000;
+  const maxLen = options.maxContentLength || 3500;
+  const userAgent = options.userAgent || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 7000);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const res = await fetch(targetUrl, {
+    const res = await fetch(cleanUrl, {
       signal: controller.signal,
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'User-Agent': userAgent,
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
       }
     });
     clearTimeout(timeout);
 
-    if (!res.ok) throw new Error(`HTTP status ${res.status}`);
+    if (!res.ok) throw new Error(`HTTP status ${res.status}: ${res.statusText}`);
+
+    const contentType = res.headers.get('content-type') || '';
+    if (!contentType.includes('text/html') && !contentType.includes('text/plain') && !contentType.includes('application/json')) {
+      return { success: false, error: `Unsupported media format: ${contentType}`, url: cleanUrl };
+    }
+
     const html = await res.text();
 
     // Strip scripts, styles, svg, and HTML comments
@@ -148,36 +250,37 @@ export async function fetchUrlContent(targetUrl) {
       .replace(/<svg\b[^<]*(?:(?!<\/svg>)<[^<]*)*<\/svg>/gi, '')
       .replace(/<!--[\s\S]*?-->/g, '');
 
-    // Extract title
+    // Extract document title
     const titleMatch = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(cleaned);
-    const title = titleMatch ? cleanHtmlEntities(titleMatch[1]) : '';
+    const title = titleMatch ? cleanHtmlEntities(titleMatch[1]) : cleanUrl;
 
     // Extract readable paragraphs and headers
     const textBlocks = [];
     const blockRegex = /<(?:p|h[1-6]|li|article|section)[^>]*>([\s\S]*?)<\/(?:p|h[1-6]|li|article|section)>/gi;
     let b;
-    while ((b = blockRegex.exec(cleaned)) !== null && textBlocks.length < 35) {
+    while ((b = blockRegex.exec(cleaned)) !== null && textBlocks.length < 40) {
       const text = cleanHtmlEntities(b[1]);
       if (text.length > 25) {
         textBlocks.push(text);
       }
     }
 
-    const content = textBlocks.slice(0, 15).join('\n\n').slice(0, 3000);
+    const content = textBlocks.slice(0, 20).join('\n\n').slice(0, maxLen);
     return {
-      url: targetUrl,
-      title: title || targetUrl,
+      success: true,
+      url: cleanUrl,
+      title: title || cleanUrl,
       content: content || 'Could not extract readable article text from this page.',
-      success: true
+      timestamp: new Date().toISOString()
     };
   } catch (err) {
     clearTimeout(timeout);
-    console.warn(`URL Reader error for ${targetUrl}:`, err.message);
+    console.warn(`URL Reader error for ${cleanUrl}:`, err.message);
     return {
-      url: targetUrl,
-      title: targetUrl,
-      error: err.message,
-      success: false
+      success: false,
+      url: cleanUrl,
+      title: cleanUrl,
+      error: err.message
     };
   }
 }

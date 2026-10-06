@@ -77,7 +77,7 @@ export function processFile(file) {
 /**
  * Send voice transcript or text query along with optional image or PDF payload to Lumen backend
  */
-export async function converseWithLumen({ transcript, message, text, history = [], file = null, image = null, webMode = 'auto' }) {
+export async function converseWithLumen({ transcript, message, text, history = [], file = null, image = null, webMode = 'auto', language = 'en-US', voiceId = null }) {
   const targetFile = file || image;
   const payload = {
     transcript: transcript || message || text || '',
@@ -86,6 +86,8 @@ export async function converseWithLumen({ transcript, message, text, history = [
       text: h.text || ''
     })),
     webMode,
+    language,
+    voiceId,
     file: targetFile ? {
       base64: targetFile.base64,
       mimeType: targetFile.mimeType || (targetFile.isPdf ? 'application/pdf' : 'image/jpeg'),
@@ -113,6 +115,215 @@ export async function converseWithLumen({ transcript, message, text, history = [
   }
 
   return await response.json();
+}
+
+/**
+ * Stream conversational tokens, live widgets, and audio via Server-Sent Events (SSE)
+ */
+export async function converseWithLumenStream({
+  transcript,
+  message,
+  text,
+  history = [],
+  file = null,
+  image = null,
+  webMode = 'auto',
+  language = 'en-US',
+  voiceId = null,
+  onToken,
+  onToolStart,
+  onWidget,
+  onAudio,
+  onVoiceChange,
+  onDone,
+  onError
+}) {
+  const targetFile = file || image;
+  const payload = {
+    transcript: transcript || message || text || '',
+    history: history.slice(-8).map(h => ({
+      role: h.role,
+      text: h.text || ''
+    })),
+    webMode,
+    language,
+    voiceId,
+    file: targetFile ? {
+      base64: targetFile.base64,
+      mimeType: targetFile.mimeType || (targetFile.isPdf ? 'application/pdf' : 'image/jpeg'),
+      name: targetFile.name,
+      isPdf: Boolean(targetFile.isPdf)
+    } : null,
+    image: targetFile ? {
+      base64: targetFile.base64,
+      mimeType: targetFile.mimeType || (targetFile.isPdf ? 'application/pdf' : 'image/jpeg'),
+      name: targetFile.name
+    } : null
+  };
+
+  try {
+    const response = await fetch(`${API_URL}/api/converse/stream`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok || !response.body) {
+      throw new Error(`Stream HTTP ${response.status}`);
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let buffer = '';
+    let hasEmittedDone = false;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || !trimmed.startsWith('data:')) continue;
+        const jsonStr = trimmed.slice(5).trim();
+        if (!jsonStr) continue;
+
+        try {
+          const event = JSON.parse(jsonStr);
+          if (event.type === 'token' && onToken) {
+            onToken(event.token || event.text || '');
+          } else if (event.type === 'tool_start' && onToolStart) {
+            onToolStart(event);
+          } else if (event.type === 'widget' && onWidget) {
+            onWidget(event.widget);
+          } else if (event.type === 'audio' && onAudio) {
+            onAudio(event.audioBase64);
+          } else if (event.type === 'voice_change' && onVoiceChange) {
+            onVoiceChange(event.voiceId);
+          } else if (event.type === 'done' && onDone) {
+            hasEmittedDone = true;
+            onDone(event);
+          }
+        } catch (parseErr) {
+          console.warn("SSE chunk parse warning:", parseErr);
+        }
+      }
+
+    }
+
+    if (buffer.trim().startsWith('data:')) {
+      try {
+        const event = JSON.parse(buffer.trim().slice(5).trim());
+        if (event.type === 'done' && onDone) {
+          hasEmittedDone = true;
+          onDone(event);
+        }
+      } catch (_) {}
+    }
+
+    if (!hasEmittedDone && onDone) {
+      onDone({ replyText: '', widgets: [], toolsUsed: [], webSources: [] });
+    }
+  } catch (err) {
+    console.warn("Stream failed, attempting standard converse fallback:", err.message);
+    if (onError) onError(err);
+    try {
+      const fallbackData = await converseWithLumen({
+        transcript,
+        message,
+        text,
+        history,
+        file,
+        image,
+        webMode,
+        language,
+        voiceId
+      });
+      if (onToken && fallbackData.replyText) {
+        onToken(fallbackData.replyText);
+      }
+      if (onWidget && Array.isArray(fallbackData.widgets)) {
+        fallbackData.widgets.forEach(w => onWidget(w));
+      }
+      if (onAudio && fallbackData.audioBase64) {
+        onAudio(fallbackData.audioBase64);
+      }
+      if (onDone) {
+        onDone(fallbackData);
+      }
+    } catch (fallbackErr) {
+      if (onError) onError(fallbackErr);
+    }
+  }
+
+}
+
+export async function researchWithLumenStream({
+  transcript,
+  history = [],
+  language = 'en-US',
+  onProgress,
+  onDone
+}) {
+  const response = await fetch(`${API_URL}/api/research/stream`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      transcript,
+      history: history.slice(-8).map(message => ({
+        role: message.role,
+        text: message.text || ''
+      })),
+      language
+    })
+  });
+
+  if (!response.ok || !response.body) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.error || `Research request failed (${response.status})`);
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder('utf-8');
+  let buffer = '';
+  let completed = false;
+
+  const handleEvent = (line) => {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith('data:')) return;
+    const event = JSON.parse(trimmed.slice(5).trim());
+
+    if (event.type === 'progress' && onProgress) {
+      onProgress(event);
+    } else if (event.type === 'done' && onDone) {
+      completed = true;
+      onDone(event);
+    } else if (event.type === 'error') {
+      throw new Error(event.error || 'Research could not be completed.');
+    }
+  };
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+    for (const line of lines) {
+      if (line.trim()) handleEvent(line);
+    }
+  }
+
+  if (buffer.trim()) handleEvent(buffer);
+  if (!completed) {
+    throw new Error('The research service ended before returning a report.');
+  }
 }
 
 /**
@@ -157,4 +368,109 @@ export async function fetchLiveCryptoDirect(asset, currency = 'usd') {
   }
 }
 
+/**
+ * Generate a PDF document directly via Lumen PDF Engine
+ */
+export async function createPdfDirect(payload) {
+  try {
+    const res = await fetch(`${API_URL}/api/pdf/create`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } catch (err) {
+    console.warn("PDF creation request failed:", err);
+    return null;
+  }
+}
 
+/**
+ * Export conversation transcript to a PDF report directly
+ */
+export async function exportConversationPdfDirect(messages, user) {
+  try {
+    const res = await fetch(`${API_URL}/api/pdf/export-conversation`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages, user })
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } catch (err) {
+    console.warn("Conversation PDF export failed:", err);
+    return null;
+  }
+}
+
+/**
+ * Preview a neural voice sample via Amazon Polly
+ */
+export async function previewVoice(voiceId, text = '') {
+  const res = await fetch(`${API_URL}/api/voice/preview`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ voiceId, text })
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Voice preview request failed');
+  }
+  return await res.json();
+}
+
+/**
+ * Fetch available neural voices catalog
+ */
+export async function fetchVoiceList() {
+  const res = await fetch(`${API_URL}/api/voice/list`);
+  if (!res.ok) {
+    throw new Error('Failed to fetch voice catalog');
+  }
+  return await res.json();
+}
+
+/**
+ * Fetch health & diagnostic telemetry from Lumen backend with roundtrip latency measurement
+ */
+export async function fetchHealthStatus() {
+  const t0 = performance.now();
+  const res = await fetch(`${API_URL}/api/health`);
+  const t1 = performance.now();
+  if (!res.ok) throw new Error(`Health ping failed with HTTP ${res.status}`);
+  const data = await res.json();
+  return { ...data, latencyMs: Math.round(t1 - t0) };
+}
+
+/**
+ * Programmatic live web search
+ */
+export async function searchWebProgrammatic(query, limit = 4) {
+  const res = await fetch(`${API_URL}/api/browser/search`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query, limit })
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Web search failed');
+  }
+  return await res.json();
+}
+
+/**
+ * Programmatic live web browsing and content extraction
+ */
+export async function browseUrlProgrammatic(url) {
+  const res = await fetch(`${API_URL}/api/browser/browse`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url })
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Web browsing extraction failed');
+  }
+  return await res.json();
+}

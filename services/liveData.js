@@ -35,17 +35,43 @@ const WMO_CODES = {
  * Fetch live real-time weather and forecast for any city or coordinate
  */
 export async function fetchLiveWeather(cityQuery) {
-  const cleanCity = String(cityQuery || '').trim();
+  let cleanCity = String(cityQuery || '').trim();
   if (!cleanCity) {
     return { error: 'No city name provided.' };
   }
+
+  // Common multilingual aliases for European & global capitals
+  const CITY_ALIASES = {
+    'wien': 'Vienna',
+    'vienna': 'Vienna',
+    'münchen': 'Munich',
+    'munich': 'Munich',
+    'köln': 'Cologne',
+    'cologne': 'Cologne',
+    'zürich': 'Zurich',
+    'zurich': 'Zurich',
+    'genf': 'Geneva',
+    'geneva': 'Geneva',
+    'roma': 'Rome',
+    'rome': 'Rome',
+    'firenze': 'Florence',
+    'florence': 'Florence',
+    'warszawa': 'Warsaw',
+    'warsaw': 'Warsaw',
+    'praha': 'Prague',
+    'prague': 'Prague',
+    'lisboa': 'Lisbon',
+    'lisbon': 'Lisbon'
+  };
+
+  const lookupName = CITY_ALIASES[cleanCity.toLowerCase()] || cleanCity;
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 6000);
 
   try {
-    // 1. Geocode city name to lat/lon
-    const geoUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(cleanCity)}&count=1&language=en&format=json`;
+    // 1. Geocode city name to lat/lon with count=5 to sort by population
+    const geoUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(lookupName)}&count=5&language=en&format=json`;
     const geoRes = await fetch(geoUrl, { signal: controller.signal });
     if (!geoRes.ok) throw new Error(`Geocoding HTTP error ${geoRes.status}`);
     const geoData = await geoRes.json();
@@ -55,7 +81,9 @@ export async function fetchLiveWeather(cityQuery) {
       return { error: `Could not locate coordinates for "${cleanCity}".` };
     }
 
-    const loc = geoData.results[0];
+    // Sort candidates by population descending so major world cities & capitals win over small villages
+    const sorted = [...geoData.results].sort((a, b) => (b.population || 0) - (a.population || 0));
+    const loc = sorted[0];
     const { latitude, longitude, name, country, admin1 } = loc;
 
     // 2. Fetch live weather & daily forecast
