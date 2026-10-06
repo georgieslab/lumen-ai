@@ -4,12 +4,14 @@ import AmbientSphere from './components/AmbientSphere';
 import VisionScanner, { SpatialMediaIcon } from './components/VisionScanner';
 import ConversationFeed, { LiveWeatherCard, LiveCryptoCard, LivePdfCard, LiveJobsRadarCard } from './components/ConversationFeed';
 import LumenLogo from './components/LumenLogo';
+import GoogleAuthButton from './components/GoogleAuthButton';
+import UserMemoryModal from './components/UserMemoryModal';
 import WorkspaceShareModal from './components/WorkspaceShareModal';
 import WebcamLensModal from './components/WebcamLensModal';
 import LumenVoiceModal, { VOICE_PERSONAS } from './components/LumenVoiceModal';
 import TechStackModal from './components/TechStackModal';
 import { useAudioVisualizer } from './hooks/useAudioVisualizer';
-import { converseWithLumenStream, researchWithLumenStream, processFile, fetchAmbientData, exportConversationPdfDirect } from './services/api';
+import { converseWithLumenStream, researchWithLumenStream, processFile, fetchAmbientData, exportConversationPdfDirect, getAuthSession } from './services/api';
 import { getTranslations, formatString, DEFAULT_VOICES_BY_LANG } from './utils/translations';
 
 function getCircadianPhase() {
@@ -25,6 +27,24 @@ function isResearchReportRequest(prompt) {
   const asksForResearch = /\b(research|investigate|look up|find out about)\b/i.test(prompt);
   const asksForDeliverable = /\b(pdf|report|briefing|dossier)\b/i.test(prompt);
   return asksForResearch && asksForDeliverable;
+}
+
+const INTERACTION_TONES = ['friendly', 'casual', 'professional', 'formal'];
+const RESPONSE_STYLES = ['concise', 'detailed', 'narrative', 'bullets'];
+
+function loadPreference(key, options, fallback) {
+  try {
+    const saved = localStorage.getItem(key);
+    return options.includes(saved) ? saved : fallback;
+  } catch (_) {
+    return fallback;
+  }
+}
+
+function getConversationStorageKey(user) {
+  if (!user) return 'lumen_standalone_history';
+  if (user.provider === 'google' && user.email) return `lumen_history_${user.email}`;
+  return `lumen_history_${user.provider || 'account'}_${user.id}`;
 }
 
 export default function App() {
@@ -50,6 +70,12 @@ export default function App() {
   });
   const [currentHourPhase, setCurrentHourPhase] = useState(getCircadianPhase());
   const [webMode, setWebMode] = useState('auto'); // 'auto' | 'always' | 'off'
+  const [interactionTone, setInteractionTone] = useState(() =>
+    loadPreference('lumen_interaction_tone', INTERACTION_TONES, 'friendly')
+  );
+  const [responseStyle, setResponseStyle] = useState(() =>
+    loadPreference('lumen_response_style', RESPONSE_STYLES, 'concise')
+  );
   const [showLogDrawer, setShowLogDrawer] = useState(false);
   const [isAttachmentMenuOpen, setIsAttachmentMenuOpen] = useState(false);
   const [isMobileControlsOpen, setIsMobileControlsOpen] = useState(false);
@@ -98,6 +124,8 @@ export default function App() {
   });
   const [isVoiceModalOpen, setIsVoiceModalOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [isMemoryModalOpen, setIsMemoryModalOpen] = useState(false);
+  const [memoryNotice, setMemoryNotice] = useState('');
   const [isTechStackModalOpen, setIsTechStackModalOpen] = useState(false);
   const [jobFilter, setJobFilter] = useState(() => {
     try {
@@ -121,16 +149,18 @@ export default function App() {
       });
     }
   };
-  const [currentUser, setCurrentUser] = useState(() => {
-    try {
-      const saved = localStorage.getItem('lumen_google_user');
-      return saved ? JSON.parse(saved) : null;
-    } catch (_) {
-      return null;
-    }
-  });
+  const [currentUser, setCurrentUser] = useState(null);
 
   const t = getTranslations(activeLanguage);
+
+  useEffect(() => {
+    try {
+      localStorage.removeItem('lumen_google_user');
+    } catch (_) {}
+    getAuthSession()
+      .then(({ user }) => setCurrentUser(user || null))
+      .catch(error => console.warn('Could not restore the signed-in account:', error.message));
+  }, []);
 
   const handleCycleTheme = () => {
     const themes = ['visionos', 'cyberpunk', 'obsidian', 'solardawn', 'highcontrast'];
@@ -177,6 +207,22 @@ export default function App() {
       }
       return prev;
     });
+  };
+
+  const handleCycleInteractionTone = () => {
+    const next = INTERACTION_TONES[(INTERACTION_TONES.indexOf(interactionTone) + 1) % INTERACTION_TONES.length];
+    setInteractionTone(next);
+    try {
+      localStorage.setItem('lumen_interaction_tone', next);
+    } catch (_) {}
+  };
+
+  const handleCycleResponseStyle = () => {
+    const next = RESPONSE_STYLES[(RESPONSE_STYLES.indexOf(responseStyle) + 1) % RESPONSE_STYLES.length];
+    setResponseStyle(next);
+    try {
+      localStorage.setItem('lumen_response_style', next);
+    } catch (_) {}
   };
 
   const getLanguageInfo = () => {
@@ -443,7 +489,7 @@ export default function App() {
   // Load history from localStorage (scoped to current user account if signed in)
   useEffect(() => {
     try {
-      const storageKey = currentUser?.email ? `lumen_history_${currentUser.email}` : 'lumen_standalone_history';
+      const storageKey = getConversationStorageKey(currentUser);
       const saved = localStorage.getItem(storageKey);
       if (saved) {
         const parsed = JSON.parse(saved);
@@ -463,7 +509,7 @@ export default function App() {
     } catch (err) {
       console.warn("Could not load saved conversation:", err);
     }
-  }, [currentUser?.email]);
+  }, [currentUser?.provider, currentUser?.id, currentUser?.email]);
 
   // Save history to localStorage
   const persistMessages = (newMsgs) => {
@@ -473,7 +519,7 @@ export default function App() {
         ...m,
         image: m.image && m.image.length > 10000 ? null : m.image
       }));
-      const storageKey = currentUser?.email ? `lumen_history_${currentUser.email}` : 'lumen_standalone_history';
+      const storageKey = getConversationStorageKey(currentUser);
       localStorage.setItem(storageKey, JSON.stringify(sanitised));
     } catch (err) {
       console.warn("Storage write error:", err);
@@ -483,8 +529,8 @@ export default function App() {
   const handleUserLogin = (user) => {
     setCurrentUser(user);
     try {
-      localStorage.setItem('lumen_google_user', JSON.stringify(user));
-      const userKey = `lumen_history_${user.email}`;
+      localStorage.removeItem('lumen_google_user');
+      const userKey = getConversationStorageKey(user);
       const saved = localStorage.getItem(userKey);
       if (saved) {
         const parsed = JSON.parse(saved);
@@ -496,12 +542,12 @@ export default function App() {
       const welcome = [{
         id: `welcome-${Date.now()}`,
         role: 'assistant',
-        text: `Welcome, ${user.givenName || user.name}. Your personal neural profile is active. How can I assist you today?`,
+        text: `Welcome, ${user.name}. Your personal neural profile is active. How can I assist you today?`,
         timestamp: Date.now()
       }];
       setMessages(welcome);
       localStorage.setItem(userKey, JSON.stringify(welcome));
-      playBrowserSpeech(`Welcome, ${user.givenName || user.name}. How can I assist you today?`);
+      playBrowserSpeech(`Welcome, ${user.name}. How can I assist you today?`);
     } catch (err) {
       console.warn("Error on user login:", err);
     }
@@ -509,6 +555,7 @@ export default function App() {
 
   const handleUserLogout = () => {
     setCurrentUser(null);
+    setMemoryNotice('');
     try {
       localStorage.removeItem('lumen_google_user');
       const saved = localStorage.getItem('lumen_standalone_history');
@@ -691,6 +738,13 @@ export default function App() {
           transcript: userPrompt,
           history: nextMessages,
           language: activeLanguage,
+          tone: interactionTone,
+          responseStyle,
+          onMemoryStatus: (status) => setMemoryNotice(status.error
+            ? t.memoryManager.autoSaveError
+            : status.saved
+              ? formatString(t.memoryManager.autoSaved, { count: status.saved })
+              : ''),
           onProgress: (progress) => {
             setIsThinking(true);
             setMessages(prev => prev.map(message => message.id === assistantMsgId
@@ -707,6 +761,13 @@ export default function App() {
           webMode,
           language: activeLanguage,
           voiceId: activeVoice,
+          tone: interactionTone,
+          responseStyle,
+          onMemoryStatus: (status) => setMemoryNotice(status.error
+            ? t.memoryManager.autoSaveError
+            : status.saved
+              ? formatString(t.memoryManager.autoSaved, { count: status.saved })
+              : ''),
           onToken: (token) => {
             accumulatedText += token;
             setIsThinking(false);
@@ -908,6 +969,18 @@ export default function App() {
       onSelect: handleCycleLanguage
     },
     {
+      icon: '🗣️',
+      label: t.personalization.tone,
+      description: `${t.personalization.tones[interactionTone]} · ${t.personalization.toneHint}`,
+      onSelect: handleCycleInteractionTone
+    },
+    {
+      icon: '✍️',
+      label: t.personalization.responseStyle,
+      description: `${t.personalization.styles[responseStyle]} · ${t.personalization.styleHint}`,
+      onSelect: handleCycleResponseStyle
+    },
+    {
       icon: '🎙️',
       label: activeVoice,
       description: formatString(t.header.voiceTooltip, { voice: activeVoice }),
@@ -1093,6 +1166,19 @@ export default function App() {
           <h1 className="brand-title">LUMEN</h1>
         </div>
 
+        <GoogleAuthButton
+          currentUser={currentUser}
+          onLoginSuccess={handleUserLogin}
+          onLogout={handleUserLogout}
+          onOpenMemory={() => setIsMemoryModalOpen(true)}
+          onOpenSettings={() => {
+            setIsExplorePanelOpen(false);
+            setIsMobileControlsOpen(true);
+          }}
+          activeLanguage={activeLanguage}
+          conversationCount={Math.max(0, messages.length - 1)}
+        />
+
         <div className="header-actions">
           {/* Circadian Atmosphere Cycle */}
           <button 
@@ -1272,7 +1358,12 @@ export default function App() {
               className="quick-start-action"
               onClick={() => handleQuickStartAction(handleToggleListen)}
             >
-              <span aria-hidden="true">🎙️</span>
+              <span className="quick-start-action-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="9" y="3" width="6" height="11" rx="3" />
+                  <path d="M5 11v1a7 7 0 0 0 14 0v-1M12 19v3M8 22h8" />
+                </svg>
+              </span>
               <span>{t.quickStart.sphere}</span>
             </button>
             <button
@@ -1280,7 +1371,12 @@ export default function App() {
               className="quick-start-action"
               onClick={() => handleQuickStartAction(() => setShowLogDrawer(true))}
             >
-              <span aria-hidden="true">💬</span>
+              <span className="quick-start-action-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M20 11.5a7.5 7.5 0 0 1-7.5 7.5H6l-3 2v-6a7.5 7.5 0 1 1 17-3.5Z" />
+                  <path d="M8 10h8M8 13.5h5" />
+                </svg>
+              </span>
               <span>{t.quickStart.chat}</span>
             </button>
             <button
@@ -1883,6 +1979,13 @@ export default function App() {
         onClose={() => setIsTechStackModalOpen(false)}
         activeLanguage={activeLanguage}
         activeVoice={activeVoice}
+      />
+
+      <UserMemoryModal
+        isOpen={isMemoryModalOpen}
+        onClose={() => setIsMemoryModalOpen(false)}
+        activeLanguage={activeLanguage}
+        statusNotice={memoryNotice}
       />
     </div>
   );

@@ -74,10 +74,89 @@ export function processFile(file) {
   }
 }
 
+async function authenticatedJsonRequest(path, options = {}) {
+  const response = await fetch(`${API_URL}${path}`, {
+    ...options,
+    credentials: 'include',
+    headers: {
+      ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+      ...options.headers
+    }
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || `Request failed (${response.status})`);
+  }
+  return data;
+}
+
+export async function getAuthSession() {
+  return authenticatedJsonRequest('/api/auth/session');
+}
+
+export async function getAuthProviders() {
+  return authenticatedJsonRequest('/api/auth/providers');
+}
+
+export async function signInWithGoogle(credential) {
+  return authenticatedJsonRequest('/api/auth/google', {
+    method: 'POST',
+    body: JSON.stringify({ credential })
+  });
+}
+
+export async function signOut() {
+  return authenticatedJsonRequest('/api/auth/logout', { method: 'POST' });
+}
+
+export function beginGithubSignIn() {
+  window.location.assign(`${API_URL}/api/auth/github`);
+}
+
+export async function getUserMemory() {
+  return authenticatedJsonRequest('/api/memory');
+}
+
+export async function saveUserProfile(text) {
+  return authenticatedJsonRequest('/api/memory/profile', {
+    method: 'PUT',
+    body: JSON.stringify({ text })
+  });
+}
+
+export async function setAutoMemory(enabled) {
+  return authenticatedJsonRequest('/api/memory/settings', {
+    method: 'PATCH',
+    body: JSON.stringify({ autoMemoryEnabled: enabled })
+  });
+}
+
+export async function createUserMemory(text) {
+  return authenticatedJsonRequest('/api/memory/items', {
+    method: 'POST',
+    body: JSON.stringify({ text })
+  });
+}
+
+export async function updateUserMemory(id, text) {
+  return authenticatedJsonRequest(`/api/memory/items/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ text })
+  });
+}
+
+export async function deleteUserMemory(id) {
+  return authenticatedJsonRequest(`/api/memory/items/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
+export async function clearUserMemory() {
+  return authenticatedJsonRequest('/api/memory', { method: 'DELETE' });
+}
+
 /**
  * Send voice transcript or text query along with optional image or PDF payload to Lumen backend
  */
-export async function converseWithLumen({ transcript, message, text, history = [], file = null, image = null, webMode = 'auto', language = 'en-US', voiceId = null }) {
+export async function converseWithLumen({ transcript, message, text, history = [], file = null, image = null, webMode = 'auto', language = 'en-US', voiceId = null, tone = 'friendly', responseStyle = 'concise' }) {
   const targetFile = file || image;
   const payload = {
     transcript: transcript || message || text || '',
@@ -88,6 +167,8 @@ export async function converseWithLumen({ transcript, message, text, history = [
     webMode,
     language,
     voiceId,
+    tone,
+    responseStyle,
     file: targetFile ? {
       base64: targetFile.base64,
       mimeType: targetFile.mimeType || (targetFile.isPdf ? 'application/pdf' : 'image/jpeg'),
@@ -103,6 +184,7 @@ export async function converseWithLumen({ transcript, message, text, history = [
 
   const response = await fetch(`${API_URL}/api/converse`, {
     method: 'POST',
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json'
     },
@@ -130,6 +212,9 @@ export async function converseWithLumenStream({
   webMode = 'auto',
   language = 'en-US',
   voiceId = null,
+  tone = 'friendly',
+  responseStyle = 'concise',
+  onMemoryStatus,
   onToken,
   onToolStart,
   onWidget,
@@ -148,6 +233,8 @@ export async function converseWithLumenStream({
     webMode,
     language,
     voiceId,
+    tone,
+    responseStyle,
     file: targetFile ? {
       base64: targetFile.base64,
       mimeType: targetFile.mimeType || (targetFile.isPdf ? 'application/pdf' : 'image/jpeg'),
@@ -164,6 +251,7 @@ export async function converseWithLumenStream({
   try {
     const response = await fetch(`${API_URL}/api/converse/stream`, {
       method: 'POST',
+      credentials: 'include',
       headers: {
         'Content-Type': 'application/json'
       },
@@ -205,6 +293,8 @@ export async function converseWithLumenStream({
             onAudio(event.audioBase64);
           } else if (event.type === 'voice_change' && onVoiceChange) {
             onVoiceChange(event.voiceId);
+          } else if (event.type === 'memory_status' && onMemoryStatus) {
+            onMemoryStatus(event);
           } else if (event.type === 'done' && onDone) {
             hasEmittedDone = true;
             onDone(event);
@@ -219,6 +309,9 @@ export async function converseWithLumenStream({
     if (buffer.trim().startsWith('data:')) {
       try {
         const event = JSON.parse(buffer.trim().slice(5).trim());
+        if (event.type === 'memory_status' && onMemoryStatus) {
+          onMemoryStatus(event);
+        }
         if (event.type === 'done' && onDone) {
           hasEmittedDone = true;
           onDone(event);
@@ -242,8 +335,13 @@ export async function converseWithLumenStream({
         image,
         webMode,
         language,
-        voiceId
+        voiceId,
+        tone,
+        responseStyle
       });
+      if (fallbackData.memoryStatus && onMemoryStatus) {
+        onMemoryStatus(fallbackData.memoryStatus);
+      }
       if (onToken && fallbackData.replyText) {
         onToken(fallbackData.replyText);
       }
@@ -267,11 +365,15 @@ export async function researchWithLumenStream({
   transcript,
   history = [],
   language = 'en-US',
+  tone = 'friendly',
+  responseStyle = 'concise',
+  onMemoryStatus,
   onProgress,
   onDone
 }) {
   const response = await fetch(`${API_URL}/api/research/stream`, {
     method: 'POST',
+    credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       transcript,
@@ -279,7 +381,9 @@ export async function researchWithLumenStream({
         role: message.role,
         text: message.text || ''
       })),
-      language
+      language,
+      tone,
+      responseStyle
     })
   });
 
@@ -300,6 +404,8 @@ export async function researchWithLumenStream({
 
     if (event.type === 'progress' && onProgress) {
       onProgress(event);
+    } else if (event.type === 'memory_status' && onMemoryStatus) {
+      onMemoryStatus(event);
     } else if (event.type === 'done' && onDone) {
       completed = true;
       onDone(event);

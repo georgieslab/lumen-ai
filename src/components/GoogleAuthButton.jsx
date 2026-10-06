@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
-import { jwtDecode } from 'jwt-decode';
+import { beginGithubSignIn, getAuthProviders, signInWithGoogle, signOut } from '../services/api';
 
 /**
  * Official Google 'G' Multi-Color Icon
@@ -32,11 +32,16 @@ export default function GoogleAuthButton({
   currentUser,
   onLoginSuccess,
   onLogout,
+  onOpenMemory,
+  onOpenSettings,
+  activeLanguage = 'en-US',
   conversationCount = 0
 }) {
   const [showDropdown, setShowDropdown] = useState(false);
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [clientIdInput, setClientIdInput] = useState('');
+  const [authError, setAuthError] = useState('');
+  const [githubEnabled, setGithubEnabled] = useState(null);
   const [configuredClientId, setConfiguredClientId] = useState(() => {
     return import.meta.env.VITE_GOOGLE_CLIENT_ID || localStorage.getItem('lumen_google_client_id') || '';
   });
@@ -53,50 +58,51 @@ export default function GoogleAuthButton({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    let active = true;
+    getAuthProviders()
+      .then(providers => {
+        if (active) setGithubEnabled(providers.github === true);
+      })
+      .catch(error => {
+        console.warn('Could not check sign-in providers:', error.message);
+        if (active) setGithubEnabled(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (url.searchParams.get('auth_error') === 'github') {
+      setAuthError('GitHub sign-in failed or was cancelled. Check the OAuth app configuration and try again.');
+      url.searchParams.delete('auth_error');
+      window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
+    }
+  }, []);
+
   const handleGoogleSuccess = async (credentialResponse) => {
     try {
       if (!credentialResponse?.credential) return;
-      const decoded = jwtDecode(credentialResponse.credential);
-      
-      const userData = {
-        id: decoded.sub,
-        email: decoded.email,
-        name: decoded.name || 'Google User',
-        givenName: decoded.given_name || decoded.name?.split(' ')[0] || 'User',
-        picture: decoded.picture || null,
-        credential: credentialResponse.credential
-      };
-
-      // Also inform backend server
-      try {
-        await fetch('/api/auth/google', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ credential: credentialResponse.credential, userInfo: userData })
-        });
-      } catch (err) {
-        console.warn('Backend google auth sync notice:', err.message);
-      }
-
-      onLoginSuccess(userData);
+      setAuthError('');
+      const result = await signInWithGoogle(credentialResponse.credential);
+      onLoginSuccess(result.user);
       setShowConfigModal(false);
       setShowDropdown(false);
     } catch (err) {
-      console.error('Google token decoding failed:', err);
+      setAuthError(err.message || 'Google sign-in failed.');
     }
   };
 
-  const handleDemoLogin = () => {
-    const demoUser = {
-      id: 'demo-google-user-101',
-      email: 'alex.creator@gmail.com',
-      name: 'Alex Rivera',
-      givenName: 'Alex',
-      picture: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
-      isDemo: true
-    };
-    onLoginSuccess(demoUser);
-    setShowConfigModal(false);
+  const handleGithubSignIn = async () => {
+    if (githubEnabled === null) return;
+    if (!githubEnabled) {
+      setAuthError('GitHub sign-in is unavailable. The Lumen server needs its GitHub OAuth credentials and session secret configured.');
+      return;
+    }
+    setAuthError('');
+    beginGithubSignIn();
   };
 
   const handleSaveCustomClientId = (e) => {
@@ -109,9 +115,14 @@ export default function GoogleAuthButton({
     }
   };
 
-  const handleSignOut = () => {
-    setShowDropdown(false);
-    onLogout();
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+      setShowDropdown(false);
+      onLogout();
+    } catch (err) {
+      setAuthError(err.message || 'Could not sign out.');
+    }
   };
 
   return (
@@ -123,7 +134,7 @@ export default function GoogleAuthButton({
             type="button"
             className="google-user-pill"
             onClick={() => setShowDropdown(!showDropdown)}
-            title={`Signed in as ${currentUser.name} (${currentUser.email})`}
+            title={`Signed in with ${currentUser.provider || 'Google'} as ${currentUser.name}${currentUser.email ? ` (${currentUser.email})` : ''}`}
             aria-expanded={showDropdown}
           >
             {currentUser.picture ? (
@@ -137,7 +148,7 @@ export default function GoogleAuthButton({
               />
             ) : (
               <div className="google-user-avatar fallback">
-                {currentUser.givenName?.[0] || currentUser.name?.[0] || 'U'}
+                {currentUser.name?.[0] || 'U'}
               </div>
             )}
             <span className="google-user-name">{currentUser.givenName || currentUser.name}</span>
@@ -152,15 +163,12 @@ export default function GoogleAuthButton({
                   <img src={currentUser.picture} alt={currentUser.name} className="dropdown-avatar" />
                 ) : (
                   <div className="dropdown-avatar fallback">
-                    {currentUser.givenName?.[0] || currentUser.name?.[0] || 'U'}
+                    {currentUser.name?.[0] || 'U'}
                   </div>
                 )}
                 <div className="dropdown-info">
                   <div className="dropdown-name">{currentUser.name}</div>
-                  <div className="dropdown-email">{currentUser.email}</div>
-                  {currentUser.isDemo && (
-                    <span className="demo-badge">Demo Google Account</span>
-                  )}
+                  <div className="dropdown-email">{currentUser.email || currentUser.provider}</div>
                 </div>
               </div>
 
@@ -168,8 +176,8 @@ export default function GoogleAuthButton({
 
               <div className="dropdown-stats">
                 <div className="stat-item">
-                  <span className="stat-label">Cloud Memory</span>
-                  <span className="stat-value text-emerald">● Synchronized</span>
+                  <span className="stat-label">Account</span>
+                  <span className="stat-value text-emerald">● {currentUser.provider || 'Google'}</span>
                 </div>
                 <div className="stat-item">
                   <span className="stat-label">Messages</span>
@@ -178,6 +186,17 @@ export default function GoogleAuthButton({
               </div>
 
               <div className="dropdown-divider"></div>
+
+              <button
+                type="button"
+                className="dropdown-memory-btn"
+                onClick={() => {
+                  setShowDropdown(false);
+                  onOpenMemory?.();
+                }}
+              >
+                Manage profile & memory
+              </button>
 
               <button
                 type="button"
@@ -197,15 +216,13 @@ export default function GoogleAuthButton({
       ) : (
         /* 2. Logged out state */
         <div className="google-signin-container">
-          {configuredClientId ? (
-            <div className="google-oauth-row">
+          <div className="google-oauth-row">
+            {configuredClientId ? (
               <GoogleOAuthProvider clientId={configuredClientId}>
                 <div className="google-login-box">
                   <GoogleLogin
                     onSuccess={handleGoogleSuccess}
-                    onError={() => {
-                      console.warn('Google Sign-In origin or client notice');
-                    }}
+                    onError={() => setAuthError('Google sign-in could not start. Check the authorized origin and OAuth client ID.')}
                     theme="filled_black"
                     shape="pill"
                     size="medium"
@@ -213,29 +230,51 @@ export default function GoogleAuthButton({
                   />
                 </div>
               </GoogleOAuthProvider>
+            ) : (
               <button
                 type="button"
-                className="google-help-pill-btn"
+                className="google-auth-trigger-btn"
                 onClick={() => setShowConfigModal(true)}
-                title="Google Setup & Authorized Origins Guide / Demo Sign-In"
-                aria-label="Google Setup & Origins Guide"
+                title="Set up Google sign-in"
               >
-                ⚙️
+                <GoogleIcon size={16} />
+                <span className="google-btn-text">Google</span>
               </button>
-            </div>
-          ) : (
+            )}
             <button
               type="button"
-              className="google-auth-trigger-btn"
-              onClick={() => setShowConfigModal(true)}
-              title="Sign in with Google Account"
+              className="github-auth-trigger-btn"
+              onClick={handleGithubSignIn}
+              disabled={githubEnabled === null}
+              aria-label="Sign in with GitHub"
+              title={githubEnabled === null
+                ? 'Checking GitHub sign-in availability'
+                : githubEnabled
+                  ? 'Sign in with GitHub'
+                  : 'GitHub sign-in is not configured; click for details'}
             >
-              <GoogleIcon size={16} />
-              <span className="google-btn-text">Sign In</span>
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M12 .9a11.1 11.1 0 0 0-3.51 21.63c.55.1.76-.24.76-.54v-2.08c-3.1.67-3.76-1.32-3.76-1.32-.5-1.29-1.24-1.63-1.24-1.63-1.01-.69.08-.68.08-.68 1.12.08 1.71 1.15 1.71 1.15 1 .1.75 2.23 3.03 1.58.1-.73.39-1.22.7-1.5-2.48-.28-5.08-1.24-5.08-5.52 0-1.22.44-2.22 1.15-3-.12-.28-.5-1.42.11-2.95 0 0 .94-.3 3.06 1.15a10.6 10.6 0 0 1 5.57 0c2.12-1.45 3.06-1.15 3.06-1.15.61 1.53.23 2.67.11 2.95.72.78 1.15 1.78 1.15 3 0 4.29-2.6 5.24-5.09 5.51.4.35.75 1.03.75 2.08v3.08c0 .3.2.65.77.54A11.1 11.1 0 0 0 12 .9Z" />
+              </svg>
+              <span className="google-btn-text">GitHub</span>
             </button>
-          )}
+          </div>
+          <button
+            type="button"
+            className="google-help-pill-btn"
+            onClick={() => onOpenSettings?.()}
+            title="Open Lumen settings and tools"
+            aria-label="Open Lumen settings and tools"
+          >
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z" />
+              <path d="m19.4 15 .1.1a1.8 1.8 0 1 1-2.5 2.5l-.1-.1a1.8 1.8 0 0 0-3 .9v.2a1.8 1.8 0 1 1-3.6 0v-.2a1.8 1.8 0 0 0-3-.9l-.1.1a1.8 1.8 0 1 1-2.5-2.5l.1-.1a1.8 1.8 0 0 0-.9-3h-.2a1.8 1.8 0 1 1 0-3.6h.2a1.8 1.8 0 0 0 .9-3l-.1-.1a1.8 1.8 0 1 1 2.5-2.5l.1.1a1.8 1.8 0 0 0 3-.9v-.2a1.8 1.8 0 1 1 3.6 0v.2a1.8 1.8 0 0 0 3 .9l.1-.1a1.8 1.8 0 1 1 2.5 2.5l-.1.1a1.8 1.8 0 0 0 .9 3h.2a1.8 1.8 0 1 1 0 3.6h-.2a1.8 1.8 0 0 0-.9 3Z" />
+            </svg>
+          </button>
+          {authError && <p className="auth-error-message" role="alert">{authError}</p>}
         </div>
       )}
+      {currentUser && authError && <p className="auth-error-message" role="alert">{authError}</p>}
 
       {/* 3. Google OAuth Setup / Demo Modal */}
       {showConfigModal && (
@@ -244,7 +283,7 @@ export default function GoogleAuthButton({
             <div className="modal-header">
               <div className="modal-title-row">
                 <GoogleIcon size={24} />
-                <h3>Google Sign-In Setup</h3>
+                <h3>Sign-In Setup</h3>
               </div>
               <button
                 type="button"
@@ -276,24 +315,8 @@ export default function GoogleAuthButton({
             </div>
 
             <p className="modal-description">
-              Sign in with your Google account to enable persistent cloud conversation memory, custom voice preferences, and personalized ambient AI experiences.
+              Sign in to sync your profile and personal memories. Google and GitHub accounts remain separate, even when their email addresses match.
             </p>
-
-            <div className="modal-demo-section">
-              <button
-                type="button"
-                className="btn-demo-login"
-                onClick={handleDemoLogin}
-              >
-                <GoogleIcon size={18} />
-                <span>Instant Sign In (Demo Profile)</span>
-              </button>
-              <span className="demo-hint">Tests user profile, avatar, cloud sync status & private memory</span>
-            </div>
-
-            <div className="modal-divider">
-              <span>OR CONNECT REAL CLIENT ID</span>
-            </div>
 
             <form onSubmit={handleSaveCustomClientId} className="client-id-form">
               <label htmlFor="clientIdInput" className="form-label">
@@ -335,8 +358,10 @@ export default function GoogleAuthButton({
                 <code>{window.location.origin}</code>
               </div>
               <div className="instruction-step">
-                <strong>3.</strong> Paste in your <code>.env</code> file:
-                <code>VITE_GOOGLE_CLIENT_ID=your_id.apps.googleusercontent.com</code>
+                <strong>3.</strong> Configure <code>VITE_GOOGLE_CLIENT_ID</code> and the matching server-side <code>GOOGLE_CLIENT_ID</code> in <code>.env</code>.
+              </div>
+              <div className="instruction-step">
+                <strong>4.</strong> For GitHub, set <code>GITHUB_OAUTH_CLIENT_ID</code>, <code>GITHUB_OAUTH_CLIENT_SECRET</code>, <code>GITHUB_OAUTH_CALLBACK_URL</code>, and a valid <code>LUMEN_SESSION_SECRET</code> on the API server.
               </div>
             </div>
           </div>

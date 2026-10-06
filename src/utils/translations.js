@@ -50,6 +50,14 @@ export const TRANSLATIONS = {
       explore: "Explore one-tap examples",
       attach: "Add an image or PDF"
     },
+    personalization: {
+      tone: "Conversation tone",
+      toneHint: "Tap to cycle",
+      tones: { friendly: "Friendly", casual: "Casual", professional: "Professional", formal: "Formal" },
+      responseStyle: "Response style",
+      styleHint: "Tap to cycle",
+      styles: { concise: "Concise", detailed: "Detailed", narrative: "Narrative", bullets: "Bullet points" }
+    },
     header: {
       atmosphere: "Atmosphere",
       visualTheme: "Visual Theme",
@@ -297,6 +305,14 @@ export const TRANSLATIONS = {
       chat: "Abre el chat para ver respuestas",
       explore: "Explora ejemplos con un toque",
       attach: "Añade una imagen o PDF"
+    },
+    personalization: {
+      tone: "Tono de conversación",
+      toneHint: "Toca para cambiar",
+      tones: { friendly: "Amable", casual: "Informal", professional: "Profesional", formal: "Formal" },
+      responseStyle: "Estilo de respuesta",
+      styleHint: "Toca para cambiar",
+      styles: { concise: "Conciso", detailed: "Detallado", narrative: "Narrativo", bullets: "Viñetas" }
     },
     header: {
       atmosphere: "Atmósfera",
@@ -546,6 +562,14 @@ export const TRANSLATIONS = {
       explore: "Découvrez des exemples en un toucher",
       attach: "Ajoutez une image ou un PDF"
     },
+    personalization: {
+      tone: "Ton de conversation",
+      toneHint: "Touchez pour changer",
+      tones: { friendly: "Amical", casual: "Décontracté", professional: "Professionnel", formal: "Formel" },
+      responseStyle: "Style de réponse",
+      styleHint: "Touchez pour changer",
+      styles: { concise: "Concis", detailed: "Détaillé", narrative: "Narratif", bullets: "À puces" }
+    },
     header: {
       atmosphere: "Atmosphère",
       visualTheme: "Thème visuel",
@@ -793,6 +817,14 @@ export const TRANSLATIONS = {
       chat: "Öffne den Chat für Antworten",
       explore: "Entdecke Beispiele mit einem Tipp",
       attach: "Füge ein Bild oder PDF hinzu"
+    },
+    personalization: {
+      tone: "Gesprächstil",
+      toneHint: "Zum Wechseln tippen",
+      tones: { friendly: "Freundlich", casual: "Locker", professional: "Professionell", formal: "Förmlich" },
+      responseStyle: "Antwortstil",
+      styleHint: "Zum Wechseln tippen",
+      styles: { concise: "Kurz", detailed: "Detailliert", narrative: "Erzählend", bullets: "Stichpunkte" }
     },
     header: {
       atmosphere: "Atmosphäre",
@@ -1042,6 +1074,14 @@ export const TRANSLATIONS = {
       explore: "ワンタップの例を試す",
       attach: "画像またはPDFを追加"
     },
+    personalization: {
+      tone: "会話のトーン",
+      toneHint: "タップして変更",
+      tones: { friendly: "親しみやすい", casual: "カジュアル", professional: "プロフェッショナル", formal: "フォーマル" },
+      responseStyle: "回答スタイル",
+      styleHint: "タップして変更",
+      styles: { concise: "簡潔", detailed: "詳細", narrative: "文章形式", bullets: "箇条書き" }
+    },
     header: {
       atmosphere: "環境の雰囲気",
       visualTheme: "ビジュアルテーマ",
@@ -1290,6 +1330,14 @@ export const TRANSLATIONS = {
       explore: "Scopri esempi con un tocco",
       attach: "Aggiungi un'immagine o un PDF"
     },
+    personalization: {
+      tone: "Tono della conversazione",
+      toneHint: "Tocca per cambiare",
+      tones: { friendly: "Amichevole", casual: "Informale", professional: "Professionale", formal: "Formale" },
+      responseStyle: "Stile di risposta",
+      styleHint: "Tocca per cambiare",
+      styles: { concise: "Conciso", detailed: "Dettagliato", narrative: "Narrativo", bullets: "Elenchi puntati" }
+    },
     header: {
       atmosphere: "Atmosfera",
       visualTheme: "Tema visivo",
@@ -1507,6 +1555,189 @@ export const TRANSLATIONS = {
     }
   }
 };
+
+const memoryManagerTranslations = {
+  'en-US': {
+    title: "Profile & Memory", subtitle: "Personal context synced to your account.", close: "Close",
+    privacyNote: "Stored in Lumen's DynamoDB table and sent to your configured AI provider with chats. Do not add secrets or highly sensitive details.",
+    profileHeading: "Your profile", profilePlaceholder: "Add background, preferences, interests, or goals for Lumen...",
+    upload: "Import .txt, .md, or .json", saveProfile: "Save profile", saved: "Saved",
+    autoTitle: "Automatic memory", autoEnabled: "On", autoDisabled: "Paused",
+    autoHint: "When on, Lumen may save useful, non-sensitive preferences, interests, and ongoing projects from text chats. This uses an extra AI request per text chat. Review and delete memories below.",
+    memoriesTitle: "Saved memories", addPlaceholder: "Add a memory yourself...", addMemory: "Add",
+    empty: "No saved memories yet.", edit: "Edit", delete: "Delete", cancel: "Cancel", update: "Update",
+    clearAll: "Delete all profile & memories", clearConfirm: "Permanently delete your entire cloud profile and all memories?",
+    loading: "Loading profile and memories...", loadError: "Could not load cloud memory. Check sign-in and server configuration.",
+    saveError: "Could not save this change. Please try again.", fileType: "Choose a .txt, .md, or .json profile file.",
+    fileTooLarge: "Profile files must be 10,000 characters or less.",
+    autoSaved: "Lumen saved {count} new memory item(s).", autoSaveError: "Automatic memory could not be updated."
+  },
+  'es-ES': {
+    title: "Perfil y memoria", subtitle: "Contexto personal sincronizado con tu cuenta.", close: "Cerrar",
+    privacyNote: "Se guarda en la tabla DynamoDB de Lumen y se envía al proveedor de IA configurado con tus chats. No añadas secretos ni datos muy sensibles.",
+    profileHeading: "Tu perfil", profilePlaceholder: "Añade contexto, preferencias, intereses u objetivos para Lumen...",
+    upload: "Importar .txt, .md o .json", saveProfile: "Guardar perfil", saved: "Guardado",
+    autoTitle: "Memoria automática", autoEnabled: "Activa", autoDisabled: "Pausada",
+    autoHint: "Si está activa, Lumen puede guardar preferencias, intereses y proyectos útiles y no sensibles de tus chats de texto. Esto usa una solicitud de IA adicional por chat de texto. Revisa y elimina los recuerdos abajo.",
+    memoriesTitle: "Recuerdos guardados", addPlaceholder: "Añade un recuerdo...", addMemory: "Añadir",
+    empty: "Aún no hay recuerdos guardados.", edit: "Editar", delete: "Eliminar", cancel: "Cancelar", update: "Actualizar",
+    clearAll: "Eliminar perfil y recuerdos", clearConfirm: "¿Eliminar permanentemente todo tu perfil y todos los recuerdos de la nube?",
+    loading: "Cargando perfil y recuerdos...", loadError: "No se pudo cargar la memoria en la nube. Comprueba el acceso y el servidor.",
+    saveError: "No se pudo guardar el cambio. Inténtalo de nuevo.", fileType: "Elige un archivo .txt, .md o .json.",
+    fileTooLarge: "Los archivos de perfil deben tener 10.000 caracteres o menos.",
+    autoSaved: "Lumen guardó {count} recuerdo(s) nuevo(s).", autoSaveError: "No se pudo actualizar la memoria automática."
+  },
+  'fr-FR': {
+    title: "Profil et mémoire", subtitle: "Contexte personnel synchronisé avec votre compte.", close: "Fermer",
+    privacyNote: "Stocké dans la table DynamoDB de Lumen et envoyé au fournisseur d’IA configuré avec vos conversations. N’ajoutez pas de secrets ni de données très sensibles.",
+    profileHeading: "Votre profil", profilePlaceholder: "Ajoutez du contexte, des préférences, des centres d’intérêt ou des objectifs...",
+    upload: "Importer .txt, .md ou .json", saveProfile: "Enregistrer le profil", saved: "Enregistré",
+    autoTitle: "Mémoire automatique", autoEnabled: "Activée", autoDisabled: "En pause",
+    autoHint: "Lorsqu’elle est activée, Lumen peut enregistrer des préférences, centres d’intérêt et projets utiles et non sensibles issus de vos conversations textuelles. Cela ajoute une requête IA par conversation texte. Consultez et supprimez les souvenirs ci-dessous.",
+    memoriesTitle: "Souvenirs enregistrés", addPlaceholder: "Ajouter un souvenir...", addMemory: "Ajouter",
+    empty: "Aucun souvenir enregistré.", edit: "Modifier", delete: "Supprimer", cancel: "Annuler", update: "Mettre à jour",
+    clearAll: "Supprimer le profil et les souvenirs", clearConfirm: "Supprimer définitivement tout votre profil et tous vos souvenirs du cloud ?",
+    loading: "Chargement du profil et des souvenirs...", loadError: "Impossible de charger la mémoire cloud. Vérifiez votre connexion et le serveur.",
+    saveError: "Impossible d’enregistrer cette modification. Réessayez.", fileType: "Choisissez un fichier .txt, .md ou .json.",
+    fileTooLarge: "Les fichiers de profil ne doivent pas dépasser 10 000 caractères.",
+    autoSaved: "Lumen a enregistré {count} nouveau(x) souvenir(s).", autoSaveError: "La mémoire automatique n’a pas pu être mise à jour."
+  },
+  'de-DE': {
+    title: "Profil & Erinnerungen", subtitle: "Persönlicher Kontext wird mit deinem Konto synchronisiert.", close: "Schließen",
+    privacyNote: "Wird in Lumens DynamoDB-Tabelle gespeichert und bei Chats an den konfigurierten KI-Anbieter gesendet. Keine Geheimnisse oder hochsensiblen Daten hinzufügen.",
+    profileHeading: "Dein Profil", profilePlaceholder: "Ergänze Hintergrund, Vorlieben, Interessen oder Ziele für Lumen...",
+    upload: ".txt, .md oder .json importieren", saveProfile: "Profil speichern", saved: "Gespeichert",
+    autoTitle: "Automatische Erinnerung", autoEnabled: "Ein", autoDisabled: "Pausiert",
+    autoHint: "Wenn aktiviert, kann Lumen nützliche, nicht sensible Vorlieben, Interessen und laufende Projekte aus Textchats speichern. Dafür wird pro Textchat eine zusätzliche KI-Anfrage gestellt. Erinnerungen unten prüfen und löschen.",
+    memoriesTitle: "Gespeicherte Erinnerungen", addPlaceholder: "Erinnerung hinzufügen...", addMemory: "Hinzufügen",
+    empty: "Noch keine Erinnerungen gespeichert.", edit: "Bearbeiten", delete: "Löschen", cancel: "Abbrechen", update: "Aktualisieren",
+    clearAll: "Profil & Erinnerungen löschen", clearConfirm: "Das gesamte Cloud-Profil und alle Erinnerungen dauerhaft löschen?",
+    loading: "Profil und Erinnerungen werden geladen...", loadError: "Cloud-Erinnerungen konnten nicht geladen werden. Anmeldung und Server prüfen.",
+    saveError: "Änderung konnte nicht gespeichert werden. Bitte erneut versuchen.", fileType: "Eine .txt-, .md- oder .json-Profildatei auswählen.",
+    fileTooLarge: "Profildateien dürfen höchstens 10.000 Zeichen enthalten.",
+    autoSaved: "Lumen hat {count} neue Erinnerung(en) gespeichert.", autoSaveError: "Die automatische Erinnerung konnte nicht aktualisiert werden."
+  },
+  'ja-JP': {
+    title: "プロフィールとメモリー", subtitle: "サインインしたアカウントに個人コンテキストを同期します。", close: "閉じる",
+    privacyNote: "LumenのDynamoDBテーブルに保存され、チャット時に設定済みAIプロバイダーへ送信されます。秘密情報や非常に機微な情報は追加しないでください。",
+    profileHeading: "プロフィール", profilePlaceholder: "Lumenに考慮してほしい背景、好み、興味、目標を入力...",
+    upload: ".txt、.md、.jsonを読み込む", saveProfile: "プロフィールを保存", saved: "保存済み",
+    autoTitle: "自動メモリー", autoEnabled: "オン", autoDisabled: "一時停止",
+    autoHint: "オンの場合、テキストチャットから役立つ非機微な好み、興味、進行中のプロジェクトを保存することがあります。テキストチャットごとに追加のAIリクエストを使用します。下で確認・削除できます。",
+    memoriesTitle: "保存したメモリー", addPlaceholder: "メモリーを追加...", addMemory: "追加",
+    empty: "保存されたメモリーはありません。", edit: "編集", delete: "削除", cancel: "キャンセル", update: "更新",
+    clearAll: "プロフィールとメモリーをすべて削除", clearConfirm: "クラウド上のプロフィールとメモリーをすべて完全に削除しますか？",
+    loading: "プロフィールとメモリーを読み込み中...", loadError: "クラウドメモリーを読み込めません。サインインとサーバー設定を確認してください。",
+    saveError: "変更を保存できませんでした。もう一度お試しください。",
+    fileType: ".txt、.md、.json形式のプロフィールファイルを選択してください。",
+    fileTooLarge: "プロフィールファイルは10,000文字以下にしてください。",
+    autoSaved: "Lumenが新しいメモリーを{count}件保存しました。", autoSaveError: "自動メモリーを更新できませんでした。"
+  },
+  'it-IT': {
+    title: "Profilo e memoria", subtitle: "Contesto personale sincronizzato con il tuo account.", close: "Chiudi",
+    privacyNote: "Salvato nella tabella DynamoDB di Lumen e inviato al provider IA configurato insieme alle chat. Non aggiungere segreti o dati altamente sensibili.",
+    profileHeading: "Il tuo profilo", profilePlaceholder: "Aggiungi contesto, preferenze, interessi o obiettivi per Lumen...",
+    upload: "Importa .txt, .md o .json", saveProfile: "Salva profilo", saved: "Salvato",
+    autoTitle: "Memoria automatica", autoEnabled: "Attiva", autoDisabled: "In pausa",
+    autoHint: "Se attiva, Lumen può salvare preferenze, interessi e progetti utili e non sensibili dalle chat testuali. Usa una richiesta IA aggiuntiva per ogni chat testuale. Puoi rivedere ed eliminare i ricordi qui sotto.",
+    memoriesTitle: "Ricordi salvati", addPlaceholder: "Aggiungi un ricordo...", addMemory: "Aggiungi",
+    empty: "Non ci sono ancora ricordi salvati.", edit: "Modifica", delete: "Elimina", cancel: "Annulla", update: "Aggiorna",
+    clearAll: "Elimina profilo e ricordi", clearConfirm: "Eliminare definitivamente tutto il profilo e tutti i ricordi dal cloud?",
+    loading: "Caricamento del profilo e dei ricordi...", loadError: "Impossibile caricare la memoria cloud. Controlla accesso e configurazione del server.",
+    saveError: "Impossibile salvare la modifica. Riprova.", fileType: "Scegli un file profilo .txt, .md o .json.",
+    fileTooLarge: "I file profilo devono contenere al massimo 10.000 caratteri.",
+    autoSaved: "Lumen ha salvato {count} nuovi ricordi.", autoSaveError: "Impossibile aggiornare la memoria automatica."
+  }
+};
+
+const memoryTransferTranslations = {
+  'en-US': {
+    aiImportHeading: "Bring context from another AI",
+    aiImportHint: "Copy this prompt into another assistant, then paste its reply here. Lumen does not contact other assistants. Review the result before adding it to your profile; it is saved only when you select Save profile.",
+    aiExportPrompt: "Create a concise profile I can use with another AI assistant. Include only durable details I explicitly shared, such as response-style preferences, interests, goals, and active projects. Do not include or infer secrets, contact details, financial or medical information, or other highly sensitive data. Return plain text with clear headings. If you have no suitable non-sensitive context, say so.",
+    aiPromptPlaceholder: "Edit the prompt to suit you...",
+    copyPrompt: "Copy prompt",
+    promptCopied: "Prompt copied",
+    pasteAiReplyPlaceholder: "Paste the other AI's reply here...",
+    addAiContext: "Add to profile",
+    importAddedNotice: "Added to your profile above. Review it, then select Save profile to keep the change.",
+    importTooLarge: "The profile and imported text exceed the 10,000-character limit.",
+    copyPromptError: "Could not copy the prompt. Select and copy it manually."
+  },
+  'es-ES': {
+    aiImportHeading: "Traer contexto de otra IA",
+    aiImportHint: "Copia este prompt en otro asistente y pega aquí su respuesta. Lumen no contacta con otros asistentes. Revisa el resultado antes de añadirlo a tu perfil; solo se guarda al seleccionar Guardar perfil.",
+    aiExportPrompt: "Crea un perfil breve para usarlo con otro asistente de IA. Incluye solo datos duraderos que haya compartido explícitamente, como preferencias de respuesta, intereses, objetivos y proyectos activos. No incluyas ni deduzcas secretos, datos de contacto, información financiera o médica ni otros datos muy sensibles. Devuelve texto sin formato y con títulos claros. Si no hay contexto adecuado y no sensible, indícalo.",
+    aiPromptPlaceholder: "Edita el prompt como prefieras...",
+    copyPrompt: "Copiar prompt",
+    promptCopied: "Prompt copiado",
+    pasteAiReplyPlaceholder: "Pega aquí la respuesta de la otra IA...",
+    addAiContext: "Añadir al perfil",
+    importAddedNotice: "Se ha añadido a tu perfil, arriba. Revísalo y selecciona Guardar perfil para conservar el cambio.",
+    importTooLarge: "El perfil y el texto importado superan el límite de 10 000 caracteres.",
+    copyPromptError: "No se pudo copiar el prompt. Selecciónalo y cópialo manualmente."
+  },
+  'fr-FR': {
+    aiImportHeading: "Importer le contexte d’une autre IA",
+    aiImportHint: "Copiez ce prompt dans un autre assistant, puis collez sa réponse ici. Lumen ne contacte pas les autres assistants. Vérifiez le résultat avant de l’ajouter au profil ; il ne sera enregistré qu’en sélectionnant Enregistrer le profil.",
+    aiExportPrompt: "Créez un profil concis à utiliser avec un autre assistant IA. Incluez uniquement les informations durables que j’ai explicitement partagées, comme mes préférences de réponse, centres d’intérêt, objectifs et projets en cours. N’incluez ni ne déduisez de secrets, coordonnées, informations financières ou médicales, ni d’autres données très sensibles. Répondez en texte brut avec des titres clairs. S’il n’y a aucun contexte non sensible approprié, indiquez-le.",
+    aiPromptPlaceholder: "Modifiez le prompt selon vos besoins...",
+    copyPrompt: "Copier le prompt",
+    promptCopied: "Prompt copié",
+    pasteAiReplyPlaceholder: "Collez ici la réponse de l’autre IA...",
+    addAiContext: "Ajouter au profil",
+    importAddedNotice: "Ajouté à votre profil ci-dessus. Vérifiez le contenu, puis sélectionnez Enregistrer le profil pour conserver la modification.",
+    importTooLarge: "Le profil et le texte importé dépassent la limite de 10 000 caractères.",
+    copyPromptError: "Impossible de copier le prompt. Sélectionnez-le et copiez-le manuellement."
+  },
+  'de-DE': {
+    aiImportHeading: "Kontext aus einer anderen KI übernehmen",
+    aiImportHint: "Kopiere diesen Prompt in einen anderen Assistenten und füge dessen Antwort hier ein. Lumen kontaktiert keine anderen Assistenten. Prüfe das Ergebnis, bevor du es deinem Profil hinzufügst; gespeichert wird es erst mit „Profil speichern“.",
+    aiExportPrompt: "Erstelle ein kurzes Profil, das ich mit einem anderen KI-Assistenten verwenden kann. Nenne nur dauerhafte Angaben, die ich ausdrücklich geteilt habe, etwa Antwortstil, Interessen, Ziele und laufende Projekte. Füge keine Geheimnisse, Kontaktdaten, finanziellen oder medizinischen Angaben oder andere hochsensible Daten ein und leite solche Informationen nicht ab. Gib Klartext mit eindeutigen Überschriften zurück. Wenn es keine geeigneten nicht sensiblen Angaben gibt, teile das mit.",
+    aiPromptPlaceholder: "Passe den Prompt nach Wunsch an...",
+    copyPrompt: "Prompt kopieren",
+    promptCopied: "Prompt kopiert",
+    pasteAiReplyPlaceholder: "Antwort der anderen KI hier einfügen...",
+    addAiContext: "Zum Profil hinzufügen",
+    importAddedNotice: "Oben zu deinem Profil hinzugefügt. Prüfe den Inhalt und wähle „Profil speichern“, um die Änderung zu übernehmen.",
+    importTooLarge: "Profil und importierter Text überschreiten die Grenze von 10.000 Zeichen.",
+    copyPromptError: "Der Prompt konnte nicht kopiert werden. Bitte manuell auswählen und kopieren."
+  },
+  'ja-JP': {
+    aiImportHeading: "別のAIからコンテキストを取り込む",
+    aiImportHint: "このプロンプトを別のアシスタントに貼り付け、回答をここに戻します。Lumenが他のアシスタントに連絡することはありません。プロフィールに追加する前に内容を確認してください。プロフィールを保存を選ぶまで保存されません。",
+    aiExportPrompt: "別のAIアシスタントで使う簡潔なプロフィールを作成してください。回答スタイルの好み、興味、目標、進行中のプロジェクトなど、私が明示した継続的な情報だけを含めてください。秘密情報、連絡先、金融・医療情報、その他の非常に機微な情報を含めたり推測したりしないでください。見出し付きのプレーンテキストで返してください。適切な非機微情報がない場合は、その旨を伝えてください。",
+    aiPromptPlaceholder: "必要に応じてプロンプトを編集...",
+    copyPrompt: "プロンプトをコピー",
+    promptCopied: "コピーしました",
+    pasteAiReplyPlaceholder: "別のAIの回答をここに貼り付け...",
+    addAiContext: "プロフィールに追加",
+    importAddedNotice: "上のプロフィールに追加しました。内容を確認し、変更を保存するには「プロフィールを保存」を選択してください。",
+    importTooLarge: "プロフィールと取り込むテキストの合計が10,000文字を超えています。",
+    copyPromptError: "コピーできませんでした。プロンプトを選択して手動でコピーしてください。"
+  },
+  'it-IT': {
+    aiImportHeading: "Importa contesto da un'altra IA",
+    aiImportHint: "Copia questo prompt in un altro assistente, poi incolla qui la risposta. Lumen non contatta altri assistenti. Controlla il risultato prima di aggiungerlo al profilo; verrà salvato solo selezionando Salva profilo.",
+    aiExportPrompt: "Crea un profilo conciso da usare con un altro assistente IA. Includi solo dettagli duraturi che ho condiviso esplicitamente, come preferenze di risposta, interessi, obiettivi e progetti in corso. Non includere né dedurre segreti, dati di contatto, informazioni finanziarie o mediche o altri dati altamente sensibili. Restituisci testo semplice con titoli chiari. Se non ci sono informazioni non sensibili adatte, dillo.",
+    aiPromptPlaceholder: "Modifica il prompt come preferisci...",
+    copyPrompt: "Copia prompt",
+    promptCopied: "Prompt copiato",
+    pasteAiReplyPlaceholder: "Incolla qui la risposta dell'altra IA...",
+    addAiContext: "Aggiungi al profilo",
+    importAddedNotice: "Aggiunto al profilo qui sopra. Controllalo e seleziona Salva profilo per conservare la modifica.",
+    importTooLarge: "Il profilo e il testo importato superano il limite di 10.000 caratteri.",
+    copyPromptError: "Impossibile copiare il prompt. Selezionalo e copialo manualmente."
+  }
+};
+
+for (const [language, labels] of Object.entries(memoryTransferTranslations)) {
+  Object.assign(memoryManagerTranslations[language], labels);
+}
+
+for (const [language, labels] of Object.entries(memoryManagerTranslations)) {
+  TRANSLATIONS[language].memoryManager = labels;
+}
 
 /**
  * Helper to get translations for given language code with fallback to en-US

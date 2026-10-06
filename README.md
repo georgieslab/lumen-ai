@@ -8,6 +8,8 @@ Lumen is a voice- and vision-enabled AI copilot built with React, Vite, and an E
 - **Image and PDF analysis:** attach a photo or PDF and ask Lumen to inspect it.
 - **Web research:** request sourced research reports; Lumen searches and reads public web pages, then can create a downloadable PDF.
 - **Live information:** ask about weather or cryptocurrency prices to show interactive data cards.
+- **Personalization and memory:** choose a response tone and style, upload a text/Markdown/JSON profile, import reviewed context from another AI with a copy-and-paste prompt, and manage cloud-synced memories. Automatic memory can be paused; saved items can be reviewed, edited, or deleted.
+- **Sign-in:** authenticate with Google or GitHub. Accounts remain provider-specific, even when email addresses match; sign-in credentials are verified by the server.
 - **Conversation tools:** use prompt starters, choose a voice and language, export a conversation, and adjust the visual theme. A dismissible quick-start guide points out the sphere, chat, Explore examples, and attachments on first visit.
 - **Installable PWA:** install Lumen on Android from a supported browser, or add it to the iPhone/iPad Home Screen from Safari. The app needs an internet connection for AI and live-data features.
 
@@ -15,7 +17,7 @@ AI responses and cloud-backed features require valid provider credentials. See [
 
 ## Requirements
 
-- Node.js 18 or later
+- Node.js 20 or later
 - npm 8 or later
 - AWS credentials with access to the configured Amazon Bedrock model for the default AI provider
 
@@ -60,9 +62,39 @@ The backend loads `.env` at startup. Common variables:
 | `BEDROCK_MODEL_ID` | Optional Bedrock model override. |
 | `POLLY_REGION` | Polly region; defaults to `eu-west-1`. |
 | `OPENAI_API_KEY` | Optional server-side OpenAI fallback key. |
-| `VITE_GOOGLE_CLIENT_ID` | Optional Google sign-in client ID. |
+| `VITE_GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_ID` | Google OAuth client ID; configure the same ID on the client and server. |
+| `GITHUB_OAUTH_CLIENT_ID` | GitHub OAuth App client ID, configured on the API server. |
+| `GITHUB_OAUTH_CLIENT_SECRET` | GitHub OAuth App secret. Server-side only; never use a `VITE_` prefix. |
+| `GITHUB_OAUTH_CALLBACK_URL` | Callback URL registered in the GitHub OAuth App. |
+| `LUMEN_APP_URL` | Frontend URL to return to after GitHub sign-in. |
+| `LUMEN_SESSION_SECRET` | Random secret of at least 32 characters used to sign HttpOnly session cookies. |
+| `LUMEN_MEMORY_TABLE_NAME` | DynamoDB table used for profile and memory records. |
+| `LUMEN_ALLOWED_ORIGINS` | Comma-separated frontend origins allowed to call the API with session cookies. |
+| `LUMEN_CROSS_SITE_COOKIES` | Set to `true` only when the frontend and API are on different sites; requires HTTPS. |
 
 Keep credentials in the server-side `.env` file. Do not commit `.env` or put private API keys in `VITE_*` variables, which are exposed to browser builds.
+
+### Sign-in and cloud memory setup
+
+1. Create a Google OAuth Web client and configure its authorized JavaScript origin. Set the same client ID in `VITE_GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_ID`.
+2. Create a GitHub OAuth App. Set its client ID in `GITHUB_OAUTH_CLIENT_ID`, keep its secret in `GITHUB_OAUTH_CLIENT_SECRET`, and register the exact `GITHUB_OAUTH_CALLBACK_URL`. Set `LUMEN_APP_URL` to the browser-facing app URL. For local development, these URLs and the browser hostname must agree (for example, use `localhost` consistently rather than mixing it with `127.0.0.1`). The GitHub button checks the API's provider status and explains when server-side OAuth configuration is missing.
+3. Generate a session secret, for example:
+
+   ```sh
+   node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
+   ```
+
+   Store the output in `LUMEN_SESSION_SECRET`. The session cookie is HttpOnly and signed by the server.
+4. Create the DynamoDB table with string partition key `userId` and string sort key `recordId`. For example, using the AWS CLI:
+
+   ```sh
+   aws dynamodb create-table --table-name lumen-user-memory --attribute-definitions AttributeName=userId,AttributeType=S AttributeName=recordId,AttributeType=S --key-schema AttributeName=userId,KeyType=HASH AttributeName=recordId,KeyType=RANGE --billing-mode PAY_PER_REQUEST
+   ```
+
+   Set `LUMEN_MEMORY_TABLE_NAME` to the table name and grant the server's IAM role only the required `GetItem`, `PutItem`, `Query`, `DeleteItem`, and `BatchWriteItem` permissions on that table. DynamoDB encryption at rest is enabled by default; use TLS and a least-privilege IAM role in production.
+5. Set `LUMEN_ALLOWED_ORIGINS` for production deployments when the frontend and API are cross-origin. When they are on different sites, set `LUMEN_CROSS_SITE_COOKIES=true` and serve both over HTTPS.
+
+Google and GitHub accounts are stored under different provider-qualified user IDs. Matching email addresses do not merge accounts, and account linking is not currently supported. Lumen stores the profile and memory records in DynamoDB; conversation history remains in browser storage. Profile and memory context is sent to the configured AI provider with chat and research requests. Automatic memory is designed to retain useful, non-sensitive text-chat details; it uses an additional AI request per text chat and can be paused. Inspect, edit, or delete stored items in the account menu. Uploaded image/PDF attachments are not used for automatic memory extraction. The optional import-from-another-AI feature only shares content when the user copies the prompt to another assistant; pasted replies remain in the editable profile and are not saved until **Save profile** is selected. Avoid storing secrets or highly sensitive information in the profile or memories.
 
 ## Production
 
@@ -95,14 +127,14 @@ Check the backend terminal for provider errors and confirm Bedrock access is con
 
 ```text
 src/
-  components/       React UI components, including the sphere and conversation feed
+  components/       React UI components, including the sphere, conversation feed, and profile/memory controls
   hooks/            Shared React hooks
   services/api.js   Frontend client for the Express API
   utils/            Translations and shared utilities
   App.jsx           Main application and interaction flow
   App.css           Application styling
 server.js           Express API and AI-provider integration
-services/           Web search, live data, and PDF services
+services/           Auth sessions, DynamoDB memory, web search, live data, and PDF services
 vite.config.js      Vite development server and API proxy
 ```
 

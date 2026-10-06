@@ -2901,6 +2901,281 @@ body {
   gap: 0.45rem;
 }
 
+.google-signin-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.github-auth-trigger-btn,
+.dropdown-memory-btn,
+.memory-primary-button,
+.memory-upload-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: var(--radius-full);
+  padding: 0.48rem 0.78rem;
+  color: #f8fafc;
+  background: rgba(255, 255, 255, 0.08);
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 650;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.github-auth-trigger-btn:hover,
+.dropdown-memory-btn:hover,
+.memory-primary-button:hover:not(:disabled),
+.memory-upload-button:hover {
+  background: rgba(56, 189, 248, 0.18);
+  border-color: rgba(125, 211, 252, 0.45);
+}
+
+.github-auth-trigger-btn:disabled,
+.memory-primary-button:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+}
+
+.dropdown-memory-btn {
+  width: 100%;
+  margin-bottom: 0.5rem;
+}
+
+.auth-error-message {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  right: 0;
+  z-index: 40;
+  width: min(320px, calc(100vw - 24px));
+  margin: 0;
+  padding: 0.65rem 0.8rem;
+  border: 1px solid rgba(248, 113, 113, 0.4);
+  border-radius: 12px;
+  background: rgba(69, 10, 10, 0.96);
+  color: #fecaca;
+  font-size: 0.75rem;
+}
+
+.memory-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 140;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+  background: rgba(2, 6, 23, 0.78);
+  backdrop-filter: blur(14px);
+}
+
+.memory-modal-card {
+  display: flex;
+  flex-direction: column;
+  width: min(760px, 100%);
+  max-height: 92dvh;
+  overflow: hidden;
+  padding: 1.2rem;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 22px;
+  background: rgba(14, 20, 38, 0.97);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.55);
+  color: #f8fafc;
+}
+
+.memory-modal-header,
+.memory-section-heading,
+.memory-profile-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.memory-modal-header h2,
+.memory-section h3 {
+  margin: 0;
+  color: #f8fafc;
+}
+
+.memory-modal-header h2 {
+  font-size: 1.15rem;
+}
+
+.memory-modal-header p,
+.memory-hint,
+.memory-empty,
+.memory-loading {
+  margin: 0.3rem 0 0;
+  color: #aab5c9;
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.memory-privacy-note {
+  flex: 0 0 auto;
+  margin: 0.85rem 0;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid rgba(251, 191, 36, 0.24);
+  border-radius: 12px;
+  background: rgba(245, 158, 11, 0.08);
+  color: #fde68a;
+  font-size: 0.76rem;
+  line-height: 1.5;
+}
+
+.memory-error {
+  flex: 0 0 auto;
+  margin: 0 0 0.8rem;
+  color: #fca5a5;
+  font-size: 0.8rem;
+}
+
+.memory-status-notice {
+  flex: 0 0 auto;
+  margin: 0 0 0.75rem;
+  color: #a7f3d0;
+  font-size: 0.78rem;
+}
+
+.memory-modal-content {
+  overflow: auto;
+  padding-right: 0.25rem;
+}
+
+.memory-section {
+  padding: 0.95rem 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.09);
+}
+
+.memory-section h3 {
+  font-size: 0.92rem;
+}
+
+.memory-profile-input,
+.memory-add-form input,
+.memory-edit-row input {
+  box-sizing: border-box;
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  padding: 0.75rem;
+  background: rgba(2, 6, 23, 0.55);
+  color: #f8fafc;
+  font: inherit;
+  font-size: 0.85rem;
+}
+
+.memory-profile-input {
+  min-height: 110px;
+  margin-top: 0.7rem;
+  resize: vertical;
+}
+
+.memory-profile-footer {
+  margin-top: 0.5rem;
+  color: #94a3b8;
+  font-size: 0.72rem;
+}
+
+.memory-primary-button,
+.memory-upload-button {
+  flex: 0 0 auto;
+  min-height: 36px;
+}
+
+.memory-toggle {
+  min-width: 82px;
+  border: 1px solid rgba(248, 113, 113, 0.32);
+  border-radius: 999px;
+  padding: 0.42rem 0.7rem;
+  background: rgba(248, 113, 113, 0.12);
+  color: #fecaca;
+  font: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.memory-toggle.is-on {
+  border-color: rgba(52, 211, 153, 0.4);
+  background: rgba(52, 211, 153, 0.12);
+  color: #a7f3d0;
+}
+
+.memory-add-form {
+  display: flex;
+  gap: 0.55rem;
+  margin-top: 0.7rem;
+}
+
+.memory-list {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.memory-list-item,
+.memory-edit-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
+}
+
+.memory-list-item {
+  padding: 0.65rem 0.7rem;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.035);
+  color: #e2e8f0;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.memory-item-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 0.35rem;
+}
+
+.memory-item-actions button,
+.memory-edit-row button {
+  border: 0;
+  border-radius: 8px;
+  padding: 0.35rem 0.5rem;
+  background: rgba(255, 255, 255, 0.08);
+  color: #cbd5e1;
+  font: inherit;
+  font-size: 0.7rem;
+  cursor: pointer;
+}
+
+.memory-clear-button {
+  display: block;
+  width: 100%;
+  margin-top: 0.9rem;
+  border: 1px solid rgba(248, 113, 113, 0.35);
+  border-radius: 12px;
+  padding: 0.65rem;
+  background: rgba(127, 29, 29, 0.18);
+  color: #fecaca;
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.memory-clear-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .google-help-pill-btn {
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.12);
@@ -6342,6 +6617,40 @@ body {
     display: none;
   }
 
+  .lumen-header > .google-auth-wrapper {
+    margin-left: auto;
+  }
+
+  .google-auth-wrapper .google-user-name,
+  .google-auth-wrapper .github-auth-trigger-btn span {
+    display: none;
+  }
+
+  .google-auth-wrapper .google-user-pill {
+    padding: 0.25rem;
+  }
+
+  .google-auth-wrapper .google-signin-container {
+    gap: 0.25rem;
+  }
+
+  .google-auth-wrapper .google-login-box iframe {
+    max-width: 116px;
+  }
+
+  .memory-modal-card {
+    padding: 0.95rem;
+  }
+
+  .memory-list-item {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .memory-item-actions {
+    align-self: flex-end;
+  }
+
   .lumen-main-stage {
     flex: 1 1 auto;
     min-height: 0;
@@ -6667,6 +6976,20 @@ body {
 .quick-start-action > span:first-child {
   flex: 0 0 auto;
   font-size: 0.9rem;
+}
+
+.quick-start-action-icon {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  place-items: center;
+  color: #7dd3fc;
+}
+
+.quick-start-action-icon svg {
+  width: 18px;
+  height: 18px;
 }
 
 @media (max-width: 768px) {
