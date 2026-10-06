@@ -54,6 +54,26 @@ export default function App() {
   const [isAttachmentMenuOpen, setIsAttachmentMenuOpen] = useState(false);
   const [isMobileControlsOpen, setIsMobileControlsOpen] = useState(false);
   const [isExplorePanelOpen, setIsExplorePanelOpen] = useState(false);
+  const [triedExploreActionIds, setTriedExploreActionIds] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('lumen_explore_tried_actions') || '[]');
+      return new Set(Array.isArray(saved) ? saved : []);
+    } catch (_) {
+      return new Set();
+    }
+  });
+  const [canInstallApp, setCanInstallApp] = useState(false);
+  const [isAppInstalled, setIsAppInstalled] = useState(() =>
+    window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true
+  );
+  const [showInstallInstructions, setShowInstallInstructions] = useState(false);
+  const [isQuickStartVisible, setIsQuickStartVisible] = useState(() => {
+    try {
+      return localStorage.getItem('lumen_quick_start_dismissed') !== 'true';
+    } catch (_) {
+      return true;
+    }
+  });
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [currentTheme, setCurrentTheme] = useState(() => {
     try {
@@ -322,8 +342,36 @@ export default function App() {
   const currentAudioRef = useRef(null);
   const fileInputRef = useRef(null);
   const textInputRef = useRef(null);
+  const installPromptRef = useRef(null);
   const [isGlobalDragging, setIsGlobalDragging] = useState(false);
   const dragCounterRef = useRef(0);
+
+  useEffect(() => {
+    const displayMode = window.matchMedia('(display-mode: standalone)');
+    const handleBeforeInstallPrompt = (event) => {
+      event.preventDefault();
+      installPromptRef.current = event;
+      setCanInstallApp(true);
+    };
+    const handleAppInstalled = () => {
+      installPromptRef.current = null;
+      setCanInstallApp(false);
+      setIsAppInstalled(true);
+      setShowInstallInstructions(false);
+    };
+    const handleDisplayModeChange = (event) => {
+      setIsAppInstalled(event.matches || window.navigator.standalone === true);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    window.addEventListener('appinstalled', handleAppInstalled);
+    displayMode.addEventListener?.('change', handleDisplayModeChange);
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener('appinstalled', handleAppInstalled);
+      displayMode.removeEventListener?.('change', handleDisplayModeChange);
+    };
+  }, []);
 
   useEffect(() => {
     if (!isAttachmentMenuOpen && !isMobileControlsOpen) return undefined;
@@ -810,6 +858,23 @@ export default function App() {
     }
   };
 
+  useEffect(() => {
+    const handleSpacebar = (event) => {
+      if (event.code !== 'Space' || event.repeat || event.defaultPrevented) return;
+
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      if (target.closest('input, textarea, select, button, a, [role="button"], [role="textbox"], [contenteditable]')) return;
+      if (document.querySelector('[aria-modal="true"]')) return;
+
+      event.preventDefault();
+      handleToggleListen();
+    };
+
+    window.addEventListener('keydown', handleSpacebar);
+    return () => window.removeEventListener('keydown', handleSpacebar);
+  }, [handleToggleListen]);
+
   const handleClearHistory = () => {
     if (confirm("Clear all conversation history?")) {
       const reset = [{
@@ -887,24 +952,28 @@ export default function App() {
   ];
   const exploreActions = [
     {
+      id: 'voice',
       icon: '🎙️',
       label: t.sphere.tapToConverse,
       description: t.explorePanel.voiceDescription,
       onSelect: handleToggleListen
     },
     {
+      id: 'inspect',
       icon: '👁️',
       label: t.scanner.inspectTitle,
       description: t.scanner.portalSubtitle,
       onSelect: () => fileInputRef.current?.click()
     },
     {
+      id: 'research',
       icon: '🔎',
       label: t.starterChips.aiBreakthroughs,
       description: t.starterChips.aiBreakthroughsTooltip,
       onSelect: () => handleSendMessage(t.starterChips.aiBreakthroughsQuery)
     },
     {
+      id: 'weather',
       icon: '🌤️',
       label: t.starterChips.cityWeather,
       description: t.starterChips.cityWeatherTooltip,
@@ -923,6 +992,7 @@ export default function App() {
       })
     },
     {
+      id: 'pdf',
       icon: '📄',
       label: t.starterChips.createPdf,
       description: t.starterChips.createPdfTooltip,
@@ -934,6 +1004,15 @@ export default function App() {
     action.onSelect();
   };
 
+  const selectExploreAction = (action) => {
+    const nextTriedActions = new Set(triedExploreActionIds).add(action.id);
+    setTriedExploreActionIds(nextTriedActions);
+    try {
+      localStorage.setItem('lumen_explore_tried_actions', JSON.stringify([...nextTriedActions]));
+    } catch (_) {}
+    selectControlMenuAction(action);
+  };
+
   const closeControlMenu = () => {
     setIsMobileControlsOpen(false);
     setIsExplorePanelOpen(false);
@@ -943,6 +1022,40 @@ export default function App() {
     setIsExplorePanelOpen(true);
     setIsMobileControlsOpen(true);
   };
+
+  const dismissQuickStart = () => {
+    setIsQuickStartVisible(false);
+    try {
+      localStorage.setItem('lumen_quick_start_dismissed', 'true');
+    } catch (_) {}
+  };
+
+  const handleQuickStartAction = (onSelect) => {
+    dismissQuickStart();
+    onSelect();
+  };
+
+  const handleInstallApp = async () => {
+    const installPrompt = installPromptRef.current;
+    if (installPrompt) {
+      setShowInstallInstructions(false);
+      try {
+        await installPrompt.prompt();
+        await installPrompt.userChoice;
+        installPromptRef.current = null;
+        setCanInstallApp(false);
+      } catch (err) {
+        console.warn('Could not open the app install prompt:', err);
+        setShowInstallInstructions(true);
+      }
+      return;
+    }
+
+    setShowInstallInstructions((visible) => !visible);
+  };
+
+  const isIosDevice = /iPad|iPhone|iPod/.test(window.navigator.userAgent) ||
+    (window.navigator.platform === 'MacIntel' && window.navigator.maxTouchPoints > 1);
 
   return (
     <div 
@@ -1139,6 +1252,57 @@ export default function App() {
         </div>
       </header>
 
+      {isQuickStartVisible && (
+        <aside className="quick-start-guide" aria-labelledby="quick-start-title">
+          <div className="quick-start-guide-header">
+            <h2 id="quick-start-title">{t.quickStart.title}</h2>
+            <button
+              type="button"
+              className="quick-start-dismiss"
+              onClick={dismissQuickStart}
+              aria-label={t.quickStart.dismiss}
+              title={t.quickStart.dismiss}
+            >
+              ×
+            </button>
+          </div>
+          <div className="quick-start-actions">
+            <button
+              type="button"
+              className="quick-start-action"
+              onClick={() => handleQuickStartAction(handleToggleListen)}
+            >
+              <span aria-hidden="true">🎙️</span>
+              <span>{t.quickStart.sphere}</span>
+            </button>
+            <button
+              type="button"
+              className="quick-start-action"
+              onClick={() => handleQuickStartAction(() => setShowLogDrawer(true))}
+            >
+              <span aria-hidden="true">💬</span>
+              <span>{t.quickStart.chat}</span>
+            </button>
+            <button
+              type="button"
+              className="quick-start-action"
+              onClick={() => handleQuickStartAction(openExplorePanel)}
+            >
+              <span aria-hidden="true">✦</span>
+              <span>{t.quickStart.explore}</span>
+            </button>
+            <button
+              type="button"
+              className="quick-start-action"
+              onClick={() => handleQuickStartAction(() => setIsAttachmentMenuOpen(true))}
+            >
+              <span aria-hidden="true">＋</span>
+              <span>{t.quickStart.attach}</span>
+            </button>
+          </div>
+        </aside>
+      )}
+
       {isMobileControlsOpen && (
         <div
           className="control-menu-backdrop"
@@ -1174,17 +1338,53 @@ export default function App() {
                       type="button"
                       className="control-menu-action explore-panel-action"
                       aria-label={`${action.label}: ${action.description}`}
-                      onClick={() => selectControlMenuAction(action)}
+                      onClick={() => selectExploreAction(action)}
                     >
                       <span className="control-menu-icon" aria-hidden="true">{action.icon}</span>
                       <span className="control-menu-copy">
                         <span className="control-menu-label">{action.label}</span>
                         <span className="control-menu-description">{action.description}</span>
                       </span>
-                      <span className="explore-panel-try">{t.explorePanel.tryIt}</span>
+                      {!triedExploreActionIds.has(action.id) && (
+                        <span className="explore-panel-try">{t.explorePanel.tryIt}</span>
+                      )}
                     </button>
                   ))}
                 </div>
+                <section className="pwa-install-card" aria-label={t.explorePanel.installTitle}>
+                  <span className="control-menu-icon" aria-hidden="true">📲</span>
+                  <div className="control-menu-copy pwa-install-copy">
+                    <span className="control-menu-label">{t.explorePanel.installTitle}</span>
+                    <span className="control-menu-description">
+                      {isAppInstalled
+                        ? t.explorePanel.installed
+                        : t.explorePanel.installDescription}
+                    </span>
+                    {!isAppInstalled && showInstallInstructions && (
+                      <span className="pwa-install-steps" role="status">
+                        {isIosDevice
+                          ? t.explorePanel.installIosSteps
+                          : t.explorePanel.installBrowserSteps}
+                      </span>
+                    )}
+                  </div>
+                  {!isAppInstalled && (
+                    <button
+                      type="button"
+                      className="pwa-install-button"
+                      onClick={handleInstallApp}
+                      aria-expanded={showInstallInstructions}
+                    >
+                      {canInstallApp
+                        ? t.explorePanel.installNow
+                        : isIosDevice
+                          ? t.explorePanel.installHowTo
+                          : showInstallInstructions
+                            ? t.explorePanel.installHide
+                            : t.explorePanel.installButton}
+                    </button>
+                  )}
+                </section>
                 <a
                   className="explore-docs-link"
                   href="https://github.com/georgieslab/lumen-ai/blob/main/README.md"

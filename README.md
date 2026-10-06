@@ -8,7 +8,8 @@ Lumen is a voice- and vision-enabled AI copilot built with React, Vite, and an E
 - **Image and PDF analysis:** attach a photo or PDF and ask Lumen to inspect it.
 - **Web research:** request sourced research reports; Lumen searches and reads public web pages, then can create a downloadable PDF.
 - **Live information:** ask about weather or cryptocurrency prices to show interactive data cards.
-- **Conversation tools:** use prompt starters, choose a voice and language, export a conversation, and adjust the visual theme.
+- **Conversation tools:** use prompt starters, choose a voice and language, export a conversation, and adjust the visual theme. A dismissible quick-start guide points out the sphere, chat, Explore examples, and attachments on first visit.
+- **Installable PWA:** install Lumen on Android from a supported browser, or add it to the iPhone/iPad Home Screen from Safari. The app needs an internet connection for AI and live-data features.
 
 AI responses and cloud-backed features require valid provider credentials. See [Configuration](#configuration).
 
@@ -39,6 +40,12 @@ An OpenAI API key can optionally provide the server-side chat fallback. Amazon P
 4. Open [http://localhost:5173](http://localhost:5173).
 
 `npm run dev` starts only the frontend. For chat and other API features during development, the backend must also be running; `npm run dev:all` starts both processes.
+
+## Install on mobile
+
+Lumen is a Progressive Web App and can be installed from its secure production URL (or `localhost` during development). On Android, open Lumen in a supported browser and use the install prompt or the browser menu. On iPhone or iPad, open Lumen in Safari, tap **Share**, then choose **Add to Home Screen**. iOS does not expose the Android-style install prompt to websites.
+
+The installed app opens in a standalone window. AI conversations and live data still require an internet connection; offline app-shell caching is not enabled.
 
 ## Configuration
 

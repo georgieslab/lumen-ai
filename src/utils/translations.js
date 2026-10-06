@@ -31,7 +31,24 @@ export const TRANSLATIONS = {
       tryIt: "Try it",
       voiceDescription: "Tap to start or stop a voice conversation.",
       docs: "Setup & troubleshooting",
-      docsDescription: "Read the README for installation, configuration, and help."
+      docsDescription: "Read the README for installation, configuration, and help.",
+      installTitle: "Install Lumen",
+      installDescription: "Add Lumen to your home screen for an app-like experience.",
+      installButton: "Install",
+      installNow: "Install app",
+      installHowTo: "How to install",
+      installHide: "Hide steps",
+      installIosSteps: "In Safari, tap Share, then choose Add to Home Screen.",
+      installBrowserSteps: "Use your browser menu to install Lumen or add it to your home screen.",
+      installed: "Lumen is installed on this device."
+    },
+    quickStart: {
+      title: "Quick start",
+      dismiss: "Dismiss quick start",
+      sphere: "Tap the sphere to speak",
+      chat: "Open chat to see replies",
+      explore: "Explore one-tap examples",
+      attach: "Add an image or PDF"
     },
     header: {
       atmosphere: "Atmosphere",
@@ -262,7 +279,24 @@ export const TRANSLATIONS = {
       tryIt: "Probar",
       voiceDescription: "Toca para iniciar o detener una conversación por voz.",
       docs: "Instalación y ayuda",
-      docsDescription: "Lee el README para instalar, configurar y solucionar problemas."
+      docsDescription: "Lee el README para instalar, configurar y solucionar problemas.",
+      installTitle: "Instalar Lumen",
+      installDescription: "Añade Lumen a tu pantalla de inicio para usarlo como una aplicación.",
+      installButton: "Instalar",
+      installNow: "Instalar app",
+      installHowTo: "Cómo instalar",
+      installHide: "Ocultar pasos",
+      installIosSteps: "En Safari, toca Compartir y selecciona Añadir a pantalla de inicio.",
+      installBrowserSteps: "Usa el menú del navegador para instalar Lumen o añadirlo a la pantalla de inicio.",
+      installed: "Lumen está instalado en este dispositivo."
+    },
+    quickStart: {
+      title: "Inicio rápido",
+      dismiss: "Cerrar inicio rápido",
+      sphere: "Toca la esfera para hablar",
+      chat: "Abre el chat para ver respuestas",
+      explore: "Explora ejemplos con un toque",
+      attach: "Añade una imagen o PDF"
     },
     header: {
       atmosphere: "Atmósfera",
@@ -493,7 +527,24 @@ export const TRANSLATIONS = {
       tryIt: "Essayer",
       voiceDescription: "Touchez pour démarrer ou arrêter une conversation vocale.",
       docs: "Installation et dépannage",
-      docsDescription: "Consultez le README pour l'installation, la configuration et l'aide."
+      docsDescription: "Consultez le README pour l'installation, la configuration et l'aide.",
+      installTitle: "Installer Lumen",
+      installDescription: "Ajoutez Lumen à l’écran d’accueil pour une expérience d’application.",
+      installButton: "Installer",
+      installNow: "Installer l’app",
+      installHowTo: "Comment installer",
+      installHide: "Masquer les étapes",
+      installIosSteps: "Dans Safari, touchez Partager, puis Ajouter à l’écran d’accueil.",
+      installBrowserSteps: "Utilisez le menu du navigateur pour installer Lumen ou l’ajouter à l’écran d’accueil.",
+      installed: "Lumen est installé sur cet appareil."
+    },
+    quickStart: {
+      title: "Démarrage rapide",
+      dismiss: "Fermer le guide de démarrage",
+      sphere: "Touchez la sphère pour parler",
+      chat: "Ouvrez la conversation pour voir les réponses",
+      explore: "Découvrez des exemples en un toucher",
+      attach: "Ajoutez une image ou un PDF"
     },
     header: {
       atmosphere: "Atmosphère",
@@ -724,7 +775,24 @@ export const TRANSLATIONS = {
       tryIt: "Ausprobieren",
       voiceDescription: "Tippe, um ein Sprachgespräch zu starten oder zu beenden.",
       docs: "Einrichtung & Hilfe",
-      docsDescription: "Das README enthält Installation, Konfiguration und Fehlerbehebung."
+      docsDescription: "Das README enthält Installation, Konfiguration und Fehlerbehebung.",
+      installTitle: "Lumen installieren",
+      installDescription: "Füge Lumen für ein appähnliches Erlebnis zum Startbildschirm hinzu.",
+      installButton: "Installieren",
+      installNow: "App installieren",
+      installHowTo: "Installationshilfe",
+      installHide: "Schritte ausblenden",
+      installIosSteps: "Tippe in Safari auf Teilen und dann auf Zum Home-Bildschirm.",
+      installBrowserSteps: "Installiere Lumen über das Browsermenü oder füge es zum Startbildschirm hinzu.",
+      installed: "Lumen ist auf diesem Gerät installiert."
+    },
+    quickStart: {
+      title: "Schnellstart",
+      dismiss: "Schnellstart schließen",
+      sphere: "Tippe auf die Kugel, um zu sprechen",
+      chat: "Öffne den Chat für Antworten",
+      explore: "Entdecke Beispiele mit einem Tipp",
+      attach: "Füge ein Bild oder PDF hinzu"
     },
     header: {
       atmosphere: "Atmosphäre",
@@ -955,7 +1023,24 @@ export const TRANSLATIONS = {
       tryIt: "試す",
       voiceDescription: "タップして音声会話を開始または停止します。",
       docs: "セットアップとトラブルシューティング",
-      docsDescription: "インストール、設定、問題解決についてはREADMEをご覧ください。"
+      docsDescription: "インストール、設定、問題解決についてはREADMEをご覧ください。",
+      installTitle: "Lumenをインストール",
+      installDescription: "ホーム画面に追加してアプリのように利用できます。",
+      installButton: "インストール",
+      installNow: "アプリをインストール",
+      installHowTo: "インストール方法",
+      installHide: "手順を閉じる",
+      installIosSteps: "Safariで共有ボタンをタップし、「ホーム画面に追加」を選択します。",
+      installBrowserSteps: "ブラウザのメニューからLumenをインストールするか、ホーム画面に追加します。",
+      installed: "このデバイスにはLumenがインストールされています。"
+    },
+    quickStart: {
+      title: "クイックスタート",
+      dismiss: "クイックスタートを閉じる",
+      sphere: "球体をタップして話す",
+      chat: "チャットを開いて返信を見る",
+      explore: "ワンタップの例を試す",
+      attach: "画像またはPDFを追加"
     },
     header: {
       atmosphere: "環境の雰囲気",
@@ -1186,7 +1271,24 @@ export const TRANSLATIONS = {
       tryIt: "Prova",
       voiceDescription: "Tocca per avviare o interrompere una conversazione vocale.",
       docs: "Configurazione e assistenza",
-      docsDescription: "Leggi il README per installazione, configurazione e risoluzione dei problemi."
+      docsDescription: "Leggi il README per installazione, configurazione e risoluzione dei problemi.",
+      installTitle: "Installa Lumen",
+      installDescription: "Aggiungi Lumen alla schermata Home per un'esperienza simile a un'app.",
+      installButton: "Installa",
+      installNow: "Installa app",
+      installHowTo: "Come installare",
+      installHide: "Nascondi passaggi",
+      installIosSteps: "In Safari, tocca Condividi e seleziona Aggiungi alla schermata Home.",
+      installBrowserSteps: "Usa il menu del browser per installare Lumen o aggiungerlo alla schermata Home.",
+      installed: "Lumen è installato su questo dispositivo."
+    },
+    quickStart: {
+      title: "Guida rapida",
+      dismiss: "Chiudi la guida rapida",
+      sphere: "Tocca la sfera per parlare",
+      chat: "Apri la chat per vedere le risposte",
+      explore: "Scopri esempi con un tocco",
+      attach: "Aggiungi un'immagine o un PDF"
     },
     header: {
       atmosphere: "Atmosfera",

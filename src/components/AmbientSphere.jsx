@@ -72,7 +72,7 @@ export default function AmbientSphere({
         aria-label={getStatusText()}
         title={t.tapToConverse}
         onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
+          if (!e.repeat && (e.key === 'Enter' || e.key === ' ')) {
             e.preventDefault();
             onToggleListen();
           }
