@@ -135,12 +135,13 @@ $base-hue: 185;         // cyan start; sweeps through violet to rose
   width: 0; 
   height: 0; 
   transform-style: preserve-3d;
-  animation: rotateOrb var(--time, #{$time}) infinite linear;
+  animation: rotateOrb calc(var(--time, #{$time}) * 1.4) infinite linear, orbAssemble 1.8s cubic-bezier(0.22, 1, 0.36, 1) 1;
 }
 
 @keyframes rotateOrb {
+  0% { transform: rotateZ(-18deg) rotateY(0deg); }
   100% {
-    transform: rotateY(360deg) rotateX(360deg);
+    transform: rotateZ(-18deg) rotateY(360deg);
   }
 }
 
@@ -155,32 +156,34 @@ $base-hue: 185;         // cyan start; sweeps through violet to rose
   will-change: transform, opacity;
 }
 
-// Generate unique 3D trajectories for all 300 particles
+// Intro: the whole shell condenses from a dispersed cloud into the orb once
+@keyframes orbAssemble {
+  from { scale: 2.4; opacity: 0; }
+  to   { scale: 1;   opacity: 1; }
+}
+
+// Every particle rests on a fixed point of the shell; a phase-shifted
+// "breathing" wave travels across it (hue bands ripple around the sphere)
+// and each particle twinkles, so the orb is alive but never dissolves.
 @for $i from 1 through $total {
-  $z: (math.random(360) * 1deg); // random angle to rotateZ
-  $y: (math.random(360) * 1deg); // random to rotateX
-  $hue: ((math.div(150, $total) * $i) + $base-hue); // cyan -> violet -> rose sweep
-  
+  $z: (math.random(360) * 1deg);
+  $y: (math.random(360) * 1deg);
+  $hue: ((math.div(150, $total) * $i) + $base-hue);
+
   .c:nth-child(#{$i}){
-    animation: orbit#{$i} var(--time, #{$time}) infinite;
-    animation-delay: ($i * 0.01s); 
+    animation: orbit#{$i} calc(var(--time, #{$time}) * 0.5) infinite ease-in-out;
+    animation-delay: calc(var(--time, #{$time}) * #{-0.5 * math.div($i, $total)});
     background-color: hsla($hue, 62%, 62%, 0.85);
   }
 
-  @keyframes orbit#{$i}{ 
-    20% {
-      opacity: 1; // fade in
+  @keyframes orbit#{$i}{
+    0%, 100% {
+      transform: rotateZ(-$z) rotateY($y) translateX($orb-size * 0.9) rotateZ($z) scale(0.8);
+      opacity: 0.45;
     }
-    30% {
-      transform: rotateZ(-$z) rotateY($y) translateX($orb-size) rotateZ($z); // form orb
-    }
-    80% {
-      transform: rotateZ(-$z) rotateY($y) translateX($orb-size) rotateZ($z); // hold orb state 30-80
-      opacity: 1; // hold opacity 20-80
-    }
-    100% {
-      transform: rotateZ(-$z) rotateY($y) translateX(($orb-size * 3)) rotateZ($z); // translateX * 3
-      opacity: 0;
+    50% {
+      transform: rotateZ(-$z) rotateY($y) translateX($orb-size * 1.12) rotateZ($z) scale(1.25);
+      opacity: 1;
     }
   }
 }
