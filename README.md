@@ -1,17 +1,42 @@
-﻿# Lumen AI
+<p align="center">
+  <img src="./public/share-cover.png" alt="Lumen AI — Your ambient AI companion" width="100%" />
+</p>
 
-Lumen is a voice- and vision-enabled AI copilot built with React, Vite, and an Express API. Its interface combines a conversational sphere with tools for voice chat, image and PDF analysis, web research, live weather, and PDF generation.
+<h1 align="center">Lumen AI</h1>
+
+<p align="center">
+  <strong>Voice, vision, and curiosity—together in one AI copilot.</strong><br />
+  Talk through ideas, understand your files, explore the web, or share a browser tab when you choose.
+</p>
+
+<p align="center">
+  <a href="#features">Explore features</a> ·
+  <a href="#run-locally">Run it locally</a> ·
+  <a href="#browser-tab-sharing-extension-mvp">Share a tab</a> ·
+  <a href="#configuration">Configure providers</a>
+</p>
+
+<p align="center">
+  <img alt="Node.js 20+" src="https://img.shields.io/badge/Node.js-20%2B-339933?logo=nodedotjs&logoColor=white" />
+  <img alt="React 18" src="https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black" />
+  <img alt="Vite 6" src="https://img.shields.io/badge/Vite-6-646CFF?logo=vite&logoColor=white" />
+  <img alt="Manifest V3 extension" src="https://img.shields.io/badge/Browser_extension-Manifest_V3-4285F4?logo=googlechrome&logoColor=white" />
+</p>
+
+Lumen is a voice- and vision-enabled AI copilot built with React, Vite, and Express. Have a spoken conversation, inspect an image or PDF, research the web, or bring in a page by explicitly sharing its text.
+
+The public landing page is at `/`. Open the existing copilot with **Talk with Lumen** or go directly to `/#app`; the hash route works on static hosts without server-side routing.
 
 ## Features
 
-- **Voice conversation:** speak with Lumen using browser speech recognition, with an AWS Transcribe fallback if the browser speech service is unreachable. Amazon Polly neural voices are used when configured.
-- **Image and PDF analysis:** attach a photo or PDF and ask Lumen to inspect it.
-- **Web research:** request sourced research reports; Lumen searches and reads public web pages, then can create a downloadable PDF.
-- **Live information:** ask about weather or cryptocurrency prices to show interactive data cards.
-- **Personalization and memory:** choose a response tone and style, upload a text/Markdown/JSON profile, import reviewed context from another AI with a copy-and-paste prompt, and manage cloud-synced memories. Automatic memory can be paused; saved items can be reviewed, edited, or deleted.
-- **Sign-in:** authenticate with GitHub. The server verifies the OAuth session; repository access is not requested.
-- **Conversation tools:** use prompt starters, choose a voice and language, export a conversation, and adjust the visual theme. A dismissible quick-start guide points out the sphere, chat, Explore examples, and attachments on first visit.
-- **Installable PWA:** install Lumen on Android from a supported browser, or add it to the iPhone/iPad Home Screen from Safari. The app needs an internet connection for AI and live-data features.
+- **🎙️ Voice conversation:** speak with Lumen using browser speech recognition, with an AWS Transcribe fallback if the browser speech service is unreachable. Amazon Polly neural voices are used when configured.
+- **🖼️ Image and PDF analysis:** attach a photo or PDF and ask Lumen to inspect it.
+- **🔎 Web research:** request sourced research reports; Lumen searches and reads public web pages, then can create a downloadable PDF.
+- **🌦️ Live information:** ask about weather or cryptocurrency prices to show interactive data cards.
+- **🧠 Personalization and memory:** choose a response tone and style, upload a text/Markdown/JSON profile, import reviewed context from another AI with a copy-and-paste prompt, and manage cloud-synced memories. Automatic memory can be paused; saved items can be reviewed, edited, or deleted.
+- **🔐 Sign-in:** authenticate with GitHub. The server verifies the OAuth session; repository access is not requested.
+- **✨ Conversation tools:** use prompt starters, choose a voice and language, export a conversation, and adjust the visual theme. A dismissible quick-start guide points out the sphere, chat, Explore examples, and attachments on first visit.
+- **📲 Installable PWA:** install Lumen on Android from a supported browser, or add it to the iPhone/iPad Home Screen from Safari. The app needs an internet connection for AI and live-data features.
 
 AI responses and cloud-backed features require valid provider credentials. See [Configuration](#configuration).
 
