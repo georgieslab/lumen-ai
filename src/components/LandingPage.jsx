@@ -1,93 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
 import LumenLogo from './LumenLogo.jsx';
+import { LANDING_COPY, LANDING_LANGUAGES, detectLandingLanguage, saveLandingLanguage } from './landingCopy.js';
 import './LandingPage.css';
 
-const DEMO_MODES = [
-  {
-    id: 'voice',
-    label: 'Talk it out',
-    icon: 'voice',
-    eyebrow: 'VOICE CONVERSATION',
-    title: 'Think out loud.',
-    detail: 'Speak naturally, hear Lumen respond, and keep the thread going without losing your place.',
-    question: '“Can we think this through together?”'
-  },
-  {
-    id: 'vision',
-    label: 'Show and tell',
-    icon: 'vision',
-    eyebrow: 'IMAGES AND DOCUMENTS',
-    title: 'Bring the context.',
-    detail: 'Share an image or PDF and ask Lumen to help you understand what you are looking at.',
-    question: '“What should I notice in this?”'
-  },
-  {
-    id: 'research',
-    label: 'Go deeper',
-    icon: 'research',
-    eyebrow: 'WEB RESEARCH',
-    title: 'Follow your curiosity.',
-    detail: 'Explore a topic with sourced web research, then turn the findings into a downloadable report.',
-    question: '“Can you research this and make me a report?”'
-  }
-];
-
-const FEATURES = [
-  {
-    id: 'voice',
-    number: '01',
-    icon: 'voice',
-    title: 'Say what you’re thinking.',
-    detail: 'Have a spoken conversation, or type when that feels more natural. Lumen is ready to follow your train of thought.',
-    action: 'Explore voice',
-    mode: 'voice'
-  },
-  {
-    id: 'vision',
-    number: '02',
-    icon: 'vision',
-    title: 'Let the details speak.',
-    detail: 'Bring an image, a PDF, or a page you choose to share. Ask questions with the context already in view.',
-    action: 'Explore vision',
-    mode: 'vision'
-  },
-  {
-    id: 'research',
-    number: '03',
-    icon: 'research',
-    title: 'Turn curiosity into clarity.',
-    detail: 'Research public web sources, get live information, and create a report you can take with you.',
-    action: 'Explore research',
-    mode: 'research'
-  },
-  {
-    id: 'personalize',
-    number: '04',
-    icon: 'personalize',
-    title: 'Make the space your own.',
-    detail: 'Choose a voice, language, and response style. Review, edit, or pause saved memories whenever you like.',
-    action: 'Meet your copilot',
-    mode: null
-  }
-];
-
-const FAQ_ITEMS = [
-  {
-    question: 'What is Lumen?',
-    answer: 'Lumen is a voice- and vision-enabled AI copilot for conversation, image and PDF analysis, web research, and live information.'
-  },
-  {
-    question: 'How do I use it?',
-    answer: 'Open the copilot and ask by voice or text. You can attach an image or PDF, or ask Lumen to research a topic on the web.'
-  },
-  {
-    question: 'Can I control what Lumen remembers?',
-    answer: 'Yes. You can review, edit, or delete saved memories, and automatic memory can be paused from the account controls.'
-  },
-  {
-    question: 'Does Lumen work offline?',
-    answer: 'AI conversations and live-data features need an internet connection.'
-  }
+const MODE_IDS = ['voice', 'vision', 'research'];
+const FEATURE_META = [
+  { id: 'voice', number: '01', icon: 'voice', mode: 'voice' },
+  { id: 'vision', number: '02', icon: 'vision', mode: 'vision' },
+  { id: 'research', number: '03', icon: 'research', mode: 'research' },
+  { id: 'personalize', number: '04', icon: 'personalize', mode: null }
 ];
 
 const WAVE_HEIGHTS = [12, 22, 16, 34, 24, 46, 27, 39, 17, 31, 48, 24, 38, 18, 44, 26, 36, 15, 29, 43, 21, 34, 13];
@@ -185,7 +106,7 @@ function Reveal({ children, className = '', delay = 0 }) {
   );
 }
 
-function FeatureArtwork({ type, coverUrl }) {
+function FeatureArtwork({ type, coverUrl, t }) {
   if (type === 'voice') {
     return (
       <div className="lp-feature-art lp-feature-art--voice" aria-hidden="true">
@@ -227,21 +148,21 @@ function FeatureArtwork({ type, coverUrl }) {
           <span className="lp-source-copy"><i /><i /><i /></span>
           <span className="lp-source-check">✓</span>
         </div>
-        <div className="lp-feature-report">RESEARCH <span>↗</span></div>
+        <div className="lp-feature-report">{t.art.research} <span>↗</span></div>
       </div>
     );
   }
 
   return (
     <div className="lp-feature-art lp-feature-art--personalize" aria-hidden="true">
-      <div className="lp-mini-setting"><span>Voice</span><strong>Joanna</strong><span className="lp-setting-chevron">⌄</span></div>
-      <div className="lp-mini-setting"><span>Reply style</span><strong>Thoughtful</strong><span className="lp-setting-chevron">⌄</span></div>
-      <div className="lp-mini-setting lp-mini-setting--memory"><span>Memory controls</span><span className="lp-mini-switch"><i /></span></div>
+      <div className="lp-mini-setting"><span>{t.art.voice}</span><strong>{t.art.voiceName}</strong><span className="lp-setting-chevron">⌄</span></div>
+      <div className="lp-mini-setting"><span>{t.art.replyStyle}</span><strong>{t.art.replyStyleName}</strong><span className="lp-setting-chevron">⌄</span></div>
+      <div className="lp-mini-setting lp-mini-setting--memory"><span>{t.art.memoryControls}</span><span className="lp-mini-switch"><i /></span></div>
     </div>
   );
 }
 
-function ModeArtwork({ mode, coverUrl }) {
+function ModeArtwork({ mode, coverUrl, t }) {
   if (mode === 'voice') {
     return (
       <div className="lp-mode-art lp-mode-art--voice" aria-hidden="true">
@@ -252,7 +173,7 @@ function ModeArtwork({ mode, coverUrl }) {
             <span key={index} style={{ height: `${height}px`, animationDelay: `${-index * 0.045}s` }} />
           ))}
         </div>
-        <span className="lp-mode-caption"><i /> A conversation, at your pace</span>
+        <span className="lp-mode-caption"><i /> {t.art.conversation}</span>
       </div>
     );
   }
@@ -265,10 +186,10 @@ function ModeArtwork({ mode, coverUrl }) {
         <div className="lp-context-image"><img src={coverUrl} alt="" /></div>
         <div className="lp-context-doc">
           <div className="lp-context-doc-icon"><FeatureIcon name="vision" /></div>
-          <div><strong>Your context</strong><span>Image or PDF</span></div>
+          <div><strong>{t.art.yourContext}</strong><span>{t.art.imageOrPdf}</span></div>
           <span className="lp-context-plus">+</span>
         </div>
-        <span className="lp-context-tag">ASK ABOUT WHAT YOU SEE</span>
+        <span className="lp-context-tag">{t.art.askAbout}</span>
       </div>
     );
   }
@@ -278,20 +199,20 @@ function ModeArtwork({ mode, coverUrl }) {
       <div className="lp-research-window">
         <div className="lp-research-window-head">
           <span className="lp-window-dot" /><span className="lp-window-dot" /><span className="lp-window-dot" />
-          <span>RESEARCH NOTES</span>
+          <span>{t.art.researchNotes}</span>
         </div>
-        <div className="lp-research-query"><FeatureIcon name="research" /><span>Explore a question</span><span className="lp-query-arrow">↗</span></div>
+        <div className="lp-research-query"><FeatureIcon name="research" /><span>{t.art.exploreQuestion}</span><span className="lp-query-arrow">↗</span></div>
         <div className="lp-research-source">
           <span className="lp-source-index">01</span>
           <span className="lp-research-lines"><i /><i /><i /></span>
-          <span className="lp-source-status">SOURCE</span>
+          <span className="lp-source-status">{t.art.source}</span>
         </div>
         <div className="lp-research-source lp-research-source--second">
           <span className="lp-source-index">02</span>
           <span className="lp-research-lines"><i /><i /><i /></span>
-          <span className="lp-source-status">SOURCE</span>
+          <span className="lp-source-status">{t.art.source}</span>
         </div>
-        <div className="lp-research-export"><span className="lp-export-icon">PDF</span><span><strong>Research report</strong><small>Ready to take with you</small></span><span className="lp-export-arrow">↗</span></div>
+        <div className="lp-research-export"><span className="lp-export-icon">PDF</span><span><strong>{t.art.report}</strong><small>{t.art.reportSub}</small></span><span className="lp-export-arrow">↗</span></div>
       </div>
       <div className="lp-research-spark">✦</div>
     </div>
@@ -302,9 +223,22 @@ export default function LandingPage() {
   const [activeMode, setActiveMode] = useState('voice');
   const [openFaq, setOpenFaq] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [lang, setLang] = useState(detectLandingLanguage);
+  const t = LANDING_COPY[lang];
   const heroVisualRef = useRef(null);
   const coverUrl = `${import.meta.env.BASE_URL}share-cover.png`;
-  const selectedMode = DEMO_MODES.find((mode) => mode.id === activeMode) || DEMO_MODES[0];
+  const demoModes = MODE_IDS.map((id, index) => ({ id, icon: id, ...t.modes[index] }));
+  const features = FEATURE_META.map((meta, index) => ({ ...meta, ...t.features[index] }));
+  const selectedMode = demoModes.find((mode) => mode.id === activeMode) || demoModes[0];
+
+  useEffect(() => {
+    document.documentElement.lang = t.htmlLang;
+  }, [t.htmlLang]);
+
+  const changeLanguage = (next) => {
+    setLang(next);
+    saveLandingLanguage(next);
+  };
 
   useEffect(() => {
     if (!menuOpen) return undefined;
@@ -347,38 +281,52 @@ export default function LandingPage() {
         <span className="lp-atmosphere-glow lp-atmosphere-glow--three" />
       </div>
 
-      <a className="lp-skip-link" href="#main-content">Skip to content</a>
+      <a className="lp-skip-link" href="#main-content">{t.skip}</a>
 
       <header className="lp-header">
         <div className="lp-container lp-header-inner">
-          <a className="lp-brand" href="#top" aria-label="Lumen AI home" onClick={closeMenu}>
+          <a className="lp-brand" href="#top" aria-label={t.homeLabel} onClick={closeMenu}>
             <LumenLogo size={36} />
             <span>LUMEN</span>
           </a>
 
-          <nav id="lp-primary-nav" className={`lp-nav-links ${menuOpen ? 'is-open' : ''}`} aria-label="Main navigation">
-            <a href="#capabilities" onClick={closeMenu}>Capabilities</a>
-            <a href="#experience" onClick={closeMenu}>The experience</a>
-            <a href="#faq" onClick={closeMenu}>FAQ</a>
+          <nav id="lp-primary-nav" className={`lp-nav-links ${menuOpen ? 'is-open' : ''}`} aria-label={t.navLabel}>
+            <a href="#capabilities" onClick={closeMenu}>{t.nav.capabilities}</a>
+            <a href="#experience" onClick={closeMenu}>{t.nav.experience}</a>
+            <a href="#faq" onClick={closeMenu}>{t.nav.faq}</a>
             <a className="lp-mobile-cta" href="#app" onClick={closeMenu}>
-              Open the copilot <ArrowIcon />
+              {t.openCopilot} <ArrowIcon />
             </a>
           </nav>
 
           <div className="lp-header-actions">
+            <div className="lp-lang-switch" role="group" aria-label={t.langLabel}>
+              {LANDING_LANGUAGES.map((code) => (
+                <button
+                  key={code}
+                  type="button"
+                  className={lang === code ? 'is-active' : ''}
+                  aria-pressed={lang === code}
+                  lang={code}
+                  onClick={() => changeLanguage(code)}
+                >
+                  {code.toUpperCase()}
+                </button>
+              ))}
+            </div>
             <a className="lp-header-cta" href="#app">
-              Open Lumen <ArrowIcon />
+              {t.openLumen} <ArrowIcon />
             </a>
             <button
               className={`lp-menu-toggle ${menuOpen ? 'is-open' : ''}`}
               type="button"
-              aria-label={menuOpen ? 'Close navigation menu' : 'Open navigation menu'}
+              aria-label={menuOpen ? t.menuClose : t.menuOpen}
               aria-expanded={menuOpen}
               aria-controls="lp-primary-nav"
               onClick={() => setMenuOpen((isOpen) => !isOpen)}
             >
               <span /><span /><span />
-              <i>{menuOpen ? 'Close' : 'Menu'}</i>
+              <i>{menuOpen ? t.menuCloseShort : t.menuOpenShort}</i>
             </button>
           </div>
         </div>
@@ -388,22 +336,22 @@ export default function LandingPage() {
         <section className="lp-hero" aria-labelledby="lp-hero-title">
           <div className="lp-container lp-hero-grid">
             <Reveal className="lp-hero-copy">
-              <div className="lp-eyebrow"><span className="lp-eyebrow-dot" /> A NEW WAY TO THINK WITH AI</div>
-              <h1 id="lp-hero-title">Your thoughts,<br />in a <span>new light.</span></h1>
+              <div className="lp-eyebrow"><span className="lp-eyebrow-dot" /> {t.hero.eyebrow}</div>
+              <h1 id="lp-hero-title">{t.hero.title1}<br />{t.hero.title2}<span>{t.hero.title3}</span></h1>
               <p className="lp-hero-intro">
-                Meet Lumen: an ambient AI companion for real conversations, curious questions, and the things you want to understand.
+                {t.hero.intro}
               </p>
               <div className="lp-hero-actions">
                 <a className="lp-button lp-button--primary" href="#app">
-                  Talk with Lumen <ArrowIcon />
+                  {t.hero.primary} <ArrowIcon />
                 </a>
                 <a className="lp-button lp-button--quiet" href="#capabilities">
-                  Discover what’s possible <span className="lp-down-arrow">↓</span>
+                  {t.hero.quiet} <span className="lp-down-arrow">↓</span>
                 </a>
               </div>
               <div className="lp-hero-note">
                 <span className="lp-note-stars" aria-hidden="true">✦</span>
-                <span>Voice, vision, and research—in one thoughtful space.</span>
+                <span>{t.hero.note}</span>
               </div>
             </Reveal>
 
@@ -417,7 +365,7 @@ export default function LandingPage() {
                 <img
                   className="lp-hero-cover"
                   src={coverUrl}
-                  alt="A luminous Lumen orb, woven from cyan, violet, and rose light."
+                  alt={t.hero.coverAlt}
                   fetchPriority="high"
                   decoding="async"
                 />
@@ -425,36 +373,36 @@ export default function LandingPage() {
                 <span className="lp-hero-orbit lp-hero-orbit--two" aria-hidden="true" />
                 <div className="lp-float-card lp-float-card--voice" aria-hidden="true">
                   <span className="lp-float-icon"><FeatureIcon name="voice" /></span>
-                  <span className="lp-float-copy"><strong>Always in the conversation</strong><small>Voice · text · your pace</small></span>
+                  <span className="lp-float-copy"><strong>{t.hero.cardVoiceTitle}</strong><small>{t.hero.cardVoiceSub}</small></span>
                   <span className="lp-float-live"><i /></span>
                 </div>
                 <div className="lp-float-card lp-float-card--vision" aria-hidden="true">
                   <span className="lp-float-spark">✦</span>
-                  <span className="lp-float-copy"><strong>Ideas, brought into focus</strong><small>Look closer with Lumen</small></span>
+                  <span className="lp-float-copy"><strong>{t.hero.cardVisionTitle}</strong><small>{t.hero.cardVisionSub}</small></span>
                 </div>
               </figure>
               <figcaption className="lp-art-caption">
-                <span><i /> A little more light on what’s next</span>
+                <span><i /> {t.hero.caption}</span>
                 <span className="lp-art-index">LUMEN / 001</span>
               </figcaption>
             </Reveal>
           </div>
-          <a className="lp-scroll-cue" href="#capabilities" aria-label="Scroll to explore Lumen">
-            <span>SCROLL TO EXPLORE</span><i />
+          <a className="lp-scroll-cue" href="#capabilities" aria-label={t.hero.scrollLabel}>
+            <span>{t.hero.scroll}</span><i />
           </a>
         </section>
 
-        <section className="lp-signal-strip" aria-label="Lumen at a glance">
+        <section className="lp-signal-strip" aria-label={t.signal.aria}>
           <div className="lp-container lp-signal-inner">
-            <span className="lp-signal-label">ONE COPILOT, MORE WAYS TO THINK</span>
+            <span className="lp-signal-label">{t.signal.label}</span>
             <div className="lp-signal-items">
-              <span><FeatureIcon name="voice" /> VOICE</span>
+              <span><FeatureIcon name="voice" /> {t.signal.voice}</span>
               <i />
-              <span><FeatureIcon name="vision" /> VISION</span>
+              <span><FeatureIcon name="vision" /> {t.signal.vision}</span>
               <i />
-              <span><FeatureIcon name="research" /> RESEARCH</span>
+              <span><FeatureIcon name="research" /> {t.signal.research}</span>
               <i />
-              <span><FeatureIcon name="personalize" /> YOUR PACE</span>
+              <span><FeatureIcon name="personalize" /> {t.signal.pace}</span>
             </div>
           </div>
         </section>
@@ -463,16 +411,16 @@ export default function LandingPage() {
           <div className="lp-container">
             <Reveal className="lp-section-heading">
               <div>
-                <p className="lp-section-kicker"><span /> A COMPANION THAT KEEPS UP</p>
-                <h2 id="lp-capabilities-title">More than an answer.<br /><span>A space to explore.</span></h2>
+                <p className="lp-section-kicker"><span /> {t.capabilities.kicker}</p>
+                <h2 id="lp-capabilities-title">{t.capabilities.title1}<br /><span>{t.capabilities.title2}</span></h2>
               </div>
               <p className="lp-section-intro">
-                Start with a thought, a picture, or a question. Lumen brings the right kind of attention to the moment.
+                {t.capabilities.intro}
               </p>
             </Reveal>
 
             <div className="lp-feature-grid">
-              {FEATURES.map((feature, index) => (
+              {features.map((feature, index) => (
                 <Reveal
                   key={feature.id}
                   className={`lp-feature-card lp-feature-card--${feature.id}`}
@@ -480,14 +428,14 @@ export default function LandingPage() {
                 >
                   <article>
                     <div className="lp-feature-topline">
-                      <span>{feature.number} <i /> LUMEN CAPABILITY</span>
+                      <span>{feature.number} <i /> {t.capabilities.topline}</span>
                       <FeatureIcon name={feature.icon} className="lp-feature-icon" />
                     </div>
                     <div className="lp-feature-copy">
                       <h3>{feature.title}</h3>
                       <p>{feature.detail}</p>
                     </div>
-                    <FeatureArtwork type={feature.id} coverUrl={coverUrl} />
+                    <FeatureArtwork type={feature.id} coverUrl={coverUrl} t={t} />
                     <a
                       className="lp-feature-link"
                       href={feature.mode ? '#experience' : '#app'}
@@ -505,14 +453,14 @@ export default function LandingPage() {
         <section className="lp-section lp-experience" id="experience" aria-labelledby="lp-experience-title">
           <div className="lp-container">
             <Reveal className="lp-experience-heading">
-              <p className="lp-section-kicker"><span /> ONE SPACE, MANY STARTING POINTS</p>
-              <h2 id="lp-experience-title">However you arrive,<br /><span>there’s room to go deeper.</span></h2>
-              <p>Choose a path to preview how Lumen can meet you there.</p>
+              <p className="lp-section-kicker"><span /> {t.experience.kicker}</p>
+              <h2 id="lp-experience-title">{t.experience.title1}<br /><span>{t.experience.title2}</span></h2>
+              <p>{t.experience.intro}</p>
             </Reveal>
 
             <Reveal className="lp-experience-grid" delay={90}>
-              <div className="lp-mode-picker" role="group" aria-label="Choose a Lumen capability to preview">
-                {DEMO_MODES.map((mode, index) => (
+              <div className="lp-mode-picker" role="group" aria-label={t.experience.pickerLabel}>
+                {demoModes.map((mode, index) => (
                   <button
                     className={`lp-mode-button ${activeMode === mode.id ? 'is-active' : ''}`}
                     type="button"
@@ -528,23 +476,23 @@ export default function LandingPage() {
                 ))}
                 <div className="lp-mode-note">
                   <span className="lp-mode-note-icon">✦</span>
-                  <p>Move between voice, vision, and research as your question takes shape.</p>
+                  <p>{t.experience.note}</p>
                 </div>
               </div>
 
-              <div className={`lp-mode-panel lp-mode-panel--${selectedMode.id}`} role="region" aria-label={`${selectedMode.label} preview`} aria-live="polite">
+              <div className={`lp-mode-panel lp-mode-panel--${selectedMode.id}`} role="region" aria-label={`${selectedMode.label} ${t.experience.previewSuffix}`} aria-live="polite">
                 <div className="lp-mode-copy">
                   <span className="lp-mode-eyebrow"><i /> {selectedMode.eyebrow}</span>
                   <h3>{selectedMode.title}</h3>
                   <p>{selectedMode.detail}</p>
                   <div className="lp-example-question">
-                    <span>AN EXAMPLE QUESTION</span>
+                    <span>{t.experience.exampleLabel}</span>
                     <p>{selectedMode.question}</p>
                     <ArrowIcon />
                   </div>
                 </div>
-                <ModeArtwork mode={selectedMode.id} coverUrl={coverUrl} />
-                <div className="lp-preview-disclaimer">A glimpse of what you can explore with Lumen</div>
+                <ModeArtwork mode={selectedMode.id} coverUrl={coverUrl} t={t} />
+                <div className="lp-preview-disclaimer">{t.experience.disclaimer}</div>
               </div>
             </Reveal>
           </div>
@@ -554,19 +502,19 @@ export default function LandingPage() {
           <div className="lp-container">
             <Reveal className="lp-personal-card">
               <div className="lp-personal-copy">
-                <p className="lp-section-kicker"><span /> BUILT AROUND YOU</p>
-                <h2 id="lp-personal-title">Your voice.<br />Your way of thinking.</h2>
+                <p className="lp-section-kicker"><span /> {t.personal.kicker}</p>
+                <h2 id="lp-personal-title">{t.personal.title1}<br />{t.personal.title2}</h2>
                 <p>
-                  Choose how Lumen speaks and responds. Keep saved memories useful, manageable, and on your terms.
+                  {t.personal.body}
                 </p>
-                <a className="lp-text-link" href="#app">Make it yours <ArrowIcon /></a>
+                <a className="lp-text-link" href="#app">{t.personal.link} <ArrowIcon /></a>
               </div>
               <div className="lp-settings-preview" aria-hidden="true">
-                <div className="lp-settings-head"><span className="lp-settings-spark">✦</span><span>YOUR LUMEN</span><span className="lp-settings-dots">•••</span></div>
-                <div className="lp-settings-row"><span className="lp-settings-row-icon"><FeatureIcon name="voice" /></span><span className="lp-settings-field"><small>VOICE</small><strong>Choose the voice that feels right</strong></span><span className="lp-settings-chevron">↗</span></div>
-                <div className="lp-settings-row"><span className="lp-settings-row-icon"><FeatureIcon name="personalize" /></span><span className="lp-settings-field"><small>RESPONSE STYLE</small><strong>Shape how Lumen replies</strong></span><span className="lp-settings-chevron">↗</span></div>
-                <div className="lp-settings-memory"><span><strong>Memory, with your say</strong><small>Review, edit, or pause anytime</small></span><span className="lp-memory-control"><i /></span></div>
-                <div className="lp-settings-foot"><span><i /> YOUR PREFERENCES, YOURS TO CHANGE</span><span>↗</span></div>
+                <div className="lp-settings-head"><span className="lp-settings-spark">✦</span><span>{t.personal.head}</span><span className="lp-settings-dots">•••</span></div>
+                <div className="lp-settings-row"><span className="lp-settings-row-icon"><FeatureIcon name="voice" /></span><span className="lp-settings-field"><small>{t.personal.voiceLabel}</small><strong>{t.personal.voiceText}</strong></span><span className="lp-settings-chevron">↗</span></div>
+                <div className="lp-settings-row"><span className="lp-settings-row-icon"><FeatureIcon name="personalize" /></span><span className="lp-settings-field"><small>{t.personal.styleLabel}</small><strong>{t.personal.styleText}</strong></span><span className="lp-settings-chevron">↗</span></div>
+                <div className="lp-settings-memory"><span><strong>{t.personal.memoryTitle}</strong><small>{t.personal.memorySub}</small></span><span className="lp-memory-control"><i /></span></div>
+                <div className="lp-settings-foot"><span><i /> {t.personal.foot}</span><span>↗</span></div>
               </div>
             </Reveal>
           </div>
@@ -575,14 +523,14 @@ export default function LandingPage() {
         <section className="lp-section lp-faq" id="faq" aria-labelledby="lp-faq-title">
           <div className="lp-container lp-faq-grid">
             <Reveal className="lp-faq-heading">
-              <p className="lp-section-kicker"><span /> GOOD TO KNOW</p>
-              <h2 id="lp-faq-title">A few things<br /><span>you might wonder.</span></h2>
-              <p>Still curious? Start a conversation and see where it takes you.</p>
-              <a className="lp-text-link" href="#app">Ask Lumen <ArrowIcon /></a>
+              <p className="lp-section-kicker"><span /> {t.faq.kicker}</p>
+              <h2 id="lp-faq-title">{t.faq.title1}<br /><span>{t.faq.title2}</span></h2>
+              <p>{t.faq.intro}</p>
+              <a className="lp-text-link" href="#app">{t.faq.link} <ArrowIcon /></a>
             </Reveal>
 
             <Reveal className="lp-faq-list" delay={90}>
-              {FAQ_ITEMS.map((item, index) => {
+              {t.faq.items.map((item, index) => {
                 const isOpen = openFaq === index;
                 const questionId = `lp-faq-question-${index}`;
                 const answerId = `lp-faq-answer-${index}`;
@@ -623,11 +571,11 @@ export default function LandingPage() {
             <Reveal className="lp-final-card">
               <div className="lp-final-glow" aria-hidden="true" />
               <div className="lp-final-mark"><LumenLogo size={82} /></div>
-              <p className="lp-section-kicker"><span /> THE NEXT QUESTION IS YOURS</p>
-              <h2 id="lp-final-title">Let’s see where<br /><span>your curiosity goes.</span></h2>
-              <p className="lp-final-description">A thought, a question, a whole new perspective. Start anywhere.</p>
+              <p className="lp-section-kicker"><span /> {t.final.kicker}</p>
+              <h2 id="lp-final-title">{t.final.title1}<br /><span>{t.final.title2}</span></h2>
+              <p className="lp-final-description">{t.final.body}</p>
               <a className="lp-button lp-button--primary" href="#app">
-                Talk with Lumen <ArrowIcon />
+                {t.final.cta} <ArrowIcon />
               </a>
             </Reveal>
           </div>
@@ -636,15 +584,15 @@ export default function LandingPage() {
 
       <footer className="lp-footer">
         <div className="lp-container lp-footer-inner">
-          <a className="lp-brand lp-footer-brand" href="#top" aria-label="Lumen AI home">
+          <a className="lp-brand lp-footer-brand" href="#top" aria-label={t.homeLabel}>
             <LumenLogo size={30} />
             <span>LUMEN</span>
           </a>
-          <p>Ambient intelligence, with room to think.</p>
+          <p>{t.footer.tagline}</p>
           <div className="lp-footer-links">
-            <a href="#capabilities">Capabilities</a>
-            <a href="#faq">FAQ</a>
-            <a href="https://github.com/georgieslab/lumen-ai" target="_blank" rel="noopener noreferrer">GitHub <span aria-hidden="true">↗</span></a>
+            <a href="#capabilities">{t.nav.capabilities}</a>
+            <a href="#faq">{t.nav.faq}</a>
+            <a href="https://github.com/georgieslab/lumen-ai" target="_blank" rel="noopener noreferrer">{t.footer.github} <span aria-hidden="true">↗</span></a>
           </div>
           <span className="lp-copyright">© {new Date().getFullYear()} Lumen AI</span>
         </div>

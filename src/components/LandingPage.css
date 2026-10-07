@@ -3544,3 +3544,48 @@
     transform: none;
   }
 }
+
+/* language switch */
+.lp-header-actions {
+  align-items: center;
+  gap: 12px;
+}
+
+.lp-lang-switch {
+  display: inline-flex;
+  padding: 3px;
+  border: 1px solid rgba(152, 182, 255, 0.25);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.lp-lang-switch button {
+  min-width: 34px;
+  min-height: 30px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: rgba(226, 232, 255, 0.72);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  transition: background 0.25s ease, color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.lp-lang-switch button:hover {
+  color: #fff;
+}
+
+.lp-lang-switch button.is-active {
+  background: linear-gradient(135deg, rgba(103, 232, 249, 0.9), rgba(167, 139, 250, 0.9));
+  color: #0b1020;
+  box-shadow: 0 0 14px rgba(125, 211, 252, 0.35);
+}
+
+.lp-lang-switch button:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
