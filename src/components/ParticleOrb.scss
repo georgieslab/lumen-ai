@@ -7,7 +7,7 @@
 
 $total: 300;            // Total particles
 $orb-size: 75px;        // Spheroid radius (diameter = 150px - refined compact scale)
-$particle-size: 2px;    // Particle dimension
+$particle-size: 3.5px;    // Particle dimension
 $time: 14s;             // Base rotation period
 $base-hue: 185;         // cyan start; sweeps through violet to rose
 
@@ -164,7 +164,7 @@ $base-hue: 185;         // cyan start; sweeps through violet to rose
   .c:nth-child(#{$i}){
     animation: orbit#{$i} var(--time, #{$time}) infinite;
     animation-delay: ($i * 0.01s); 
-    background-color: hsla($hue, 70%, 80%, 0.8);
+    background-color: hsla($hue, 62%, 62%, 0.85);
   }
 
   @keyframes orbit#{$i}{ 

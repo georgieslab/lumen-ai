@@ -1,4 +1,4 @@
-﻿
+
 import React, { useState, useEffect, useRef } from 'react';
 import AmbientSphere from './components/AmbientSphere';
 import VisionScanner, { SpatialMediaIcon } from './components/VisionScanner';
@@ -1667,25 +1667,6 @@ export default function App() {
                 <span className="glance-title">{t.glance.weatherTitle}</span>
               </button>
             )}
-
-            {/* Career & Tech Radar Changeable Tile */}
-            <button
-              type="button"
-              className={`ambient-glance-pill career-glance ${activeStageWidget?.widgetType === 'jobs' ? 'active' : ''}`}
-              onClick={() => {
-                setActiveStageWidget(activeStageWidget?.widgetType === 'jobs' ? null : {
-                  widgetType: 'jobs',
-                  role: jobFilter.role,
-                  location: jobFilter.location
-                });
-              }}
-              title={formatString(t.glance.jobsTooltip, { role: jobFilter.role, location: jobFilter.location })}
-            >
-              <span className="glance-pulse green"></span>
-              <span className="glance-icon">💼</span>
-              <span className="glance-title">{jobFilter.role.split(' ')[0]}</span>
-              <span className="glance-sub positive">{jobFilter.location.split(',')[0]}</span>
-            </button>
           </div>
 
           {/* Quick-action 1-tap intelligent starter chips (Option E) */}
