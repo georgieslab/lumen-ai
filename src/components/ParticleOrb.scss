@@ -164,7 +164,7 @@ $base-hue: 185;         // cyan start; sweeps through violet to rose
   .c:nth-child(#{$i}){
     animation: orbit#{$i} var(--time, #{$time}) infinite;
     animation-delay: ($i * 0.01s); 
-    background-color: hsla($hue, 95%, 66%, 1);
+    background-color: hsla($hue, 70%, 80%, 0.8);
   }
 
   @keyframes orbit#{$i}{ 
