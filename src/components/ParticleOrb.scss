@@ -9,7 +9,7 @@ $total: 300;            // Total particles
 $orb-size: 75px;        // Spheroid radius (diameter = 150px - refined compact scale)
 $particle-size: 2px;    // Particle dimension
 $time: 14s;             // Base rotation period
-$base-hue: 180;         // 180 for tranquil cyan/azure baseline
+$base-hue: 185;         // cyan start; sweeps through violet to rose
 
 // Reactive state tokens mapped to sphere-stage
 .sphere-stage {
@@ -159,12 +159,12 @@ $base-hue: 180;         // 180 for tranquil cyan/azure baseline
 @for $i from 1 through $total {
   $z: (math.random(360) * 1deg); // random angle to rotateZ
   $y: (math.random(360) * 1deg); // random to rotateX
-  $hue: ((math.div(40, $total) * $i) + $base-hue); // set hue
+  $hue: ((math.div(150, $total) * $i) + $base-hue); // cyan -> violet -> rose sweep
   
   .c:nth-child(#{$i}){
     animation: orbit#{$i} var(--time, #{$time}) infinite;
     animation-delay: ($i * 0.01s); 
-    background-color: hsla($hue, 100%, 55%, 1);
+    background-color: hsla($hue, 95%, 66%, 1);
   }
 
   @keyframes orbit#{$i}{ 
