@@ -162,28 +162,38 @@ $base-hue: 185;         // cyan start; sweeps through violet to rose
   to   { scale: 1;   opacity: 1; }
 }
 
-// Every particle rests on a fixed point of the shell; a phase-shifted
-// "breathing" wave travels across it (hue bands ripple around the sphere)
-// and each particle twinkles, so the orb is alive but never dissolves.
+// Armillary / gyroscope motion: particles are grouped into 15 tilted
+// orbital rings. Each ring spins at its own speed and alternating direction,
+// so 300 particles flow along interlocking great circles like a living
+// gyroscope. A slow breathing pulse on the radius keeps the shell soft.
+$rings: 15;
+
+@for $k from 0 through ($rings - 1) {
+  $tilt: (math.div(180, $rings) * $k) * 1deg;
+  $axis: ($k * 37) * 1deg;
+  @keyframes ring#{$k} {
+    from { transform: rotateY($axis) rotateZ($tilt) rotateY(0deg) translateX($orb-size); }
+    to   { transform: rotateY($axis) rotateZ($tilt) rotateY(360deg) translateX($orb-size); }
+  }
+}
+
+@keyframes particleGlow {
+  0%, 100% { opacity: 0.55; scale: 0.8; }
+  50%      { opacity: 1;    scale: 1.3; }
+}
+
 @for $i from 1 through $total {
-  $z: (math.random(360) * 1deg);
-  $y: (math.random(360) * 1deg);
+  $k: ($i - 1) % $rings;
+  $slot: math.div(math.floor(math.div($i - 1, $rings)), math.div($total, $rings));
   $hue: ((math.div(150, $total) * $i) + $base-hue);
 
   .c:nth-child(#{$i}){
-    animation: orbit#{$i} calc(var(--time, #{$time}) * 0.5) infinite ease-in-out;
-    animation-delay: calc(var(--time, #{$time}) * #{-0.5 * math.div($i, $total)});
+    animation:
+      ring#{$k} calc(var(--time, #{$time}) * #{0.55 + ($k % 5) * 0.18}) linear infinite #{if($k % 2 == 0, normal, reverse)},
+      particleGlow calc(var(--time, #{$time}) * 0.4) ease-in-out infinite;
+    animation-delay:
+      calc(var(--time, #{$time}) * #{-0.55 * $slot * 1}),
+      calc(var(--time, #{$time}) * #{-0.4 * math.div($i, $total)});
     background-color: hsla($hue, 62%, 62%, 0.85);
-  }
-
-  @keyframes orbit#{$i}{
-    0%, 100% {
-      transform: rotateZ(-$z) rotateY($y) translateX($orb-size * 0.9) rotateZ($z) scale(0.8);
-      opacity: 0.45;
-    }
-    50% {
-      transform: rotateZ(-$z) rotateY($y) translateX($orb-size * 1.12) rotateZ($z) scale(1.25);
-      opacity: 1;
-    }
   }
 }
