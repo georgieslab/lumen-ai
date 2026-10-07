@@ -12,7 +12,8 @@
     "dev:all": "npx concurrently \"npm run dev\" \"npm run dev:server\"",
     "build": "vite build",
     "preview": "vite preview",
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node --test \"tests/*.test.js\""
   },
   "dependencies": {
     "@aws-sdk/client-bedrock": "^3.1143.0",
@@ -35,3 +36,5 @@
     "vite": "^6.0.5"
   }
 }
+
+

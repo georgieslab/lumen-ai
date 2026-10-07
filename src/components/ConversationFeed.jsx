@@ -1,6 +1,8 @@
-import React, { useRef, useEffect, useState } from 'react';
+﻿import React, { useRef, useEffect, useState } from 'react';
 import { fetchLiveWeatherDirect } from '../services/api';
 import { getTranslations } from '../utils/translations';
+import HtmlPageCard from './HtmlPageCard';
+import { splitHtmlBlocks } from '../services/htmlPage';
 
 function parseFormattedText(text) {
   if (!text) return [];
@@ -697,6 +699,29 @@ function FormattedBubbleText({ text }) {
   );
 }
 
+function CopyAnswerButton({ text }) {
+  const [copied, setCopied] = React.useState(false);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch (_) {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+  return (
+    <button type="button" className="copy-answer-btn" onClick={copy} aria-label="Copy answer" title="Copy answer">
+      {copied ? '✓ Copied' : '⧉ Copy'}
+    </button>
+  );
+}
+
 export default function ConversationFeed({
   messages,
   liveTranscript,
@@ -763,6 +788,7 @@ export default function ConversationFeed({
                   {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </span>
               )}
+              {msg.role === 'assistant' && !msg.isStreaming && msg.text && <CopyAnswerButton text={msg.text} />}
             </div>
 
             {Boolean(msg.isPdf || msg.fileName?.toLowerCase().endsWith('.pdf') || (msg.image && msg.image.startsWith('data:application/pdf'))) ? (
@@ -784,7 +810,11 @@ export default function ConversationFeed({
               </div>
             ) : null}
 
-            <FormattedBubbleText text={msg.text} />
+            {msg.role === 'assistant' && !msg.isStreaming && /```html/i.test(msg.text || '')
+              ? splitHtmlBlocks(msg.text).map((seg, i) => seg.type === 'html'
+                ? <HtmlPageCard key={i} html={seg.content} />
+                : <FormattedBubbleText key={i} text={seg.content} />)
+              : <FormattedBubbleText text={msg.text} />}
             {msg.taskProgress && (
               <div
                 className="research-progress"
@@ -907,3 +937,4 @@ export default function ConversationFeed({
     </div>
   );
 }
+

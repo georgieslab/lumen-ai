@@ -1,0 +1,24 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font: 13px system-ui, sans-serif; width: 320px; margin: 12px; }
+    .tab { margin: 8px 0; word-break: break-all; }
+    input { width: 100%; box-sizing: border-box; margin: 4px 0 8px; padding: 4px; }
+    button { padding: 6px 10px; margin-right: 6px; cursor: pointer; }
+    #status { margin-top: 8px; min-height: 1.2em; }
+    small { color: #666; }
+  </style>
+</head>
+<body>
+  <strong>Share this tab with Lumen</strong>
+  <div class="tab" id="tab">Loading…</div>
+  <label>Lumen URL<input id="lumenUrl" placeholder="http://localhost:5173"></label>
+  <button id="share">Share this tab</button>
+  <button id="stop">Stop sharing</button>
+  <div id="status" role="status"></div>
+  <small>Only the visible text of this tab is sent, once, when you click Share. The extension is read-only and never clicks or types on pages.</small>
+  <script src="popup.js"></script>
+</body>
+</html>

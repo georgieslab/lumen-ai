@@ -1,4 +1,4 @@
-
+﻿
 import React, { useState, useEffect, useRef } from 'react';
 import AmbientSphere from './components/AmbientSphere';
 import VisionScanner, { SpatialMediaIcon } from './components/VisionScanner';
@@ -7,6 +7,14 @@ import LumenLogo from './components/LumenLogo';
 import AccountAuthButton from './components/AccountAuthButton';
 import UserMemoryModal from './components/UserMemoryModal';
 import WorkspaceShareModal from './components/WorkspaceShareModal';
+import SharedTabChip from './components/SharedTabChip';
+import OpenLinkApproval from './components/OpenLinkApproval';
+import EmbeddedTabPanel from './components/EmbeddedTabPanel';
+import HtmlWindowPanel from './components/HtmlWindowPanel';
+import OpenWebPageButton from './components/OpenWebPageButton';
+import { splitHtmlBlocks } from './services/htmlPage';
+import { extractOpenLinkRequest } from './services/openLink';
+import { captureSharedTabFrame, isTabCaptureSupported } from './services/tabCapture';
 import WebcamLensModal from './components/WebcamLensModal';
 import LumenVoiceModal, { VOICE_PERSONAS } from './components/LumenVoiceModal';
 import TechStackModal from './components/TechStackModal';
@@ -124,6 +132,31 @@ export default function App() {
   });
   const [isVoiceModalOpen, setIsVoiceModalOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [sharedTab, setSharedTab] = useState(null);
+  const [pendingOpenUrl, setPendingOpenUrl] = useState(null);
+  const [embeddedUrl, setEmbeddedUrl] = useState(null);
+  const [htmlWindow, setHtmlWindow] = useState(null);
+
+  // Receive a tab the user explicitly shared through the Lumen browser extension
+  useEffect(() => {
+    const onBridgeMessage = (event) => {
+      const data = event.data;
+      if (event.source !== window || event.origin !== window.location.origin) return;
+      if (!data || data.channel !== 'lumen-tab-bridge') return;
+      if (data.type === 'TAB_SHARED' && data.payload && typeof data.payload.text === 'string') {
+        setSharedTab({
+          title: String(data.payload.title || '').slice(0, 200),
+          url: String(data.payload.url || '').slice(0, 500),
+          text: data.payload.text.slice(0, 20000),
+          sharedAt: Date.now()
+        });
+      } else if (data.type === 'TAB_STOPPED') {
+        setSharedTab(null);
+      }
+    };
+    window.addEventListener('message', onBridgeMessage);
+    return () => window.removeEventListener('message', onBridgeMessage);
+  }, []);
   const [isMemoryModalOpen, setIsMemoryModalOpen] = useState(false);
   const [memoryNotice, setMemoryNotice] = useState('');
   const [isTechStackModalOpen, setIsTechStackModalOpen] = useState(false);
@@ -438,6 +471,15 @@ export default function App() {
     audioElementRef: currentAudioRef
   });
 
+  const handleShareTabSnapshot = async () => {
+    setIsAttachmentMenuOpen(false);
+    try {
+      setSelectedFile(await processFile(await captureSharedTabFrame()));
+    } catch (err) {
+      console.warn('Tab share cancelled or failed:', err);
+    }
+  };
+
   const handleGlobalFileChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -631,6 +673,7 @@ export default function App() {
       timestamp: Date.now()
     };
 
+    setPendingOpenUrl(extractOpenLinkRequest(userPrompt));
     const nextMessages = [...messages, userMessage];
     persistMessages(nextMessages);
 
@@ -686,6 +729,8 @@ export default function App() {
       };
 
       persistMessages([...nextMessages, completedMessage]);
+      const writtenPage = splitHtmlBlocks(finalText).find((seg) => seg.type === 'html');
+      if (writtenPage) setHtmlWindow(writtenPage.content);
 
       if (finalWidgets.length > 0 && data.webType !== 'research_report') {
         setActiveStageWidget(finalWidgets[0]);
@@ -736,6 +781,7 @@ export default function App() {
           voiceId: activeVoice,
           tone: interactionTone,
           responseStyle,
+          pageContext: sharedTab,
           onMemoryStatus: (status) => setMemoryNotice(status.error
             ? t.memoryManager.autoSaveError
             : status.saved
@@ -927,43 +973,50 @@ export default function App() {
       icon: getCircadianInfo().icon,
       label: t.header.atmosphere,
       description: getCircadianInfo().label,
-      onSelect: handleCycleCircadian
+      onSelect: handleCycleCircadian,
+      keepOpen: true
     },
     {
       icon: getThemeInfo().icon,
       label: t.header.visualTheme,
       description: getThemeInfo().label,
-      onSelect: handleCycleTheme
+      onSelect: handleCycleTheme,
+      keepOpen: true
     },
     {
       icon: getLanguageInfo().flag,
       label: getLanguageInfo().code,
       description: t.header.languageTooltip,
-      onSelect: handleCycleLanguage
+      onSelect: handleCycleLanguage,
+      keepOpen: true
     },
     {
       icon: '🗣️',
       label: t.personalization.tone,
       description: `${t.personalization.tones[interactionTone]} · ${t.personalization.toneHint}`,
-      onSelect: handleCycleInteractionTone
+      onSelect: handleCycleInteractionTone,
+      keepOpen: true
     },
     {
       icon: '✍️',
       label: t.personalization.responseStyle,
       description: `${t.personalization.styles[responseStyle]} · ${t.personalization.styleHint}`,
-      onSelect: handleCycleResponseStyle
+      onSelect: handleCycleResponseStyle,
+      keepOpen: true
     },
     {
       icon: '🎙️',
       label: activeVoice,
       description: formatString(t.header.voiceTooltip, { voice: activeVoice }),
-      onSelect: () => setIsVoiceModalOpen(true)
+      onSelect: () => setIsVoiceModalOpen(true),
+      keepOpen: true
     },
     {
       icon: '🌐',
       label: t.header.webModes[webMode] || webMode,
       description: formatString(t.header.webTooltip, { mode: t.header.webModes[webMode] || webMode.toUpperCase() }),
-      onSelect: handleCycleWebMode
+      onSelect: handleCycleWebMode,
+      keepOpen: true
     },
     {
       icon: '🔗',
@@ -1046,7 +1099,7 @@ export default function App() {
     }
   ];
   const selectControlMenuAction = (action) => {
-    setIsMobileControlsOpen(false);
+    if (!action.keepOpen) setIsMobileControlsOpen(false);
     action.onSelect();
   };
 
@@ -1138,17 +1191,6 @@ export default function App() {
           <LumenLogo size={28} />
           <h1 className="brand-title">LUMEN</h1>
         </div>
-
-        <AccountAuthButton
-          currentUser={currentUser}
-          onLogout={handleUserLogout}
-          onOpenMemory={() => setIsMemoryModalOpen(true)}
-          onOpenSettings={() => {
-            setIsExplorePanelOpen(false);
-            setIsMobileControlsOpen(true);
-          }}
-          conversationCount={Math.max(0, messages.length - 1)}
-        />
 
         <div className="header-actions">
           {/* Circadian Atmosphere Cycle */}
@@ -1307,6 +1349,17 @@ export default function App() {
             <span className="mobile-explore-notice" aria-hidden="true"></span>
           </button>
         </div>
+
+        <AccountAuthButton
+          currentUser={currentUser}
+          onLogout={handleUserLogout}
+          onOpenMemory={() => setIsMemoryModalOpen(true)}
+          onOpenSettings={() => {
+            setIsExplorePanelOpen(false);
+            setIsMobileControlsOpen(true);
+          }}
+          conversationCount={Math.max(0, messages.length - 1)}
+        />
       </header>
 
       {isQuickStartVisible && (
@@ -1528,6 +1581,14 @@ export default function App() {
           </div>
         )}
 
+        <SharedTabChip tab={sharedTab} onDisconnect={() => setSharedTab(null)} />
+        <OpenLinkApproval url={pendingOpenUrl} onDismiss={() => setPendingOpenUrl(null)} onOpenInLumen={(u) => { setEmbeddedUrl(u); setPendingOpenUrl(null); }} />
+        <EmbeddedTabPanel url={embeddedUrl} onClose={() => setEmbeddedUrl(null)} />
+        <HtmlWindowPanel html={htmlWindow} onClose={() => setHtmlWindow(null)} />
+        <div className="open-web-dock">
+          <OpenWebPageButton onOpen={(u) => { setPendingOpenUrl(null); setEmbeddedUrl(u); }} />
+        </div>
+
         {/* Vision & Document Scanner Drop Zone */}
         <VisionScanner 
           selectedFile={selectedFile}
@@ -1547,7 +1608,8 @@ export default function App() {
         <div className="ambient-live-bar">
           <div className="ambient-glance-row">
             {ambientData.weather ? (
-              <button
+              <div className="weather-tile-wrap">
+                <button
                 type="button"
                 className={`ambient-glance-pill weather-glance ${activeStageWidget?.widgetType === 'weather' ? 'active' : ''}`}
                 onClick={() => setActiveStageWidget(activeStageWidget?.widgetType === 'weather' ? null : ambientData.weather)}
@@ -1559,6 +1621,26 @@ export default function App() {
                 <span className="glance-value">{ambientData.weather.temp}°C</span>
                 <span className="glance-sub">{ambientData.weather.condition}</span>
               </button>
+                <button
+                  type="button"
+                  className="weather-settings-btn"
+                  aria-label="Change city"
+                  title="Change city"
+                  onClick={() => setActiveStageWidget({
+                    widgetType: 'weather',
+                    city: ambientData.weather.city || 'Vienna',
+                    temp: ambientData.weather.temp ?? '--',
+                    condition: ambientData.weather.condition || t.glance.liveGlobalWeather,
+                    icon: ambientData.weather.icon || '🌤️',
+                    high: ambientData.weather.high ?? '--',
+                    low: ambientData.weather.low ?? '--',
+                    humidity: ambientData.weather.humidity ?? '--',
+                    wind: ambientData.weather.wind ?? '--',
+                    forecast: ambientData.weather.forecast || [],
+                    initialSearching: true
+                  })}
+                >⚙</button>
+              </div>
             ) : (
               <button
                 type="button"
@@ -1619,28 +1701,7 @@ export default function App() {
             >
               {t.starterChips.researchReport}
             </button>
-            <button
-              type="button"
-              className="quick-chip search-city-chip"
-              onClick={() => {
-                setActiveStageWidget({
-                  widgetType: 'weather',
-                  city: ambientData.weather?.city || 'Vienna',
-                  temp: ambientData.weather?.temp ?? '--',
-                  condition: ambientData.weather?.condition || t.glance.liveGlobalWeather,
-                  icon: ambientData.weather?.icon || '🌤️',
-                  high: ambientData.weather?.high ?? '--',
-                  low: ambientData.weather?.low ?? '--',
-                  humidity: ambientData.weather?.humidity ?? '--',
-                  wind: ambientData.weather?.wind ?? '--',
-                  forecast: ambientData.weather?.forecast || [],
-                  initialSearching: true
-                });
-              }}
-              title={t.starterChips.cityWeatherTooltip}
-            >
-              {t.starterChips.cityWeather}
-            </button>
+
             <button
               type="button"
               className="quick-chip pdf-chip"
@@ -1881,6 +1942,12 @@ export default function App() {
               <span className="attachment-sheet-icon" aria-hidden="true">▧</span>
               <span>{t.footer.chooseFile}</span>
             </button>
+            {isTabCaptureSupported() && (
+              <button type="button" className="attachment-sheet-action" onClick={handleShareTabSnapshot}>
+                <span className="attachment-sheet-icon" aria-hidden="true">🖥️</span>
+                <span>Share a tab or window (snapshot)</span>
+              </button>
+            )}
             <button
               type="button"
               className="attachment-sheet-cancel"

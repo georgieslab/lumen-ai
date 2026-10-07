@@ -149,7 +149,7 @@ export async function clearUserMemory() {
 /**
  * Send voice transcript or text query along with optional image or PDF payload to Lumen backend
  */
-export async function converseWithLumen({ transcript, message, text, history = [], file = null, image = null, webMode = 'auto', language = 'en-US', voiceId = null, tone = 'friendly', responseStyle = 'concise' }) {
+export async function converseWithLumen({ transcript, message, text, history = [], file = null, image = null, webMode = 'auto', language = 'en-US', voiceId = null, tone = 'friendly', responseStyle = 'concise', pageContext = null }) {
   const targetFile = file || image;
   const payload = {
     transcript: transcript || message || text || '',
@@ -162,6 +162,7 @@ export async function converseWithLumen({ transcript, message, text, history = [
     voiceId,
     tone,
     responseStyle,
+    pageContext,
     file: targetFile ? {
       base64: targetFile.base64,
       mimeType: targetFile.mimeType || (targetFile.isPdf ? 'application/pdf' : 'image/jpeg'),
@@ -207,6 +208,7 @@ export async function converseWithLumenStream({
   voiceId = null,
   tone = 'friendly',
   responseStyle = 'concise',
+  pageContext = null,
   onMemoryStatus,
   onToken,
   onToolStart,
@@ -228,6 +230,7 @@ export async function converseWithLumenStream({
     voiceId,
     tone,
     responseStyle,
+    pageContext,
     file: targetFile ? {
       base64: targetFile.base64,
       mimeType: targetFile.mimeType || (targetFile.isPdf ? 'application/pdf' : 'image/jpeg'),

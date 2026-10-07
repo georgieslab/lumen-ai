@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { getTranslations } from '../utils/translations';
 
 export default function TechStackModal({
@@ -164,6 +164,13 @@ export default function TechStackModal({
             onClick={() => setActiveTab('telemetry')}
           >
             {t.tabTelemetry}
+          </button>
+          <button
+            type="button"
+            className={`tech-tab-btn ${activeTab === 'news' ? 'active' : ''}`}
+            onClick={() => setActiveTab('news')}
+          >
+            📰 What's New
           </button>
         </div>
 
@@ -451,6 +458,56 @@ export default function TechStackModal({
             </div>
           )}
 
+          {/* TAB: WHAT'S NEW */}
+          {activeTab === 'news' && (
+            <div className="tech-detail-section animate-fade-in">
+              <div className="detail-hero">
+                <span className="detail-hero-icon">📰</span>
+                <div className="detail-hero-text">
+                  <h3>What's New in Lumen</h3>
+                  <p>Lumen can now work with web pages, always with your approval before anything opens.</p>
+                </div>
+              </div>
+
+              <div className="tech-specs-grid">
+                <div className="spec-card">
+                  <h4>Open web page</h4>
+                  <div className="spec-value">Your click is the approval</div>
+                  <p className="spec-desc">Type an address and the page opens inside Lumen. Links Lumen suggests appear as an approval card first.</p>
+                </div>
+
+                <div className="spec-card">
+                  <h4>Share a tab</h4>
+                  <div className="spec-value">Snapshot or read-only extension</div>
+                  <p className="spec-desc">Use + → Share a tab or window, or the Chrome/Edge extension, so Lumen can read the page. It never clicks or types for you.</p>
+                </div>
+
+                <div className="spec-card">
+                  <h4>Lumen writes web pages</h4>
+                  <div className="spec-value">Runs in a sandbox</div>
+                  <p className="spec-desc">Ask for a page, button or animation. It opens in a square window over the orb, with preview, new tab and download.</p>
+                </div>
+
+                <div className="spec-card">
+                  <h4>Copy any answer</h4>
+                  <div className="spec-value">One-click ⧉ Copy</div>
+                  <p className="spec-desc">Every finished Lumen answer has a copy button in its header.</p>
+                </div>
+
+                <div className="spec-card">
+                  <h4>Longer answers</h4>
+                  <div className="spec-value">3× output limit</div>
+                  <p className="spec-desc">Replies and generated pages are no longer cut off mid-way.</p>
+                </div>
+
+                <div className="spec-card">
+                  <h4>Weather tile</h4>
+                  <div className="spec-value">Bigger, with ⚙ Change city</div>
+                  <p className="spec-desc">Pick any city from the tile's settings button.</p>
+                </div>
+              </div>
+            </div>
+          )}
           {/* TAB 5: LIVE DATA & GROUNDING */}
           {activeTab === 'livedata' && (
             <div className="tech-detail-section animate-fade-in">

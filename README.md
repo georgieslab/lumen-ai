@@ -1,4 +1,4 @@
-# Lumen AI
+﻿# Lumen AI
 
 Lumen is a voice- and vision-enabled AI copilot built with React, Vite, and an Express API. Its interface combines a conversational sphere with tools for voice chat, image and PDF analysis, web research, live weather, and PDF generation.
 
@@ -94,6 +94,28 @@ Keep credentials in the server-side `.env` file. Do not commit `.env` or put pri
 
 GitHub accounts are stored under provider-qualified user IDs, and account linking is not currently supported. Lumen stores the profile and memory records in DynamoDB; conversation history remains in browser storage. Profile and memory context is sent to the configured AI provider with chat and research requests. Automatic memory is designed to retain useful, non-sensitive text-chat details; it uses an additional AI request per text chat and can be paused. Inspect, edit, or delete stored items in the account menu. Uploaded image/PDF attachments are not used for automatic memory extraction. The optional import-from-another-AI feature only shares content when the user copies the prompt to another assistant; pasted replies remain in the editable profile and are not saved until **Save profile** is selected. Avoid storing secrets or highly sensitive information in the profile or memories.
 
+## Browser tab sharing (extension MVP)
+
+The [extension/](extension) folder holds a Manifest V3 extension (Chrome, Edge, Brave, Firefox 128+) that lets you explicitly share the tab you are viewing with Lumen.
+
+**Setup**
+1. Run Lumen (`npm run dev:all`) and open it once.
+2. Chrome/Edge: open `chrome://extensions`, enable Developer mode, choose **Load unpacked**, select `extension/`. Firefox: open `about:debugging#/runtime/this-firefox`, choose **Load Temporary Add-on**, select `extension/manifest.json`.
+3. On the tab you want to share, click the extension icon, set your Lumen URL (default `http://localhost:5173`), and click **Share this tab**. Approve the one-time permission prompt for the Lumen origin.
+4. A "Sharing tab" chip appears in Lumen; ask questions about the page. Click **Stop** (in Lumen or the popup) to end sharing.
+
+**Safety model**
+- Nothing is read until you click Share; it uses `activeTab`, so only that tab is accessible. Your text selection is shared if present, otherwise the page's visible text (max 20,000 characters, no form field values).
+- The text is sent with each message while the chip is shown, and is treated by the server as untrusted data, not instructions.
+- The MVP is read-only: it cannot click, type, or navigate. Any future action execution must show an explicit per-action approval.
+
+### For end users (no developer mode)
+
+- **No install:** in Lumen, tap **+** and choose **Share a tab or window (snapshot)**. Your browser's own picker asks which tab to share; Lumen captures one image frame, stops the capture immediately, and attaches it so you can ask about it. It reads pixels only and cannot click or type.
+- **Extension (richer, text-based):** regular users install it from the Chrome Web Store / Edge Add-ons once it is published. To publish, zip the *contents* of `extension/` (for example `Compress-Archive -Path extension\* -DestinationPath lumen-tab-share.zip`), upload it in the Chrome Web Store Developer Dashboard and the Microsoft Partner Center (a developer account is required; Chrome charges a one-time fee), and set the production Lumen URL as the popup default in `extension/popup.js` before zipping. The store listing needs a privacy statement: page text is sent only to your Lumen server when the user clicks Share and is not stored.
+**Verify:** `npm test` covers the server-side page-context fencing; `npm run build` checks the frontend.
+
+**Limitations:** a snapshot is taken at share time (click Share again to refresh); restricted pages (`chrome://`, store pages, PDFs viewers) can't be read; Firefox may close the popup on the permission prompt (click Share again); the page text isn't persisted to saved conversations or memory.
 ## Production
 
 Build the frontend, then start the Express server:

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Zero-Setup Internet Access & Web Browsing Engine for Lumen AI
  * - Programmatic Live Web Browsing & Extraction Tool (SSRF-Protected)
  * - Free DuckDuckGo HTML Search Scraper (No API key required)
@@ -265,7 +265,25 @@ export async function fetchUrlContent(targetUrl, options = {}) {
       }
     }
 
-    const content = textBlocks.slice(0, 20).join('\n\n').slice(0, maxLen);
+    let content = textBlocks.slice(0, 20).join('\n\n').slice(0, maxLen);
+    if (!content) {
+      // Client-rendered pages ship little body text; their meta tags still describe the page.
+      const metaContent = (attr, name) => {
+        const m = new RegExp(`<meta[^>]+${attr}=["']${name}["'][^>]*content=["']([^"']*)["']`, 'i').exec(cleaned)
+          || new RegExp(`<meta[^>]+content=["']([^"']*)["'][^>]*${attr}=["']${name}["']`, 'i').exec(cleaned);
+        return m ? cleanHtmlEntities(m[1]) : '';
+      };
+      const noscript = /<noscript[^>]*>([\s\S]*?)<\/noscript>/i.exec(cleaned);
+      const parts = [
+        metaContent('name', 'description'),
+        metaContent('property', 'og:title'),
+        metaContent('property', 'og:description'),
+        noscript ? cleanHtmlEntities(noscript[1]) : ''
+      ].filter((p, i, arr) => p && p.length > 10 && arr.indexOf(p) === i);
+      if (parts.length) {
+        content = `(This page is rendered by JavaScript, so only its metadata could be read. The user can share the live tab or a screenshot for the full view.)\n\n${parts.join('\n\n')}`.slice(0, maxLen);
+      }
+    }
     return {
       success: true,
       url: cleanUrl,

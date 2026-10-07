@@ -1,4 +1,4 @@
-import express from 'express';
+﻿import express from 'express';
 import cors from 'cors';
 import { BedrockRuntimeClient, ConverseCommand, ConverseStreamCommand } from '@aws-sdk/client-bedrock-runtime';
 import { PollyClient, SynthesizeSpeechCommand } from '@aws-sdk/client-polly';
@@ -8,6 +8,7 @@ import { dirname, join } from 'path';
 import { existsSync } from 'fs';
 import dotenv from 'dotenv';
 import { getWebGroundingContext, searchDuckDuckGo, fetchUrlContent, searchWikipedia, webBrowser, WebBrowserTool, isSafeUrl } from './services/webSearch.js';
+import { buildPageContextBlock } from './services/pageContext.js';
 import { fetchLiveWeather, fetchCryptoPrices } from './services/liveData.js';
 import { generatePdfDocument, exportConversationToPdf } from './services/pdfGenerator.js';
 import {
@@ -1065,6 +1066,9 @@ Tone & Guidelines:
 - Career & Job Inquiries: Whenever the user asks for help finding a job, identifying hiring companies, or advancing their career, be enthusiastic and proactive. Use \`live_web_search\` to discover real current openings and job boards for their target role and location. Offer resume reviews, interview prep, and actionable next steps. NEVER state that you cannot assist with job searches.
 - When sharing web resources, job postings, articles, documentation, or links, ALWAYS provide the direct clickable markdown link format: [Descriptive Title](https://actual-url.com). Format multiple items as a clean bulleted list so the user can easily review and click each one.
 - Never output bare titles claiming to provide URLs without including the actual markdown link [Title](url).
+- Opening links and sharing tabs: you cannot control the user's browser yourself, but Lumen's interface can help. When the user asks you to "open", "visit" or "go to" a URL, do NOT say you are unable. Call \`browse_web_page\` on that URL, summarize what you find, and include the clickable markdown link. Tell them an approval card appears in Lumen with **Open in Lumen** (shows the page in a side panel inside Lumen) and **New tab** (opens it in their browser), and nothing opens until they click it. Some sites block embedding, so suggest New tab then.
+- Writing web pages: when the user asks you to build/write/create a web page, HTML, mini-app, game or demo, reply with ONE complete self-contained HTML document (inline CSS and JavaScript only, no external scripts, no network requests, no forms that submit) inside a single \`\`\`html fenced code block, plus a short sentence. Lumen will show buttons under it so the user can preview it, open it in a new tab, or download it. Say the page runs only after they click, in an isolated sandbox. Do not claim you opened it yourself.
+- Showing you a page or screen: tell users they can (1) tap the **+** button and choose **Share a tab or window (snapshot)**, pick a tab in the browser prompt, and send a screenshot of it for you to analyze, or (2) install the Lumen Tab Share browser extension and click **Share this tab** so you can read the page text; a "Sharing tab" chip shows while active and **Stop** ends it. You can only see what they share, and never click, type, submit forms or act on pages; any such action requires their explicit approval.
 - When the user asks what you can do or what features you have, clearly explain these specific capabilities and suggest relevant actions.
 - When asked to compile a PDF: Ground the PDF content strictly in the user's specific prompt or actual conversation history. Never fabricate generic placeholder business topics. Invoke the \`create_pdf_document\` tool to compile the document.${langInstruction}${hasImage ? '\n- The user shared an image payload. Carefully inspect and describe key observations, document contents, or visual nuances with sharp precision.' : ''}${hasDocument ? '\n- The user shared a PDF document payload. Carefully inspect the document text and structure, summarize key points, or answer specific questions with sharp precision.' : ''}${webContext ? `\n- Real-Time Internet Data:\n${webContext.groundingText}` : ''}${liveDataGrounding}${isPdfCreationIntent ? '\n- The user requested to create/generate a PDF file or report. You MUST invoke the `create_pdf_document` tool to compile the requested document with a title, executive summary, and well-structured sections so a downloadable PDF card is generated for the user. Ground the PDF content strictly in the user\'s specific prompt or actual conversation history. Never fabricate generic placeholder business topics.' : ''}${personalizationInstructions}${memoryState.prompt}`;
 
@@ -1128,7 +1132,7 @@ Tone & Guidelines:
       }
     }
 
-    userContent.push({ text: promptText });
+    userContent.push({ text: buildPageContextBlock(req.body.pageContext) + promptText });
 
     if (formattedMessages.length > 0 && formattedMessages[formattedMessages.length - 1].role === 'user') {
       formattedMessages[formattedMessages.length - 1].content = userContent;
@@ -1208,7 +1212,7 @@ Tone & Guidelines:
             messages: turnMessages,
             system: [{ text: systemPrompt }],
             inferenceConfig: {
-              maxTokens: 400,
+              maxTokens: 1200,
               temperature: 0.7
             }
           };
@@ -1639,6 +1643,9 @@ Tone & Guidelines:
 - Career & Job Inquiries: Whenever the user asks for help finding a job, identifying hiring companies, or advancing their career, be enthusiastic and proactive. Use \`live_web_search\` to discover real current openings and job boards for their target role and location. Offer resume reviews, interview prep, and actionable next steps. NEVER state that you cannot assist with job searches.
 - When sharing web resources, job postings, articles, documentation, or links, ALWAYS provide the direct clickable markdown link format: [Descriptive Title](https://actual-url.com). Format multiple items as a clean bulleted list so the user can easily review and click each one.
 - Never output bare titles claiming to provide URLs without including the actual markdown link [Title](url).
+- Opening links and sharing tabs: you cannot control the user's browser yourself, but Lumen's interface can help. When the user asks you to "open", "visit" or "go to" a URL, do NOT say you are unable. Call \`browse_web_page\` on that URL, summarize what you find, and include the clickable markdown link. Tell them an approval card appears in Lumen with **Open in Lumen** (shows the page in a side panel inside Lumen) and **New tab** (opens it in their browser), and nothing opens until they click it. Some sites block embedding, so suggest New tab then.
+- Writing web pages: when the user asks you to build/write/create a web page, HTML, mini-app, game or demo, reply with ONE complete self-contained HTML document (inline CSS and JavaScript only, no external scripts, no network requests, no forms that submit) inside a single \`\`\`html fenced code block, plus a short sentence. Lumen will show buttons under it so the user can preview it, open it in a new tab, or download it. Say the page runs only after they click, in an isolated sandbox. Do not claim you opened it yourself.
+- Showing you a page or screen: tell users they can (1) tap the **+** button and choose **Share a tab or window (snapshot)**, pick a tab in the browser prompt, and send a screenshot of it for you to analyze, or (2) install the Lumen Tab Share browser extension and click **Share this tab** so you can read the page text; a "Sharing tab" chip shows while active and **Stop** ends it. You can only see what they share, and never click, type, submit forms or act on pages; any such action requires their explicit approval.
 - When the user asks what you can do or what features you have, clearly explain these specific capabilities and suggest relevant actions.
 - When asked to compile a PDF: Ground the PDF content strictly in the user's specific prompt or actual conversation history. Never fabricate generic placeholder business topics. Invoke the \`create_pdf_document\` tool to compile the document.${langInstruction}${hasImage ? '\n- The user shared an image payload. Carefully inspect and describe key observations, document contents, or visual nuances with sharp precision.' : ''}${hasDocument ? '\n- The user shared a PDF document payload. Carefully inspect the document text and structure, summarize key points, or answer specific questions with sharp precision.' : ''}${webContext ? `\n- Real-Time Internet Data:\n${webContext.groundingText}` : ''}${liveDataGrounding}${isPdfCreationIntent ? '\n- The user requested to create/generate a PDF file or report. You MUST invoke the `create_pdf_document` tool to compile the requested document with a title, executive summary, and well-structured sections so a downloadable PDF card is generated for the user. Ground the PDF content strictly in the user\'s specific prompt or actual conversation history. Never fabricate generic placeholder business topics.' : ''}${personalizationInstructions}${memoryState.prompt}`;
 
@@ -1699,7 +1706,7 @@ Tone & Guidelines:
       }
     }
 
-    userContent.push({ text: promptText });
+    userContent.push({ text: buildPageContextBlock(req.body.pageContext) + promptText });
 
     if (formattedMessages.length > 0 && formattedMessages[formattedMessages.length - 1].role === 'user') {
       formattedMessages[formattedMessages.length - 1].content = userContent;
@@ -1770,7 +1777,7 @@ Tone & Guidelines:
               messages: turnMessages,
               system: [{ text: systemPrompt }],
               inferenceConfig: {
-                maxTokens: 450,
+                maxTokens: 1350,
                 temperature: 0.7
               }
             };

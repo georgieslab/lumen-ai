@@ -1,0 +1,12 @@
+{
+  "manifest_version": 3,
+  "name": "Lumen Tab Share",
+  "version": "0.1.0",
+  "description": "Explicitly share the tab you are viewing with Lumen AI. Read-only; nothing is shared until you click Share.",
+  "action": { "default_title": "Share this tab with Lumen", "default_popup": "popup.html" },
+  "permissions": ["activeTab", "scripting", "storage"],
+  "optional_host_permissions": ["http://*/*", "https://*/*"],
+  "browser_specific_settings": {
+    "gecko": { "id": "lumen-tab-share@lumen-ai.local", "strict_min_version": "128.0" }
+  }
+}
