@@ -3589,3 +3589,78 @@
   outline: 2px solid #fff;
   outline-offset: 2px;
 }
+
+/* sphere showcase */
+.lp-sphere-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: clamp(24px, 5vw, 72px);
+  padding: clamp(28px, 5vw, 64px);
+  border: 1px solid rgba(152, 182, 255, 0.18);
+  border-radius: 32px;
+  background: radial-gradient(120% 120% at 80% 50%, rgba(139, 92, 246, 0.16), transparent 60%), rgba(255, 255, 255, 0.03);
+  overflow: hidden;
+}
+
+.lp-sphere-copy h2 {
+  margin: 0 0 18px;
+}
+
+.lp-sphere-copy > p:not(.lp-section-kicker) {
+  max-width: 46ch;
+  color: rgba(226, 232, 255, 0.74);
+  line-height: 1.7;
+}
+
+.lp-sphere-states {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 22px 0 24px;
+}
+
+.lp-sphere-states button {
+  min-height: 36px;
+  padding: 0 16px;
+  border: 1px solid rgba(152, 182, 255, 0.25);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.045);
+  color: rgba(226, 232, 255, 0.8);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.25s ease, color 0.25s ease, transform 0.25s ease;
+}
+
+.lp-sphere-states button:hover {
+  transform: translateY(-2px);
+}
+
+.lp-sphere-states button.is-active {
+  border-color: transparent;
+  background: linear-gradient(135deg, rgba(103, 232, 249, 0.9), rgba(167, 139, 250, 0.9));
+  color: #0b1020;
+}
+
+.lp-sphere-stage {
+  display: flex;
+  min-height: 340px;
+  align-items: center;
+  justify-content: center;
+}
+
+.lp-sphere-stage .sphere-stage {
+  transform: scale(1.35);
+}
+
+@media (max-width: 820px) {
+  .lp-sphere-card {
+    grid-template-columns: 1fr;
+  }
+
+  .lp-sphere-stage {
+    min-height: 300px;
+  }
+}

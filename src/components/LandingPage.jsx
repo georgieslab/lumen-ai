@@ -1,8 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import LumenLogo from './LumenLogo.jsx';
+import AmbientSphere from './AmbientSphere.jsx';
 import { LANDING_COPY, LANDING_LANGUAGES, detectLandingLanguage, saveLandingLanguage } from './landingCopy.js';
 import './LandingPage.css';
 
+const SPHERE_STATES = ['idle', 'listening', 'thinking', 'speaking'];
 const MODE_IDS = ['voice', 'vision', 'research'];
 const FEATURE_META = [
   { id: 'voice', number: '01', icon: 'voice', mode: 'voice' },
@@ -223,6 +225,7 @@ export default function LandingPage() {
   const [activeMode, setActiveMode] = useState('voice');
   const [openFaq, setOpenFaq] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [sphereState, setSphereState] = useState('idle');
   const [lang, setLang] = useState(detectLandingLanguage);
   const t = LANDING_COPY[lang];
   const heroVisualRef = useRef(null);
@@ -234,6 +237,10 @@ export default function LandingPage() {
   useEffect(() => {
     document.documentElement.lang = t.htmlLang;
   }, [t.htmlLang]);
+
+  const cycleSphere = () => {
+    setSphereState((current) => SPHERE_STATES[(SPHERE_STATES.indexOf(current) + 1) % SPHERE_STATES.length]);
+  };
 
   const changeLanguage = (next) => {
     setLang(next);
@@ -404,6 +411,43 @@ export default function LandingPage() {
               <i />
               <span><FeatureIcon name="personalize" /> {t.signal.pace}</span>
             </div>
+          </div>
+        </section>
+
+        <section className="lp-section lp-sphere" id="sphere" aria-labelledby="lp-sphere-title">
+          <div className="lp-container">
+            <Reveal className="lp-sphere-card">
+              <div className="lp-sphere-copy">
+                <p className="lp-section-kicker"><span /> {t.sphere.kicker}</p>
+                <h2 id="lp-sphere-title">{t.sphere.title1}<br /><span>{t.sphere.title2}</span></h2>
+                <p>{t.sphere.body}</p>
+                <div className="lp-sphere-states" role="group" aria-label={t.sphere.stateLabel}>
+                  {SPHERE_STATES.map((state) => (
+                    <button
+                      key={state}
+                      type="button"
+                      className={sphereState === state ? 'is-active' : ''}
+                      aria-pressed={sphereState === state}
+                      onClick={() => setSphereState(state)}
+                    >
+                      {t.sphere.states[state]}
+                    </button>
+                  ))}
+                </div>
+                <a className="lp-text-link" href="#app">{t.sphere.cta} <ArrowIcon /></a>
+              </div>
+              <div className="lp-sphere-stage">
+                <AmbientSphere
+                  isListening={sphereState === 'listening'}
+                  isThinking={sphereState === 'thinking'}
+                  isSpeaking={sphereState === 'speaking'}
+                  audioLevel={sphereState === 'listening' || sphereState === 'speaking' ? 0.5 : 0}
+                  frequencyData={[40, 70, 55, 85, 60, 75, 45, 65]}
+                  onToggleListen={cycleSphere}
+                  sphereLabels={t.sphere.labels}
+                />
+              </div>
+            </Reveal>
           </div>
         </section>
 

@@ -119,6 +119,16 @@ const en = {
       question: '“Can you research this and make me a report?”'
     }
   ],
+  sphere: {
+    kicker: 'MEET THE SPHERE',
+    title1: 'A presence, not a chat box.',
+    title2: 'Tap it. It listens.',
+    body: 'The living sphere is how you talk to Lumen. It glows while it listens, ripples while it thinks, and pulses as it speaks. Tap it to try the states.',
+    stateLabel: 'STATE',
+    states: { idle: 'Idle', listening: 'Listening', thinking: 'Thinking', speaking: 'Speaking' },
+    labels: { tapToConverse: 'Tap to converse', listening: 'Listening…', reflecting: 'Reflecting…', speaking: 'Speaking…', taskComplete: 'Done', inspectingDoc: 'Reading…', inspectingImg: 'Looking…' },
+    cta: 'Try it live'
+  },
   personal: {
     kicker: 'BUILT AROUND YOU',
     title1: 'Your voice.',
@@ -291,6 +301,16 @@ const de = {
       question: '„Kannst du das recherchieren und mir einen Bericht erstellen?“'
     }
   ],
+  sphere: {
+    kicker: 'LERNE DIE KUGEL KENNEN',
+    title1: 'Eine Präsenz, kein Chatfenster.',
+    title2: 'Tippe sie an. Sie hört zu.',
+    body: 'Die lebendige Kugel ist dein Weg zu Lumen. Sie leuchtet beim Zuhören, wogt beim Nachdenken und pulsiert beim Sprechen. Tippe sie an, um die Zustände auszuprobieren.',
+    stateLabel: 'ZUSTAND',
+    states: { idle: 'Bereit', listening: 'Zuhören', thinking: 'Nachdenken', speaking: 'Sprechen' },
+    labels: { tapToConverse: 'Zum Sprechen tippen', listening: 'Höre zu…', reflecting: 'Denke nach…', speaking: 'Spreche…', taskComplete: 'Fertig', inspectingDoc: 'Lese…', inspectingImg: 'Schaue…' },
+    cta: 'Live ausprobieren'
+  },
   personal: {
     kicker: 'AUF DICH ZUGESCHNITTEN',
     title1: 'Deine Stimme.',
