@@ -3664,3 +3664,14 @@
     min-height: 300px;
   }
 }
+
+/* tighter type scale */
+.lp-site h1 { font-size: clamp(38px, 5.4vw, 66px); }
+.lp-site .lp-section-heading h2,
+.lp-site .lp-experience-heading h2,
+.lp-site .lp-personal-copy h2,
+.lp-site .lp-faq-heading h2,
+.lp-site .lp-final-card h2,
+.lp-site .lp-sphere-copy h2 { font-size: clamp(26px, 3.4vw, 40px); line-height: 1.12; }
+.lp-site .lp-hero-intro { font-size: clamp(14px, 1.2vw, 16px); }
+.lp-site .lp-feature-copy h3 { font-size: clamp(20px, 2.2vw, 26px); }
