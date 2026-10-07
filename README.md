@@ -186,3 +186,5 @@ vite.config.js      Vite development server and API proxy
 ## License
 
 This project is distributed under the MIT License. See [LICENSE](LICENSE).
+#   l u m e n - a i  
+ 
