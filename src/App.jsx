@@ -4,7 +4,7 @@ import AmbientSphere from './components/AmbientSphere';
 import VisionScanner, { SpatialMediaIcon } from './components/VisionScanner';
 import ConversationFeed, { LiveWeatherCard, LiveCryptoCard, LivePdfCard, LiveJobsRadarCard } from './components/ConversationFeed';
 import LumenLogo from './components/LumenLogo';
-import GoogleAuthButton from './components/GoogleAuthButton';
+import AccountAuthButton from './components/AccountAuthButton';
 import UserMemoryModal from './components/UserMemoryModal';
 import WorkspaceShareModal from './components/WorkspaceShareModal';
 import WebcamLensModal from './components/WebcamLensModal';
@@ -523,33 +523,6 @@ export default function App() {
       localStorage.setItem(storageKey, JSON.stringify(sanitised));
     } catch (err) {
       console.warn("Storage write error:", err);
-    }
-  };
-
-  const handleUserLogin = (user) => {
-    setCurrentUser(user);
-    try {
-      localStorage.removeItem('lumen_google_user');
-      const userKey = getConversationStorageKey(user);
-      const saved = localStorage.getItem(userKey);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setMessages(parsed);
-          return;
-        }
-      }
-      const welcome = [{
-        id: `welcome-${Date.now()}`,
-        role: 'assistant',
-        text: `Welcome, ${user.name}. Your personal neural profile is active. How can I assist you today?`,
-        timestamp: Date.now()
-      }];
-      setMessages(welcome);
-      localStorage.setItem(userKey, JSON.stringify(welcome));
-      playBrowserSpeech(`Welcome, ${user.name}. How can I assist you today?`);
-    } catch (err) {
-      console.warn("Error on user login:", err);
     }
   };
 
@@ -1166,16 +1139,14 @@ export default function App() {
           <h1 className="brand-title">LUMEN</h1>
         </div>
 
-        <GoogleAuthButton
+        <AccountAuthButton
           currentUser={currentUser}
-          onLoginSuccess={handleUserLogin}
           onLogout={handleUserLogout}
           onOpenMemory={() => setIsMemoryModalOpen(true)}
           onOpenSettings={() => {
             setIsExplorePanelOpen(false);
             setIsMobileControlsOpen(true);
           }}
-          activeLanguage={activeLanguage}
           conversationCount={Math.max(0, messages.length - 1)}
         />
 

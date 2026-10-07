@@ -1,6 +1,5 @@
 import express from 'express';
 import cors from 'cors';
-import { OAuth2Client } from 'google-auth-library';
 import { BedrockRuntimeClient, ConverseCommand, ConverseStreamCommand } from '@aws-sdk/client-bedrock-runtime';
 import { PollyClient, SynthesizeSpeechCommand } from '@aws-sdk/client-polly';
 import { randomBytes, timingSafeEqual } from 'crypto';
@@ -38,8 +37,6 @@ const __dirname = dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const googleOAuthClient = new OAuth2Client();
-
 const INTERACTION_TONE_INSTRUCTIONS = {
   friendly: 'Use a warm, friendly, approachable tone.',
   casual: 'Use a relaxed, casual tone and natural everyday phrasing.',
@@ -2075,41 +2072,6 @@ app.get('/api/auth/providers', (_req, res) => {
       sessionSecret.length >= 32
     )
   });
-});
-
-app.post('/api/auth/google', requireTrustedOrigin, async (req, res) => {
-  try {
-    const clientId = process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID;
-    if (!clientId) {
-      return res.status(503).json({ error: 'Google sign-in is not configured on the server.' });
-    }
-    if (!process.env.LUMEN_SESSION_SECRET || process.env.LUMEN_SESSION_SECRET.length < 32) {
-      return res.status(503).json({ error: 'Sign-in sessions are not configured. Set a 32-character LUMEN_SESSION_SECRET.' });
-    }
-    if (typeof req.body?.credential !== 'string') {
-      return res.status(400).json({ error: 'A Google credential is required.' });
-    }
-    const ticket = await googleOAuthClient.verifyIdToken({
-      idToken: req.body.credential,
-      audience: clientId
-    });
-    const claims = ticket.getPayload();
-    if (!claims?.sub || claims.email_verified !== true) {
-      return res.status(401).json({ error: 'Google could not verify this account.' });
-    }
-    const user = {
-      id: claims.sub,
-      provider: 'google',
-      email: claims.email || null,
-      name: claims.name || 'Google user',
-      picture: claims.picture || null
-    };
-    setSessionCookie(res, user);
-    res.json({ user });
-  } catch (error) {
-    console.warn('Google sign-in failed:', error.message);
-    res.status(401).json({ error: 'Google sign-in could not be verified. Please try again.' });
-  }
 });
 
 app.get('/api/auth/github', (req, res) => {

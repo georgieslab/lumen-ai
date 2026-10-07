@@ -98,13 +98,6 @@ export async function getAuthProviders() {
   return authenticatedJsonRequest('/api/auth/providers');
 }
 
-export async function signInWithGoogle(credential) {
-  return authenticatedJsonRequest('/api/auth/google', {
-    method: 'POST',
-    body: JSON.stringify({ credential })
-  });
-}
-
 export async function signOut() {
   return authenticatedJsonRequest('/api/auth/logout', { method: 'POST' });
 }
