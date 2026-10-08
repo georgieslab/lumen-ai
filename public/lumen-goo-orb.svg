@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300" class="goo-orb" aria-hidden="true">
+  <style>
+    .goo-orb { overflow: visible; --goo-a:#38bdf8; --goo-b:#8b5cf6; --goo-c:#ec4899; filter:saturate(1.1) brightness(1.06) drop-shadow(0 12px 24px rgba(139,92,246,.34)); }
+    .goo-orbit,.goo-counter { animation:gooTurn var(--dur,4s) ease-in-out var(--delay,0s) infinite; transform-box:view-box; }
+    .goo-counter { animation-direction:reverse; }
+    .goo-body { transform-box:fill-box; transform-origin:center; animation:gooBreathe 4.2s ease-in-out infinite; }
+    @keyframes gooTurn { from { transform:rotate(0deg); } to { transform:rotate(360deg); } }
+    @keyframes gooBreathe { 0%,100% { transform:scale(1); } 50% { transform:scale(1.045); } }
+    @media (prefers-reduced-motion:reduce) { .goo-orbit,.goo-counter,.goo-body { animation:none; } }
+  </style>
+  <defs>
+    <radialGradient id="goo-a" cx="0.5" cy="0.5" r="0.62" fx="0.33" fy="0.27">
+      <stop offset="0" stop-color="#fff"/><stop offset=".16" stop-color="#e6fbff" style="stop-color:color-mix(in srgb,var(--goo-a) 28%,white)"/>
+      <stop offset=".42" stop-color="#7fe3ff" style="stop-color:color-mix(in srgb,var(--goo-a) 70%,white)"/>
+      <stop offset=".74" stop-color="#4aa3ff" style="stop-color:var(--goo-a)"/>
+      <stop offset="1" stop-color="#6b6bff" style="stop-color:color-mix(in srgb,var(--goo-a) 74%,#0b1030)"/>
+    </radialGradient>
+    <radialGradient id="goo-b" cx="0.5" cy="0.5" r="0.62" fx="0.33" fy="0.27">
+      <stop offset="0" stop-color="#fff"/><stop offset=".16" stop-color="#eef0ff" style="stop-color:color-mix(in srgb,var(--goo-b) 28%,white)"/>
+      <stop offset=".42" stop-color="#a5b4fc" style="stop-color:color-mix(in srgb,var(--goo-b) 70%,white)"/>
+      <stop offset=".74" stop-color="#7c83ff" style="stop-color:var(--goo-b)"/>
+      <stop offset="1" stop-color="#9b6bff" style="stop-color:color-mix(in srgb,var(--goo-b) 74%,#0b1030)"/>
+    </radialGradient>
+    <radialGradient id="goo-c" cx="0.5" cy="0.5" r="0.62" fx="0.33" fy="0.27">
+      <stop offset="0" stop-color="#fff"/><stop offset=".16" stop-color="#f3e8ff" style="stop-color:color-mix(in srgb,var(--goo-c) 28%,white)"/>
+      <stop offset=".42" stop-color="#c9a7ff" style="stop-color:color-mix(in srgb,var(--goo-c) 70%,white)"/>
+      <stop offset=".74" stop-color="#a07bff" style="stop-color:var(--goo-c)"/>
+      <stop offset="1" stop-color="#d17bff" style="stop-color:color-mix(in srgb,var(--goo-c) 74%,#0b1030)"/>
+    </radialGradient>
+    <filter id="goo" filterUnits="userSpaceOnUse" x="0" y="0" width="300" height="300" color-interpolation-filters="sRGB">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="7" result="blur"/>
+      <feColorMatrix in="blur" type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 24 -10" result="goo"/>
+      <feComposite in="SourceGraphic" in2="goo" operator="atop"/>
+    </filter>
+  </defs>
+  <g filter="url(#goo)">
+    <g class="goo-orbit" style="transform-origin:113.295px 140.165px;--dur:2.7s;--delay:.2s"><g class="goo-counter" style="transform-origin:150px 150px"><circle cx="150" cy="150" r="36" fill="url(#goo-a)"/></g></g>
+    <g class="goo-orbit" style="transform-origin:173.314px 131.12px;--dur:2.9s;--delay:.4s"><g class="goo-counter" style="transform-origin:150px 150px"><circle cx="150" cy="150" r="35" fill="url(#goo-b)"/></g></g>
+    <g class="goo-orbit" style="transform-origin:138.669px 168.858px;--dur:3.1s;--delay:.6s"><g class="goo-counter" style="transform-origin:150px 150px"><circle cx="150" cy="150" r="34" fill="url(#goo-c)"/></g></g>
+    <g class="goo-orbit" style="transform-origin:146.18px 128.334px;--dur:3.9s;--delay:1.4s"><g class="goo-counter" style="transform-origin:150px 150px"><circle cx="150" cy="150" r="32" fill="url(#goo-a)"/></g></g>
+    <g class="goo-orbit" style="transform-origin:207.321px 170.863px;--dur:3.7s;--delay:.2s"><g class="goo-counter" style="transform-origin:150px 150px"><circle cx="150" cy="150" r="11" fill="url(#goo-a)"/><ellipse cx="146.26" cy="145.6" rx="3.3" ry="1.87" transform="rotate(-35 146.26 145.6)" fill="#fff" opacity=".85"/></g></g>
+    <g class="goo-orbit" style="transform-origin:148.115px 203.967px;--dur:4.3s;--delay:.8s"><g class="goo-counter" style="transform-origin:150px 150px"><circle cx="150" cy="150" r="9" fill="url(#goo-b)"/><ellipse cx="146.94" cy="146.4" rx="2.7" ry="1.53" transform="rotate(-35 146.94 146.4)" fill="#fff" opacity=".85"/></g></g>
+    <g class="goo-orbit" style="transform-origin:93.2856px 166.263px;--dur:4.1s;--delay:.6s"><g class="goo-counter" style="transform-origin:150px 150px"><circle cx="150" cy="150" r="9" fill="url(#goo-c)"/><ellipse cx="146.94" cy="146.4" rx="2.7" ry="1.53" transform="rotate(-35 146.94 146.4)" fill="#fff" opacity=".85"/></g></g>
+    <g class="goo-orbit" style="transform-origin:125.955px 114.351px;--dur:4.9s;--delay:1.4s"><g class="goo-counter" style="transform-origin:150px 150px"><circle cx="150" cy="150" r="14" fill="url(#goo-a)"/><ellipse cx="145.24" cy="144.4" rx="4.2" ry="2.38" transform="rotate(-35 145.24 144.4)" fill="#fff" opacity=".85"/></g></g>
+    <g class="goo-orbit" style="transform-origin:180.783px 110.599px;--dur:4.5s;--delay:1s"><g class="goo-counter" style="transform-origin:150px 150px"><circle cx="150" cy="150" r="9" fill="url(#goo-b)"/><ellipse cx="146.94" cy="146.4" rx="2.7" ry="1.53" transform="rotate(-35 146.94 146.4)" fill="#fff" opacity=".85"/></g></g>
+    <g class="goo-body"><circle cx="150" cy="150" r="58" fill="url(#goo-a)"/><ellipse cx="130.28" cy="126.8" rx="17.4" ry="9.86" transform="rotate(-35 130.28 126.8)" fill="#fff" opacity=".85"/></g>
+  </g>
+</svg>

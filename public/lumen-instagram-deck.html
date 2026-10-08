@@ -1,0 +1,510 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#070913">
+  <meta name="description" content="Nine square slides introducing Lumen AI.">
+  <title>Lumen AI — nine square slides</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --ink: #070913;
+      --ink-soft: #0c1221;
+      --glass: rgba(18, 27, 47, .74);
+      --white: #f8fafc;
+      --muted: #a8b6ce;
+      --cyan: #38bdf8;
+      --violet: #8b5cf6;
+      --pink: #ec4899;
+      --green: #34d399;
+      --line: rgba(190, 213, 255, .15);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-synthesis: none;
+    }
+    * { box-sizing: border-box; }
+    body {
+      min-width: 320px;
+      min-height: 100vh;
+      margin: 0;
+      color: var(--white);
+      background:
+        radial-gradient(ellipse at 12% 0%, rgba(56, 189, 248, .11), transparent 34rem),
+        radial-gradient(ellipse at 92% 14%, rgba(139, 92, 246, .12), transparent 33rem),
+        #050711;
+    }
+    button { color: inherit; font: inherit; }
+    .page { width: min(1480px, calc(100% - 48px)); margin: 0 auto; padding: 42px 0 72px; }
+    .topline { display:flex; align-items:center; justify-content:space-between; gap:24px; padding-bottom:28px; border-bottom:1px solid var(--line); }
+    .brand { display:flex; align-items:center; gap:12px; color:var(--white); text-decoration:none; }
+    .brand img { width:36px; height:36px; }
+    .brand > span { display:grid; gap:4px; }
+    .brand-name { font-size:13px; font-weight:750; letter-spacing:.25em; }
+    .brand-kicker { color:#92a2bd; font-size:10px; letter-spacing:.17em; }
+    .top-actions { display:flex; align-items:center; gap:10px; }
+    .action {
+      min-height:42px; display:inline-flex; align-items:center; justify-content:center; gap:9px;
+      padding:0 15px; border:1px solid rgba(185,211,255,.2); border-radius:999px;
+      background:rgba(255,255,255,.035); color:#e6efff; font-size:12px; font-weight:650;
+      cursor:pointer; transition:background .2s ease, border-color .2s ease, transform .2s ease;
+    }
+    .action:hover { background:rgba(56,189,248,.11); border-color:rgba(56,189,248,.55); transform:translateY(-1px); }
+    .action.primary { color:#06111d; border-color:transparent; background:linear-gradient(110deg,#58d5ff,#9c8cff 58%,#f28ac5); }
+    .action:focus-visible, .slide:focus-visible, .nav-btn:focus-visible { outline:3px solid #d3f4ff; outline-offset:4px; }
+    .intro { display:flex; align-items:end; justify-content:space-between; gap:30px; padding:34px 0 28px; }
+    .eyebrow { color:#87ddff; font-size:10px; font-weight:750; letter-spacing:.2em; text-transform:uppercase; }
+    .intro h1 { max-width:800px; margin:11px 0 10px; font-size:clamp(30px,4.4vw,58px); line-height:.98; letter-spacing:-.055em; }
+    .intro p { margin:0; color:var(--muted); font-size:14px; line-height:1.65; }
+    .intro-note { max-width:220px; color:#899ab7; font-size:11px; line-height:1.55; text-align:right; }
+    .deck-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:clamp(12px,2vw,24px); }
+
+    /* Each article is a stand-alone 1:1 post canvas. */
+    .slide {
+      --accent: var(--cyan);
+      --accent2: var(--violet);
+      position:relative; display:flex; flex-direction:column; isolation:isolate; overflow:hidden;
+      width:100%; aspect-ratio:1; padding:8.1%; border:1px solid rgba(184,213,255,.15); border-radius:22px;
+      background:
+        radial-gradient(ellipse at 76% 22%, color-mix(in srgb, var(--accent) 19%, transparent), transparent 44%),
+        radial-gradient(ellipse at 92% 88%, color-mix(in srgb, var(--accent2) 21%, transparent), transparent 45%),
+        linear-gradient(145deg,#0c1324 0%,#070a14 72%);
+      box-shadow:0 18px 55px rgba(0,0,0,.3);
+      container-type:inline-size;
+      cursor:pointer; text-align:left;
+      transition:transform .25s ease, border-color .25s ease, box-shadow .25s ease;
+    }
+    .slide::before, .slide::after { position:absolute; z-index:-1; content:""; pointer-events:none; }
+    .slide::before { width:76%; aspect-ratio:1; top:-35%; right:-30%; border:1px solid color-mix(in srgb,var(--accent) 23%,transparent); border-radius:50%; box-shadow:0 0 0 18px rgba(255,255,255,.012),0 0 0 38px rgba(255,255,255,.01); }
+    .slide::after { width:54%; aspect-ratio:1; bottom:-29%; left:-25%; border-radius:50%; background:radial-gradient(circle,color-mix(in srgb,var(--accent2) 15%,transparent),transparent 72%); filter:blur(7px); }
+    .slide:hover { transform:translateY(-4px); border-color:color-mix(in srgb,var(--accent) 56%,transparent); box-shadow:0 24px 68px rgba(0,0,0,.4); }
+    .slide[data-slide="1"] { --accent:#67dcff; --accent2:#a881ff; }
+    .slide[data-slide="2"] { --accent:#42d8ff; --accent2:#8787ff; }
+    .slide[data-slide="3"] { --accent:#7ce8ff; --accent2:#c07aff; }
+    .slide[data-slide="4"] { --accent:#60d9ff; --accent2:#b269ef; }
+    .slide[data-slide="5"] { --accent:#55e6cd; --accent2:#559aff; }
+    .slide[data-slide="6"] { --accent:#a98bff; --accent2:#ec76bb; }
+    .slide[data-slide="7"] { --accent:#5cd5ff; --accent2:#5ee0b4; }
+    .slide[data-slide="8"] { --accent:#d686ff; --accent2:#4bc6ff; }
+    .slide[data-slide="9"] { --accent:#55d4ff; --accent2:#ee79ca; }
+    .slide-top, .slide-foot { position:relative; z-index:2; display:flex; align-items:center; justify-content:space-between; gap:12px; }
+    .mini-brand { display:flex; align-items:center; gap:8px; color:#eaf4ff; font-size:clamp(8px,2.2cqw,12px); font-weight:750; letter-spacing:.19em; }
+    .mini-brand img { width:clamp(24px,7cqw,34px); height:clamp(24px,7cqw,34px); }
+    .slide-count, .tag { color:#aabbd4; font-size:clamp(7px,1.8cqw,10px); font-weight:650; letter-spacing:.13em; text-transform:uppercase; }
+    .slide-body { position:relative; z-index:1; display:flex; flex:1; flex-direction:column; justify-content:center; min-height:0; padding:7% 0 4%; }
+    .slide h2 { max-width:95%; margin:0 0 4%; color:#f5f8ff; font-size:clamp(21px,7.8cqw,51px); font-weight:720; line-height:.99; letter-spacing:-.064em; text-wrap:balance; }
+    .slide .sub { max-width:83%; margin:0; color:#b6c4db; font-size:clamp(10px,2.55cqw,15px); line-height:1.55; }
+    .slide-foot { padding-top:5%; border-top:1px solid rgba(206,224,255,.17); color:#9caec9; font-size:clamp(7px,1.8cqw,10px); letter-spacing:.11em; text-transform:uppercase; }
+    .slide-foot span:last-child { color:color-mix(in srgb,var(--accent) 84%,white); }
+    .visual { position:relative; width:100%; margin:7% 0 5%; }
+    .glass-card { border:1px solid rgba(199,220,255,.2); border-radius:14px; background:linear-gradient(145deg,rgba(22,34,58,.86),rgba(7,12,25,.75)); box-shadow:0 14px 35px rgba(0,0,0,.24),inset 0 1px rgba(255,255,255,.06); }
+    .cover-slide .slide-body { justify-content:flex-start; padding-top:9%; }
+    .cover-slide h2 { max-width:75%; font-size:clamp(29px,12cqw,72px); }
+    .cover-slide .sub { max-width:67%; font-size:clamp(10px,2.8cqw,16px); }
+    .cover-orb { position:absolute; width:59%; aspect-ratio:1; right:-2%; top:25%; display:grid; place-items:center; border-radius:50%; background:radial-gradient(circle,rgba(56,189,248,.3),rgba(139,92,246,.18) 46%,transparent 72%); filter:drop-shadow(0 0 26px rgba(94,197,255,.17)); }
+    .cover-orb img { width:112%; height:112%; object-fit:contain; }
+    .cover-tags { display:flex; flex-wrap:wrap; gap:6px; margin-top:8%; }
+    .cover-tags span { padding:6px 9px; border:1px solid rgba(181,211,255,.22); border-radius:999px; color:#bed1e9; font-size:clamp(7px,1.7cqw,9px); letter-spacing:.11em; }
+    .cover-app-controls { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin-top:6%; }
+    .voice-toggle-btn { display:flex; align-items:center; gap:.45rem; padding:.45rem .85rem; border:1px solid rgba(255,255,255,.1); border-radius:999px; color:#cbd5e1; background:rgba(255,255,255,.05); box-shadow:inset 0 1px 0 rgba(255,255,255,.16); backdrop-filter:blur(16px); font-family:inherit; font-size:clamp(9px,2cqw,12px); font-weight:600; }
+    .voice-toggle-btn:disabled { opacity:1; }
+    .voice-toggle-btn .voice-icon { font-size:1em; line-height:1; }
+    .voice-toggle-btn .voice-label { font-size:.96em; font-weight:600; letter-spacing:.02em; }
+    .sphere-status { display:inline-flex; align-items:center; gap:7px; padding:7px 10px; border:1px solid rgba(255,255,255,.08); border-radius:999px; color:#d3deef; background:rgba(255,255,255,.035); font-size:clamp(8px,1.8cqw,10px); }
+    .sphere-status::before { content:""; width:6px; height:6px; flex:none; border-radius:50%; background:#68dcff; box-shadow:0 0 9px rgba(56,189,248,.8); }
+
+    .voice-panel { display:flex; align-items:center; justify-content:space-around; gap:4%; min-height:38cqw; padding:4% 5%; }
+    .voice-orb { position:relative; flex:none; width:37%; aspect-ratio:1; display:grid; place-items:center; border-radius:50%; background:radial-gradient(circle,rgba(56,189,248,.28),rgba(139,92,246,.16) 48%,transparent 74%); }
+    .voice-orb img { width:132%; height:132%; object-fit:contain; }
+    .voice-controls { display:flex; flex-direction:column; align-items:flex-start; gap:8px; min-width:0; }
+    .voice-controls .voice-toggle-btn { cursor:default; }
+    .voice-caption { color:#dce9fa; font-size:clamp(9px,2.1cqw,12px); line-height:1.4; }
+    .voice-caption small { display:block; margin-bottom:4px; color:#90a8c7; font-size:.78em; letter-spacing:.1em; text-transform:uppercase; }
+
+    .file-stack { min-height:35cqw; display:flex; align-items:center; justify-content:center; }
+    .file-card { width:43%; min-height:31cqw; padding:6%; transform:rotate(-7deg) translateX(9%); }
+    .file-card.second { transform:rotate(7deg) translateX(-9%); background:linear-gradient(145deg,rgba(34,26,66,.86),rgba(10,12,27,.88)); }
+    .file-icon { width:28px; height:34px; display:grid; place-items:center; margin-bottom:13%; border:1px solid rgba(113,218,255,.45); border-radius:7px; color:#7ae3ff; font-size:9px; font-weight:800; }
+    .file-rule { height:4px; margin:7px 0; border-radius:3px; background:rgba(190,211,243,.32); }
+    .file-rule.short { width:60%; }
+    .file-glow { position:absolute; width:30%; aspect-ratio:1; border-radius:50%; background:rgba(86,184,255,.25); filter:blur(32px); }
+
+    .plan-card { padding:5.5%; }
+    .panel-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:5%; color:#d7e5fb; font-size:clamp(8px,2cqw,11px); font-weight:650; }
+    .pill { padding:5px 8px; border:1px solid rgba(104,225,255,.3); border-radius:999px; color:#8be7ff; font-size:clamp(7px,1.65cqw,9px); letter-spacing:.04em; }
+    .plan-step { display:flex; align-items:center; gap:9px; padding:3.4% 0; border-top:1px solid rgba(198,220,255,.11); color:#b9c8df; font-size:clamp(8px,1.95cqw,11px); }
+    .step-no { flex:none; width:18px; height:18px; display:grid; place-items:center; border-radius:50%; background:rgba(68,202,255,.12); color:#86e5ff; font-size:9px; }
+    .sources-row { display:flex; gap:7px; margin-top:5%; }
+    .source-chip { padding:6px 8px; border:1px solid rgba(169,190,225,.15); border-radius:7px; color:#93a8c6; font-size:clamp(7px,1.65cqw,9px); }
+
+    .live-cards { display:grid; grid-template-columns:1.1fr .9fr; gap:9px; }
+    .live-tile { padding:7%; min-height:28cqw; }
+    .live-label { color:#91a6c5; font-size:clamp(7px,1.65cqw,9px); letter-spacing:.08em; text-transform:uppercase; }
+    .live-value { margin-top:10%; color:#eff9ff; font-size:clamp(20px,6.2cqw,36px); font-weight:700; letter-spacing:-.05em; }
+    .live-meta { margin-top:3%; color:#83e0ff; font-size:clamp(7px,1.7cqw,9px); }
+    .weather-icon { float:right; font-size:clamp(17px,4.8cqw,27px); }
+    .tiny-chart { display:flex; align-items:end; gap:3px; height:27%; margin-top:10%; }
+    .tiny-chart i { flex:1; height:var(--h); border-radius:3px 3px 1px 1px; background:linear-gradient(0deg,rgba(75,143,255,.25),#67ead0); }
+
+    .memory-panel { padding:5%; }
+    .memory-row { display:flex; align-items:center; gap:9px; padding:3% 0; border-top:1px solid rgba(198,220,255,.11); color:#c8d5e8; font-size:clamp(8px,1.95cqw,11px); }
+    .memory-dot { width:7px; height:7px; flex:none; border-radius:50%; background:#b79aff; box-shadow:0 0 10px rgba(183,154,255,.6); }
+    .memory-check { margin-left:auto; color:#71e2b5; font-size:clamp(8px,1.8cqw,10px); }
+    .memory-controls { display:flex; gap:7px; margin-top:4%; }
+    .memory-controls span { padding:6px 8px; border-radius:7px; background:rgba(151,128,245,.12); color:#c6b6ff; font-size:clamp(7px,1.65cqw,9px); }
+
+    .browser-window { overflow:hidden; }
+    .browser-bar { display:flex; align-items:center; gap:4px; padding:9px 10px; border-bottom:1px solid rgba(200,220,255,.12); }
+    .browser-bar i { width:5px; height:5px; border-radius:50%; background:#70829e; }
+    .address { flex:1; height:14px; margin-left:6px; padding-left:7px; border:1px solid rgba(186,208,244,.13); border-radius:999px; color:#91a5c3; font-size:clamp(6px,1.4cqw,8px); line-height:12px; }
+    .browser-content { padding:6%; }
+    .page-line { height:4px; margin:7px 0; border-radius:3px; background:rgba(176,199,232,.25); }
+    .page-line.bright { width:69%; height:7px; background:linear-gradient(90deg,#80dfff,#b694ff); }
+    .share-status { display:flex; align-items:center; gap:7px; margin-top:5%; color:#73e4bc; font-size:clamp(7px,1.7cqw,9px); }
+    .share-status::before { content:""; width:6px; height:6px; border-radius:50%; background:#55dfac; box-shadow:0 0 9px #55dfac; }
+    .read-only { margin-top:4%; color:#91a5c0; font-size:clamp(7px,1.7cqw,9px); }
+
+    .brief-layout { display:grid; grid-template-columns:1fr .8fr; gap:9px; align-items:center; }
+    .brief-card { padding:7%; }
+    .brief-line { height:4px; margin:8px 0; border-radius:3px; background:rgba(186,207,239,.23); }
+    .brief-line.title { width:78%; height:7px; background:linear-gradient(90deg,#cf9bff,#76dcff); }
+    .brief-badge { display:inline-block; margin-top:7%; padding:5px 7px; border:1px solid rgba(197,143,255,.34); border-radius:999px; color:#d9baff; font-size:clamp(6px,1.45cqw,8px); letter-spacing:.08em; text-transform:uppercase; }
+    .page-preview { aspect-ratio:.75; padding:6%; border:1px solid rgba(111,211,255,.2); border-radius:10px; background:linear-gradient(160deg,rgba(71,165,232,.16),rgba(157,96,238,.16)),#101628; }
+    .page-preview .preview-orb { width:38%; aspect-ratio:1; margin:8% auto 12%; border-radius:50%; background:radial-gradient(circle at 35% 35%,#eafaff 0 6%,#80dfff 10%,#8378ff 49%,rgba(236,72,153,.2) 74%,transparent 75%); box-shadow:0 0 17px rgba(87,181,255,.32); }
+
+    .mission-panel { padding:5.5%; }
+    .mission-row { display:flex; align-items:center; gap:9px; padding:3.5% 0; color:#c3d1e6; font-size:clamp(8px,1.9cqw,11px); }
+    .mission-row + .mission-row { border-top:1px solid rgba(198,220,255,.1); }
+    .mission-mark { width:17px; height:17px; display:grid; place-items:center; flex:none; border:1px solid rgba(109,225,255,.4); border-radius:50%; color:#75e2ff; font-size:8px; }
+    .mission-row.done .mission-mark { color:#08131d; border-color:#61e3b2; background:#61e3b2; }
+    .mission-state { margin-left:auto; color:#72ddb5; font-size:clamp(6px,1.5cqw,8px); text-transform:uppercase; letter-spacing:.1em; }
+    .stop-chip { display:inline-flex; align-items:center; gap:7px; margin-top:4%; padding:6px 9px; border:1px solid rgba(255,173,138,.26); border-radius:999px; color:#ffc5aa; font-size:clamp(7px,1.65cqw,9px); }
+    .stop-chip i { width:7px; height:7px; border-radius:2px; background:#ff9a7c; }
+    .closing-orb { position:absolute; width:55%; aspect-ratio:1; right:0; top:27%; display:grid; place-items:center; border-radius:50%; background:radial-gradient(circle,rgba(56,189,248,.27),rgba(139,92,246,.17) 48%,transparent 73%); }
+    .closing-orb img { width:112%; height:112%; object-fit:contain; }
+    .closing-slide .slide-body { justify-content:flex-start; padding-top:14%; }
+    .closing-slide h2 { max-width:76%; font-size:clamp(27px,10.4cqw,62px); }
+    .closing-slide .sub { max-width:65%; }
+    .closing-cta { display:inline-flex; align-items:center; gap:8px; margin-top:8%; color:#91e5ff; font-size:clamp(8px,2cqw,11px); font-weight:700; letter-spacing:.08em; text-transform:uppercase; }
+    .closing-cta::after { content:"↗"; font-size:1.3em; }
+
+    @container (max-width:380px) {
+      .slide-body { justify-content:flex-start; padding:3% 0 0; }
+      .slide h2 { max-width:100%; margin-bottom:2%; font-size:clamp(19px,7.1cqw,27px); }
+      .slide .sub { max-width:100%; font-size:clamp(10px,2.2cqw,12px); line-height:1.4; }
+      .visual { margin:4% 0 2%; }
+      .file-stack { min-height:25cqw; }
+      .live-tile { min-height:22cqw; }
+      .plan-card,.memory-panel { padding:4%; }
+      .plan-step { padding:2.5% 0; }
+      .sources-row { margin-top:3%; }
+      .memory-row { padding:2.2% 0; }
+      .memory-controls { gap:5px; margin-top:2%; }
+      .brief-layout { gap:7px; }
+      .brief-card { padding:5%; }
+      .page-preview { aspect-ratio:.95; }
+      .cover-slide .slide-body { padding-top:7%; }
+      .cover-slide h2 { max-width:72%; font-size:clamp(29px,10.5cqw,39px); }
+      .cover-slide .sub { max-width:70%; }
+      .cover-orb { width:54%; right:-2%; top:27%; }
+      .cover-app-controls { gap:6px; margin-top:4%; }
+      .voice-panel { min-height:31cqw; padding:3%; }
+      .voice-orb { width:34%; }
+      .voice-controls { gap:6px; }
+      .closing-slide .slide-body { padding-top:9%; }
+      .closing-slide h2 { max-width:72%; font-size:clamp(27px,9cqw,35px); }
+      .closing-slide .sub { max-width:70%; }
+    }
+
+    .slide-note { margin:20px 2px 0; color:#74849e; font-size:11px; line-height:1.5; }
+    .presentation[hidden] { display:none; }
+    .presentation { position:fixed; z-index:10; inset:0; display:grid; grid-template-rows:auto 1fr auto; place-items:center; padding:20px; background:rgba(3,5,12,.94); backdrop-filter:blur(18px); }
+    .presentation-top,.presentation-bottom { width:min(86vh,88vw,760px); display:flex; align-items:center; justify-content:space-between; gap:12px; }
+    .presentation-top { margin-bottom:12px; }
+    .presentation-bottom { margin-top:12px; color:#aab9d1; font-size:12px; }
+    .stage { width:min(86vh,88vw,760px); max-height:76vh; aspect-ratio:1; }
+    .stage .slide { width:100%; height:100%; aspect-ratio:1; border-radius:22px; cursor:default; }
+    .nav-group { display:flex; align-items:center; gap:9px; }
+    .nav-btn { width:38px; height:38px; display:grid; place-items:center; border:1px solid rgba(188,210,247,.22); border-radius:50%; background:rgba(255,255,255,.05); color:#e8f3ff; cursor:pointer; }
+    .nav-btn:hover { border-color:rgba(88,215,255,.6); background:rgba(62,191,255,.1); }
+    .dots { display:flex; gap:6px; }
+    .dots button { width:7px; height:7px; padding:0; border:0; border-radius:999px; background:#52617a; cursor:pointer; }
+    .dots button[aria-current="true"] { width:20px; background:linear-gradient(90deg,#50d6ff,#ae81ff); }
+
+    @media (max-width:1040px) {
+      .deck-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+    }
+    @media (max-width:760px) {
+      .page { width:min(100% - 28px,620px); padding-top:22px; }
+      .topline { align-items:flex-start; }
+      .brand-kicker { display:none; }
+      .top-actions { gap:7px; }
+      .action { min-height:38px; padding:0 11px; font-size:11px; }
+      .intro { display:block; padding:28px 0 22px; }
+      .intro-note { max-width:none; margin-top:12px; text-align:left; }
+      .deck-grid { gap:10px; }
+      .slide { border-radius:14px; padding:7.7%; }
+      .presentation { padding:12px; }
+      .presentation-top,.presentation-bottom,.stage { width:min(92vw,76vh); }
+      .presentation-top { margin-bottom:4px; }
+      .presentation-bottom { margin-top:5px; }
+      .stage { max-height:73vh; }
+      .stage .slide { border-radius:15px; }
+    }
+    @media (max-width:620px) {
+      .deck-grid { grid-template-columns:1fr; }
+    }
+    @media (max-width:420px) {
+      .topline { gap:10px; }
+      .brand { gap:7px; }
+      .brand img { width:30px; height:30px; }
+      .brand-name { font-size:11px; }
+      .action .long { display:none; }
+      .deck-grid { gap:8px; }
+    }
+    @media (prefers-reduced-motion: reduce) { *,*::before,*::after { scroll-behavior:auto!important; transition:none!important; } }
+    @media print {
+      @page { size:210mm 210mm; margin:0; }
+      html,body { width:210mm; min-width:0; margin:0; padding:0; background:#070913!important; print-color-adjust:exact; -webkit-print-color-adjust:exact; }
+      .page { width:210mm; margin:0; padding:0; }
+      .topline,.intro,.slide-note,.presentation { display:none!important; }
+      .deck-grid { display:block; width:210mm; margin:0; }
+      .slide { width:210mm; height:210mm; aspect-ratio:auto; margin:0; padding:17mm; border:0; border-radius:0; box-shadow:none; break-after:page; page-break-after:always; }
+      .slide:last-child { break-after:auto; page-break-after:auto; }
+      .slide h2 { font-size:20mm; }
+      .cover-slide h2 { font-size:27mm; }
+      .closing-slide h2 { font-size:23mm; }
+      .slide .sub { font-size:5mm; }
+      .mini-brand { font-size:3.2mm; }
+      .mini-brand img { width:8mm; height:8mm; }
+      .slide-count,.tag,.slide-foot { font-size:2.6mm; }
+      .cover-tags span { font-size:2.4mm; }
+      .voice-caption,.panel-head,.plan-step,.live-label,.live-meta,.memory-row,.browser-bar,.share-status,.read-only,.mission-row,.stop-chip { font-size:3.1mm; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="topline">
+      <a class="brand" href="./" aria-label="Lumen AI home">
+        <img src="./logo.svg" alt="">
+        <span><span class="brand-name">LUMEN</span><span class="brand-kicker">VOICE · VISION · CURIOSITY</span></span>
+      </a>
+      <div class="top-actions">
+        <button class="action" id="printButton" type="button" title="Print or save the slides as a square PDF">▤ <span class="long">Print / save PDF</span></button>
+        <button class="action primary" id="presentButton" type="button">▶ <span class="long">Present slides</span></button>
+      </div>
+    </header>
+
+    <section class="intro" aria-labelledby="pageTitle">
+      <div>
+        <div class="eyebrow">A closer look at the app · 9 square slides</div>
+        <h1 id="pageTitle">Meet your ambient AI companion.</h1>
+        <p>Voice, vision, web research, and the controls that keep you in charge.</p>
+      </div>
+      <div class="intro-note">Select any square to present it. Use ← and → to move through the deck, or print to save all nine slides as a PDF.</div>
+    </section>
+
+    <section class="deck-grid" id="deckGrid" aria-label="Nine Lumen AI slides">
+      <article class="slide cover-slide" data-slide="1" tabindex="0" role="button" aria-label="Slide 1: Meet Lumen">
+        <div class="slide-top"><span class="mini-brand"><img src="./logo.svg" alt=""> LUMEN AI</span><span class="slide-count">01 / 09</span></div>
+        <div class="cover-orb" aria-hidden="true"><img src="./lumen-goo-orb.svg" alt=""></div>
+        <div class="slide-body">
+          <span class="tag">A copilot for curious minds</span>
+          <h2>Meet<br>Lumen.</h2>
+          <p class="sub">Voice, vision, and curiosity—together in one ambient AI companion.</p>
+          <div class="cover-tags"><span>VOICE</span><span>VISION</span><span>LIVE RESEARCH</span></div>
+          <div class="cover-app-controls">
+            <button type="button" class="voice-toggle-btn" disabled aria-label="Voice: Joanna"><span class="voice-icon">🎙️</span><span class="voice-label">Joanna</span></button>
+            <span class="sphere-status">Tap sphere to converse</span>
+          </div>
+        </div>
+        <div class="slide-foot"><span>Say hello to Lumen</span><span>Swipe to explore ↗</span></div>
+      </article>
+
+      <article class="slide" data-slide="2" tabindex="0" role="button" aria-label="Slide 2: Talk naturally with voice">
+        <div class="slide-top"><span class="mini-brand"><img src="./logo.svg" alt=""> LUMEN AI</span><span class="slide-count">02 / 09</span></div>
+        <div class="slide-body">
+          <span class="tag">01 · Voice</span>
+          <h2>Talk it<br>through.</h2>
+          <p class="sub">Choose a voice, then tap Lumen’s sphere to speak and listen.</p>
+          <div class="visual glass-card voice-panel" aria-hidden="true">
+            <div class="voice-orb"><img src="./lumen-goo-orb.svg" alt=""></div>
+            <div class="voice-controls">
+              <button type="button" class="voice-toggle-btn" disabled aria-label="Voice: Joanna"><span class="voice-icon">🎙️</span><span class="voice-label">Joanna</span></button>
+              <span class="sphere-status">Tap sphere to converse</span>
+              <div class="voice-caption"><small>Voice control</small>Choose a voice in Lumen’s header.</div>
+            </div>
+          </div>
+        </div>
+        <div class="slide-foot"><span>Hands-free conversation</span><span>Speak · Listen</span></div>
+      </article>
+
+      <article class="slide" data-slide="3" tabindex="0" role="button" aria-label="Slide 3: Ask questions about images and PDFs">
+        <div class="slide-top"><span class="mini-brand"><img src="./logo.svg" alt=""> LUMEN AI</span><span class="slide-count">03 / 09</span></div>
+        <div class="slide-body">
+          <span class="tag">02 · Vision</span>
+          <h2>Bring a file.<br>Get the picture.</h2>
+          <p class="sub">Add an image or PDF, then ask Lumen to inspect it and explain what matters.</p>
+          <div class="visual file-stack" aria-hidden="true">
+            <span class="file-glow"></span>
+            <div class="glass-card file-card"><div class="file-icon">JPG</div><div class="file-rule"></div><div class="file-rule short"></div><div class="file-rule"></div></div>
+            <div class="glass-card file-card second"><div class="file-icon">PDF</div><div class="file-rule"></div><div class="file-rule short"></div><div class="file-rule"></div></div>
+          </div>
+        </div>
+        <div class="slide-foot"><span>Image + PDF analysis</span><span>Ask what you see</span></div>
+      </article>
+
+      <article class="slide" data-slide="4" tabindex="0" role="button" aria-label="Slide 4: Review a research plan and get a sourced report">
+        <div class="slide-top"><span class="mini-brand"><img src="./logo.svg" alt=""> LUMEN AI</span><span class="slide-count">04 / 09</span></div>
+        <div class="slide-body">
+          <span class="tag">03 · Web research</span>
+          <h2>From question<br>to sourced report.</h2>
+          <p class="sub">Review the research plan first. Lumen searches public pages and can turn the findings into a PDF.</p>
+          <div class="visual glass-card plan-card" aria-hidden="true">
+            <div class="panel-head"><span>Research plan</span><span class="pill">Ready for your review</span></div>
+            <div class="plan-step"><span class="step-no">1</span>Search relevant public pages</div>
+            <div class="plan-step"><span class="step-no">2</span>Build a sourced PDF report</div>
+            <div class="sources-row"><span class="source-chip">Source links</span><span class="source-chip">Downloadable PDF</span></div>
+          </div>
+        </div>
+        <div class="slide-foot"><span>Review before research</span><span>Sources stay visible</span></div>
+      </article>
+
+      <article class="slide" data-slide="5" tabindex="0" role="button" aria-label="Slide 5: Live weather and cryptocurrency cards">
+        <div class="slide-top"><span class="mini-brand"><img src="./logo.svg" alt=""> LUMEN AI</span><span class="slide-count">05 / 09</span></div>
+        <div class="slide-body">
+          <span class="tag">04 · Live information</span>
+          <h2>Stay close<br>to right now.</h2>
+          <p class="sub">Check live weather, forecasts, and cryptocurrency prices in glanceable cards.</p>
+          <div class="visual live-cards" aria-hidden="true">
+            <div class="glass-card live-tile"><span class="weather-icon">☼</span><div class="live-label">Vienna · weather</div><div class="live-value">18°</div><div class="live-meta">Clear · feels like 17°</div></div>
+            <div class="glass-card live-tile"><div class="live-label">Market · BTC</div><div class="live-value">Live</div><div class="live-meta">Price &amp; 24h change</div><div class="tiny-chart"><i style="--h:36%"></i><i style="--h:58%"></i><i style="--h:43%"></i><i style="--h:72%"></i><i style="--h:62%"></i><i style="--h:90%"></i><i style="--h:78%"></i></div></div>
+          </div>
+        </div>
+        <div class="slide-foot"><span>Useful data at a glance</span><span>Weather · Markets</span></div>
+      </article>
+
+      <article class="slide" data-slide="6" tabindex="0" role="button" aria-label="Slide 6: Personalize tone and manage memory">
+        <div class="slide-top"><span class="mini-brand"><img src="./logo.svg" alt=""> LUMEN AI</span><span class="slide-count">06 / 09</span></div>
+        <div class="slide-body">
+          <span class="tag">05 · Personalization</span>
+          <h2>Make it<br>feel like yours.</h2>
+          <p class="sub">Choose a tone and style. Review, edit, or delete saved memories whenever you like.</p>
+          <div class="visual glass-card memory-panel" aria-hidden="true">
+            <div class="panel-head"><span>Your preferences</span><span class="pill">Manage memory</span></div>
+            <div class="memory-row"><span class="memory-dot"></span>Concise, thoughtful replies<span class="memory-check">SAVED</span></div>
+            <div class="memory-row"><span class="memory-dot"></span>Prefer examples with code<span class="memory-check">SAVED</span></div>
+            <div class="memory-controls"><span>Edit</span><span>Delete</span><span>Pause auto-save</span></div>
+          </div>
+        </div>
+        <div class="slide-foot"><span>Personal, with controls</span><span>Your memory · Your choice</span></div>
+      </article>
+
+      <article class="slide" data-slide="7" tabindex="0" role="button" aria-label="Slide 7: Share a browser tab intentionally and read-only">
+        <div class="slide-top"><span class="mini-brand"><img src="./logo.svg" alt=""> LUMEN AI</span><span class="slide-count">07 / 09</span></div>
+        <div class="slide-body">
+          <span class="tag">06 · Shared context</span>
+          <h2>You choose<br>what Lumen sees.</h2>
+          <p class="sub">Share one browser tab when you want help with a page. Lumen can read it—but can’t click or type.</p>
+          <div class="visual glass-card browser-window" aria-hidden="true">
+            <div class="browser-bar"><i></i><i></i><i></i><span class="address">your chosen page</span></div>
+            <div class="browser-content"><div class="page-line bright"></div><div class="page-line"></div><div class="page-line" style="width:81%"></div><div class="page-line" style="width:57%"></div><div class="share-status">Tab shared by you</div><div class="read-only">Read-only · Stop sharing anytime</div></div>
+          </div>
+        </div>
+        <div class="slide-foot"><span>Explicit, read-only sharing</span><span>You stay in control</span></div>
+      </article>
+
+      <article class="slide" data-slide="8" tabindex="0" role="button" aria-label="Slide 8: Review a design brief before generating a page">
+        <div class="slide-top"><span class="mini-brand"><img src="./logo.svg" alt=""> LUMEN AI</span><span class="slide-count">08 / 09</span></div>
+        <div class="slide-body">
+          <span class="tag">07 · Make something</span>
+          <h2>Turn a brief<br>into a page.</h2>
+          <p class="sub">Review the brief before Lumen builds a web page or demo.</p>
+          <div class="visual brief-layout" aria-hidden="true">
+            <div class="glass-card brief-card"><div class="panel-head"><span>Design brief</span></div><div class="brief-line title"></div><div class="brief-line"></div><div class="brief-line" style="width:72%"></div><div class="brief-line" style="width:84%"></div><span class="brief-badge">Review first</span></div>
+            <div class="page-preview"><div class="preview-orb"></div><div class="brief-line title"></div><div class="brief-line"></div><div class="brief-line" style="width:68%"></div></div>
+          </div>
+        </div>
+        <div class="slide-foot"><span>From idea to artifact</span><span>Brief · Review · Build</span></div>
+      </article>
+
+      <article class="slide closing-slide" data-slide="9" tabindex="0" role="button" aria-label="Slide 9: Stay in control as Lumen works">
+        <div class="slide-top"><span class="mini-brand"><img src="./logo.svg" alt=""> LUMEN AI</span><span class="slide-count">09 / 09</span></div>
+        <div class="closing-orb" aria-hidden="true"><img src="./lumen-goo-orb.svg" alt=""></div>
+        <div class="slide-body">
+          <span class="tag">Helpful work. Clear checkpoints.</span>
+          <h2>Stay in<br>the loop.</h2>
+          <p class="sub">Review a plan, follow progress, stop a run, and see what Lumen found.</p>
+          <span class="closing-cta">Meet Lumen</span>
+        </div>
+        <div class="slide-foot"><span>Useful, with you in control</span><span>Lumen AI</span></div>
+      </article>
+    </section>
+    <p class="slide-note">The logo, voice selector, and sphere orb use Lumen’s actual assets and interface details. Other panels represent features in the app; they are not screenshots.</p>
+  </main>
+
+  <section class="presentation" id="presentation" hidden aria-label="Slide presentation">
+    <div class="presentation-top"><span class="mini-brand"><img src="./logo.svg" alt=""> LUMEN AI · PRESENTATION</span><button class="nav-btn" id="closeButton" type="button" aria-label="Close presentation">×</button></div>
+    <div class="stage" id="stage" aria-live="polite"></div>
+    <div class="presentation-bottom">
+      <span id="currentCount">01 / 09</span>
+      <div class="dots" id="dots" aria-label="Choose slide"></div>
+      <span class="nav-group"><button class="nav-btn" id="previousButton" type="button" aria-label="Previous slide">←</button><button class="nav-btn" id="nextButton" type="button" aria-label="Next slide">→</button></span>
+    </div>
+  </section>
+
+  <script>
+    // Small, dependency-free presenter controls; no app data is read or sent.
+    const slides = [...document.querySelectorAll('.deck-grid .slide')];
+    const presentation = document.getElementById('presentation');
+    const stage = document.getElementById('stage');
+    const count = document.getElementById('currentCount');
+    const dots = document.getElementById('dots');
+    let current = 0;
+    let returnFocus = null;
+
+    function renderSlide(index) {
+      current = (index + slides.length) % slides.length;
+      stage.innerHTML = slides[current].outerHTML;
+      stage.querySelector('.slide').setAttribute('tabindex', '-1');
+      count.textContent = `${String(current + 1).padStart(2, '0')} / ${String(slides.length).padStart(2, '0')}`;
+      [...dots.children].forEach((dot, i) => dot.setAttribute('aria-current', String(i === current)));
+    }
+    function openPresentation(index = 0, trigger = document.getElementById('presentButton')) {
+      returnFocus = trigger;
+      renderSlide(index);
+      presentation.hidden = false;
+      document.body.style.overflow = 'hidden';
+      document.getElementById('closeButton').focus();
+    }
+    function closePresentation() {
+      presentation.hidden = true;
+      document.body.style.overflow = '';
+      returnFocus?.focus();
+    }
+    slides.forEach((slide, index) => {
+      slide.addEventListener('click', () => openPresentation(index, slide));
+      slide.addEventListener('keydown', event => {
+        if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openPresentation(index, slide); }
+      });
+      const dot = document.createElement('button');
+      dot.type = 'button';
+      dot.setAttribute('aria-label', `Go to slide ${index + 1}`);
+      dot.addEventListener('click', () => renderSlide(index));
+      dots.append(dot);
+    });
+    document.getElementById('presentButton').addEventListener('click', () => openPresentation());
+    document.getElementById('printButton').addEventListener('click', () => window.print());
+    document.getElementById('closeButton').addEventListener('click', closePresentation);
+    document.getElementById('previousButton').addEventListener('click', () => renderSlide(current - 1));
+    document.getElementById('nextButton').addEventListener('click', () => renderSlide(current + 1));
+    document.addEventListener('keydown', event => {
+      if (presentation.hidden) return;
+      if (event.key === 'Escape') closePresentation();
+      if (event.key === 'ArrowRight' || event.key === ' ') { event.preventDefault(); renderSlide(current + 1); }
+      if (event.key === 'ArrowLeft') { event.preventDefault(); renderSlide(current - 1); }
+    });
+    renderSlide(0);
+  </script>
+</body>
+</html>
