@@ -51,6 +51,9 @@ export function applyProgress(mission, event) {
   if (Number.isFinite(event.searchesTotal)) meta.searchesTotal = event.searchesTotal;
   if (Number.isFinite(event.searchesFailed)) meta.searchesFailed = event.searchesFailed;
   if (Number.isFinite(event.pagesFailed)) meta.pagesFailed = event.pagesFailed;
+  if (typeof event.followUpStatus === 'string') meta.followUpStatus = clip(event.followUpStatus, 30);
+  if (Number.isFinite(event.followUpQueries)) meta.followUpQueries = event.followUpQueries;
+  if (typeof event.followUpQuery === 'string') meta.followUpQuery = clip(event.followUpQuery, 160);
   const steps = mission.steps.map((step, i) => {
     if (i < index) return { ...step, state: 'done' };
     if (i === index) return { ...step, state: 'active', meta: { ...step.meta, ...meta } };

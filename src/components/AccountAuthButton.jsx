@@ -3,6 +3,7 @@ import { beginGithubSignIn, getAuthProviders, signOut } from '../services/api';
 
 export default function AccountAuthButton({
   currentUser,
+  memoryLabel = 'Memory',
   onLogout,
   onOpenMemory,
   onOpenSettings,
@@ -71,6 +72,23 @@ export default function AccountAuthButton({
     <div className="account-auth-wrapper" ref={dropdownRef}>
       {currentUser ? (
         <div className="account-user-container">
+          <button
+            type="button"
+            className="account-memory-launcher"
+            onClick={() => {
+              setShowDropdown(false);
+              onOpenMemory?.();
+            }}
+            aria-label={memoryLabel}
+            aria-haspopup="dialog"
+            title={memoryLabel}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M12 6.5c-1.7-1.7-4.1-2.5-7-2.5v13c2.9 0 5.3.8 7 2.5m0-13c1.7-1.7 4.1-2.5 7-2.5v13c-2.9 0-5.3.8-7 2.5M12 6.5v13" />
+            </svg>
+            <span>{memoryLabel}</span>
+          </button>
+
           <button
             type="button"
             className="account-user-pill"

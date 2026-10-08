@@ -114,6 +114,14 @@ export async function getUserMemory() {
   return authenticatedJsonRequest('/api/memory');
 }
 
+export async function generateUserPersonaCard(language, signal) {
+  return authenticatedJsonRequest('/api/memory/persona', {
+    method: 'POST',
+    body: JSON.stringify({ language }),
+    signal
+  });
+}
+
 export async function saveUserProfile(text) {
   return authenticatedJsonRequest('/api/memory/profile', {
     method: 'PUT',

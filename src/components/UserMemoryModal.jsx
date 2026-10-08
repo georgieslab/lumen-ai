@@ -3,6 +3,7 @@ import {
   clearUserMemory,
   createUserMemory,
   deleteUserMemory,
+  generateUserPersonaCard,
   getUserMemory,
   saveUserProfile,
   setAutoMemory,
@@ -13,7 +14,7 @@ import { getTranslations } from '../utils/translations';
 const MAX_PROFILE_LENGTH = 10000;
 const MAX_MEMORY_LENGTH = 280;
 
-export default function UserMemoryModal({ isOpen, onClose, activeLanguage = 'en-US', statusNotice = '' }) {
+export default function UserMemoryModal({ isOpen, onClose, activeLanguage = 'en-US', statusNotice = '', isSignedIn = false }) {
   const labels = getTranslations(activeLanguage).memoryManager;
   const [profile, setProfile] = useState('');
   const [memories, setMemories] = useState([]);
@@ -28,10 +29,24 @@ export default function UserMemoryModal({ isOpen, onClose, activeLanguage = 'en-
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savedProfile, setSavedProfile] = useState(false);
+  const [profileIsDirty, setProfileIsDirty] = useState(false);
+  const [personaCard, setPersonaCard] = useState(null);
+  const [personaLoading, setPersonaLoading] = useState(false);
+  const [personaError, setPersonaError] = useState('');
   const [importNotice, setImportNotice] = useState('');
   const [error, setError] = useState('');
   const fileInputRef = useRef(null);
   const contentRef = useRef(null);
+  const personaControllerRef = useRef(null);
+  const hasPersonaKnowledge = Boolean(!profileIsDirty && (profile.trim() || memories.length));
+
+  const invalidatePersonaCard = () => {
+    personaControllerRef.current?.abort();
+    personaControllerRef.current = null;
+    setPersonaLoading(false);
+    setPersonaCard(null);
+    setPersonaError('');
+  };
 
   useEffect(() => {
     if (!memoryPromptEdited) setMemoryPrompt(labels.aiExportPrompt);
@@ -47,14 +62,20 @@ export default function UserMemoryModal({ isOpen, onClose, activeLanguage = 'en-
   }, [isOpen, onClose]);
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || !isSignedIn) {
+      setLoading(false);
+      return;
+    }
     let active = true;
     setLoading(true);
     setError('');
+    setPersonaCard(null);
+    setPersonaError('');
     getUserMemory()
       .then(data => {
         if (!active) return;
         setProfile(data.profile || '');
+        setProfileIsDirty(false);
         setMemories(data.memories || []);
         setAutoEnabled(data.autoMemoryEnabled !== false);
       })
@@ -67,7 +88,16 @@ export default function UserMemoryModal({ isOpen, onClose, activeLanguage = 'en-
     return () => {
       active = false;
     };
-  }, [isOpen, labels.loadError]);
+  }, [isOpen, isSignedIn]);
+
+  useEffect(() => {
+    if (isOpen) return;
+    personaControllerRef.current?.abort();
+    personaControllerRef.current = null;
+    setPersonaLoading(false);
+    setPersonaCard(null);
+    setPersonaError('');
+  }, [isOpen]);
 
   const handleProfileUpload = async (event) => {
     const file = event.target.files?.[0];
@@ -88,6 +118,8 @@ export default function UserMemoryModal({ isOpen, onClose, activeLanguage = 'en-
         text = JSON.stringify(JSON.parse(text), null, 2);
       }
       setProfile(text);
+      setProfileIsDirty(true);
+      invalidatePersonaCard();
       setError('');
       setSavedProfile(false);
     } catch {
@@ -115,6 +147,8 @@ export default function UserMemoryModal({ isOpen, onClose, activeLanguage = 'en-
       return;
     }
     setProfile(combined);
+    setProfileIsDirty(true);
+    invalidatePersonaCard();
     setImportedReply('');
     setSavedProfile(false);
     setImportNotice(labels.importAddedNotice);
@@ -132,6 +166,8 @@ export default function UserMemoryModal({ isOpen, onClose, activeLanguage = 'en-
     try {
       await saveUserProfile(profile);
       setSavedProfile(true);
+      setProfileIsDirty(false);
+      invalidatePersonaCard();
       setImportNotice('');
     } catch {
       setError(labels.saveError);
@@ -163,6 +199,7 @@ export default function UserMemoryModal({ isOpen, onClose, activeLanguage = 'en-
     try {
       const result = await createUserMemory(text);
       setMemories(previous => [result.memory, ...previous]);
+      invalidatePersonaCard();
       setNewMemory('');
     } catch (saveError) {
       setError(saveError.message || labels.saveError);
@@ -177,6 +214,7 @@ export default function UserMemoryModal({ isOpen, onClose, activeLanguage = 'en-
     try {
       const result = await updateUserMemory(memoryId, editingText);
       setMemories(previous => previous.map(memory => memory.id === memoryId ? result.memory : memory));
+      invalidatePersonaCard();
       setEditingId(null);
       setEditingText('');
     } catch (saveError) {
@@ -192,6 +230,7 @@ export default function UserMemoryModal({ isOpen, onClose, activeLanguage = 'en-
     try {
       await deleteUserMemory(memoryId);
       setMemories(previous => previous.filter(memory => memory.id !== memoryId));
+      invalidatePersonaCard();
     } catch {
       setError(labels.saveError);
     } finally {
@@ -206,13 +245,32 @@ export default function UserMemoryModal({ isOpen, onClose, activeLanguage = 'en-
     try {
       await clearUserMemory();
       setProfile('');
+      setProfileIsDirty(false);
       setMemories([]);
+      invalidatePersonaCard();
       setAutoEnabled(true);
       setSavedProfile(false);
     } catch {
       setError(labels.saveError);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleCreatePersonaCard = async () => {
+    personaControllerRef.current?.abort();
+    const controller = new AbortController();
+    personaControllerRef.current = controller;
+    setPersonaLoading(true);
+    setPersonaError('');
+    try {
+      const result = await generateUserPersonaCard(activeLanguage, controller.signal);
+      if (!controller.signal.aborted) setPersonaCard(result.card);
+    } catch (personaRequestError) {
+      if (!controller.signal.aborted) setPersonaError(personaRequestError.message || labels.personaError);
+    } finally {
+      if (personaControllerRef.current === controller) personaControllerRef.current = null;
+      if (!controller.signal.aborted) setPersonaLoading(false);
     }
   };
 
@@ -238,10 +296,64 @@ export default function UserMemoryModal({ isOpen, onClose, activeLanguage = 'en-
         <p className="memory-privacy-note">{labels.privacyNote}</p>
         {statusNotice && <p className="memory-status-notice" role="status">{statusNotice}</p>}
         {error && <p className="memory-error" role="alert">{error}</p>}
-        {loading ? (
+        {!isSignedIn ? (
+          <div className="memory-auth-required" role="status">
+            <article className="memory-persona-card memory-persona-card--locked">
+              <div className="persona-card-eyebrow">✦ {labels.personaHeading}</div>
+              <span className="memory-auth-icon" aria-hidden="true">🔒</span>
+              <h3>{labels.signInTitle}</h3>
+              <p>{labels.signInHint}</p>
+            </article>
+          </div>
+        ) : loading ? (
           <p className="memory-loading">{labels.loading}</p>
         ) : (
           <div className="memory-modal-content" ref={contentRef}>
+            <section className="memory-section memory-persona-section">
+              <div className="memory-section-heading memory-persona-heading">
+                <h3>{labels.personaHeading}</h3>
+                <button
+                  type="button"
+                  className="memory-primary-button"
+                  onClick={handleCreatePersonaCard}
+                  disabled={!hasPersonaKnowledge || saving || personaLoading}
+                >
+                  {personaLoading ? labels.personaCreating : personaCard ? labels.personaRefresh : labels.personaCreate}
+                </button>
+              </div>
+              <p className="memory-hint">{labels.personaHint}</p>
+              {profileIsDirty
+                ? <p className="memory-empty">{labels.personaSaveFirst}</p>
+                : !hasPersonaKnowledge && <p className="memory-empty">{labels.personaNeedsKnowledge}</p>}
+              {personaError && <p className="memory-error persona-card-error" role="alert">{personaError}</p>}
+              {personaCard && (
+                <article className="memory-persona-card">
+                  <div className="persona-card-eyebrow">✦ {labels.personaSummary}</div>
+                  <p className="persona-card-summary">{personaCard.summary}</p>
+                  <div className="persona-card-details">
+                    {personaCard.preferences?.length > 0 && (
+                      <section>
+                        <h4>{labels.personaPreferences}</h4>
+                        <ul>{personaCard.preferences.map((item, index) => <li key={`preference-${index}`}>{item}</li>)}</ul>
+                      </section>
+                    )}
+                    {personaCard.currentFocus?.length > 0 && (
+                      <section>
+                        <h4>{labels.personaFocus}</h4>
+                        <ul>{personaCard.currentFocus.map((item, index) => <li key={`focus-${index}`}>{item}</li>)}</ul>
+                      </section>
+                    )}
+                    {personaCard.worksBest?.length > 0 && (
+                      <section>
+                        <h4>{labels.personaWorksBest}</h4>
+                        <ul>{personaCard.worksBest.map((item, index) => <li key={`works-${index}`}>{item}</li>)}</ul>
+                      </section>
+                    )}
+                  </div>
+                </article>
+              )}
+            </section>
+
             <section className="memory-section">
               <div className="memory-section-heading">
                 <h3>{labels.profileHeading}</h3>
@@ -262,6 +374,8 @@ export default function UserMemoryModal({ isOpen, onClose, activeLanguage = 'en-
                 maxLength={MAX_PROFILE_LENGTH}
                 onChange={event => {
                   setProfile(event.target.value);
+                  setProfileIsDirty(true);
+                  invalidatePersonaCard();
                   setSavedProfile(false);
                   setImportNotice('');
                 }}

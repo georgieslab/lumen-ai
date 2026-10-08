@@ -79,6 +79,7 @@ export default function App() {
   const [isWebcamOpen, setIsWebcamOpen] = useState(false);
   const [liveTranscript, setLiveTranscript] = useState('');
   const [textInput, setTextInput] = useState('');
+  const [decisionMissionDraft, setDecisionMissionDraft] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
   const selectedImage = selectedFile; // Backward compatibility alias
   const setSelectedImage = setSelectedFile; // Backward compatibility alias
@@ -689,6 +690,7 @@ export default function App() {
     const approvedPlan = options.plan || null;
     const approvedBrief = options.brief || null;
     const resumed = Boolean(options.baseMessages);
+    const requestedDecisionMission = Boolean(options.decisionMission || (!resumed && !textToSend && decisionMissionDraft));
     unlockAudio();
     const userPrompt = (textToSend || liveTranscript || textInput).trim();
     if (!userPrompt && !filePayload) return;
@@ -715,6 +717,7 @@ export default function App() {
     if (!resumed) {
       setLiveTranscript('');
       setTextInput('');
+      setDecisionMissionDraft(false);
       if (filePayload) {
         setProcessingFile(filePayload);
       }
@@ -724,7 +727,7 @@ export default function App() {
     setIsTaskComplete(false);
 
     // A research request first becomes a plan the user reviews; nothing is searched until they approve it.
-    if (!resumed && isResearchReportRequest(userPrompt) && !filePayload) {
+    if (!resumed && (requestedDecisionMission || isResearchReportRequest(userPrompt)) && !filePayload) {
       const planController = new AbortController();
       runAbortRef.current = planController;
       try {
@@ -775,7 +778,7 @@ export default function App() {
     const accumulatedWidgets = [];
     let audioPlayed = false;
 
-    const isResearchRun = isResearchReportRequest(userPrompt) && !filePayload;
+    const isResearchRun = Boolean(approvedPlan) || ((requestedDecisionMission || isResearchReportRequest(userPrompt)) && !filePayload);
     const controller = new AbortController();
     runAbortRef.current = controller;
     const startedAt = Date.now();
@@ -1218,6 +1221,12 @@ export default function App() {
       onSelect: () => window.open('https://github.com/georgieslab', '_blank', 'noopener,noreferrer')
     }
   ];
+  const prepareDecisionMission = () => {
+    setDecisionMissionDraft(true);
+    setTextInput(t.starterChips.decisionMissionPrompt);
+    textInputRef.current?.focus();
+  };
+
   const exploreActions = [
     {
       id: 'voice',
@@ -1239,6 +1248,13 @@ export default function App() {
       label: t.starterChips.aiBreakthroughs,
       description: t.starterChips.aiBreakthroughsTooltip,
       onSelect: () => handleSendMessage(t.starterChips.aiBreakthroughsQuery)
+    },
+    {
+      id: 'decision-mission',
+      icon: '🧭',
+      label: t.starterChips.decisionMission,
+      description: t.starterChips.decisionMissionTooltip,
+      onSelect: prepareDecisionMission
     },
     {
       id: 'weather',
@@ -1532,6 +1548,7 @@ export default function App() {
 
         <AccountAuthButton
           currentUser={currentUser}
+          memoryLabel={t.memoryManager.launcher}
           onLogout={handleUserLogout}
           onOpenMemory={() => setIsMemoryModalOpen(true)}
           onOpenSettings={() => {
@@ -1865,6 +1882,25 @@ export default function App() {
 
             <button
               type="button"
+              className="quick-chip memory-chip"
+              onClick={() => setIsMemoryModalOpen(true)}
+              title={t.memoryManager.launcherHint}
+            >
+              <span aria-hidden="true">🧠</span>
+              {t.memoryManager.personaLauncher}
+            </button>
+
+            <button
+              type="button"
+              className="quick-chip mission-chip"
+              onClick={prepareDecisionMission}
+              title={t.starterChips.decisionMissionTooltip}
+            >
+              {t.starterChips.decisionMission}
+            </button>
+
+            <button
+              type="button"
               className="quick-chip pdf-chip"
               onClick={() => {
                 if (messages.length > 1) {
@@ -2056,7 +2092,10 @@ export default function App() {
                 : t.footer.placeholderNormal
             }
             value={textInput}
-            onChange={(e) => setTextInput(e.target.value)}
+            onChange={(event) => {
+              setTextInput(event.target.value);
+              if (!event.target.value.trim()) setDecisionMissionDraft(false);
+            }}
           />
           <button 
             type="submit" 
@@ -2191,6 +2230,7 @@ export default function App() {
         onClose={() => setIsMemoryModalOpen(false)}
         activeLanguage={activeLanguage}
         statusNotice={memoryNotice}
+        isSignedIn={Boolean(currentUser)}
       />
     </div>
   );

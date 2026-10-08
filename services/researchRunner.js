@@ -43,6 +43,7 @@ export async function collectResearchSources({
   topic = '',
   search,
   read,
+  planFollowUp,
   signal,
   onProgress = () => {}
 }) {
@@ -52,6 +53,7 @@ export async function collectResearchSources({
     throw new TypeError('Research search and page-reading functions are required.');
   }
   throwIfAborted(signal);
+  const adaptiveFollowUpEnabled = plan.adaptiveFollowUp && typeof planFollowUp === 'function';
 
   let completedQueries = 0;
   let searchFailures = 0;
@@ -103,7 +105,10 @@ export async function collectResearchSources({
     throw new ResearchStageError('search', 'The web search returned no usable sources. Try a more specific topic.');
   }
 
-  const selected = uniqueResults.slice(0, Math.min(plan.maxPages, PLAN_LIMITS.maxPages));
+  // Reserve one page from the user's approved total for a possible targeted follow-up read.
+  const totalPageLimit = Math.min(plan.maxPages, PLAN_LIMITS.maxPages);
+  const initialPageLimit = Math.max(1, totalPageLimit - (adaptiveFollowUpEnabled ? 1 : 0));
+  const selected = uniqueResults.slice(0, initialPageLimit);
   let completedPages = 0;
   let pagesRead = 0;
   let pagesFailed = 0;
@@ -148,5 +153,144 @@ export async function collectResearchSources({
   }));
   throwIfAborted(signal);
 
-  return { plan, sources, searchesFailed: searchFailures, pagesRead, pagesFailed };
+  let followUpQuestion = null;
+  let followUpStatus = adaptiveFollowUpEnabled ? 'checking' : 'disabled';
+  let allSources = [...sources];
+  let totalPagesRead = pagesRead;
+  let totalPagesFailed = pagesFailed;
+
+  if (adaptiveFollowUpEnabled) {
+    onProgress({
+      stage: 'reading',
+      message: 'Checking the first-pass evidence for an important gap…',
+      progress: 61,
+      sources: allSources.length,
+      pagesRead: totalPagesRead,
+      pagesFailed: totalPagesFailed,
+      followUpStatus: 'checking',
+      followUpQueries: 0
+    });
+
+    let followUpProposal = null;
+    try {
+      followUpProposal = await planFollowUp({ plan, sources: allSources, signal });
+    } catch (error) {
+      if (signal?.aborted || error?.name === 'AbortError') throw error;
+      followUpProposal = { unavailable: true };
+    }
+    throwIfAborted(signal);
+
+    followUpQuestion = typeof followUpProposal === 'string'
+      ? cleanText(followUpProposal, PLAN_LIMITS.maxQuestionChars)
+      : cleanText(followUpProposal?.question, PLAN_LIMITS.maxQuestionChars);
+    if (followUpQuestion.length < 3) followUpQuestion = null;
+    if (followUpProposal?.unavailable) {
+      followUpStatus = 'unavailable';
+    } else if (!followUpQuestion) {
+      followUpStatus = 'no_gaps';
+    } else {
+      followUpStatus = 'searching';
+      onProgress({
+        stage: 'reading',
+        message: 'Searching once more to check an evidence gap…',
+        progress: 62,
+        sources: allSources.length,
+        pagesRead: totalPagesRead,
+        pagesFailed: totalPagesFailed,
+        followUpStatus,
+        followUpQueries: 1,
+        followUpQuery: followUpQuestion
+      });
+
+      let followUpResults = [];
+      try {
+        const results = await search(followUpQuestion, RESULTS_PER_QUERY, { signal });
+        followUpResults = Array.isArray(results) ? results.slice(0, RESULTS_PER_QUERY) : [];
+      } catch (error) {
+        if (signal?.aborted || error?.name === 'AbortError') throw error;
+        searchFailures += 1;
+        followUpStatus = 'search_failed';
+      }
+      throwIfAborted(signal);
+
+      const knownUrls = new Set(uniqueResults.map((source) => source.url));
+      const followUpSource = followUpResults
+        .map(cleanResult)
+        .find((source) => source && !knownUrls.has(source.url));
+      const remainingPageBudget = Math.max(0, totalPageLimit - allSources.length);
+      if (followUpStatus === 'searching' && followUpSource && remainingPageBudget > 0) {
+        onProgress({
+          stage: 'reading',
+          message: 'Reading the follow-up source…',
+          progress: 63,
+          sources: allSources.length,
+          pagesRead: totalPagesRead,
+          pagesFailed: totalPagesFailed,
+          followUpStatus: 'reading',
+          followUpQueries: 1,
+          followUpQuery: followUpQuestion
+        });
+        let page = null;
+        try {
+          page = await read(followUpSource.url, { signal });
+        } catch (error) {
+          if (signal?.aborted || error?.name === 'AbortError') throw error;
+          page = { success: false };
+        }
+        throwIfAborted(signal);
+        if (page?.success) totalPagesRead += 1;
+        else totalPagesFailed += 1;
+        allSources.push({
+          ...followUpSource,
+          title: cleanText(page?.title, 300) || followUpSource.title,
+          content: page?.success ? cleanText(page.content, 3500) : '',
+          read: Boolean(page?.success)
+        });
+        followUpStatus = page?.success ? 'complete' : 'source_unavailable';
+      } else if (followUpStatus === 'searching') {
+        followUpStatus = 'no_source';
+      }
+      onProgress({
+        stage: 'reading',
+        message: followUpStatus === 'complete'
+          ? 'The follow-up evidence check is complete.'
+          : followUpStatus === 'search_failed'
+            ? 'The follow-up search failed; continuing with collected sources.'
+            : followUpStatus === 'source_unavailable'
+              ? 'The follow-up page could not be read; continuing with the search result.'
+              : 'The follow-up search found no additional usable source.',
+        progress: 64,
+        sources: allSources.length,
+        pagesRead: totalPagesRead,
+        pagesFailed: totalPagesFailed,
+        followUpStatus,
+        followUpQueries: 1,
+        followUpQuery: followUpQuestion
+      });
+    }
+    if (followUpStatus === 'no_gaps' || followUpStatus === 'unavailable') {
+      onProgress({
+        stage: 'reading',
+        message: followUpStatus === 'no_gaps'
+          ? 'The first-pass evidence covers the approved questions.'
+          : 'The evidence check could not suggest a follow-up; continuing with collected sources.',
+        progress: 64,
+        sources: allSources.length,
+        pagesRead: totalPagesRead,
+        pagesFailed: totalPagesFailed,
+        followUpStatus,
+        followUpQueries: 0
+      });
+    }
+  }
+
+  return {
+    plan,
+    sources: allSources,
+    searchesFailed: searchFailures,
+    pagesRead: totalPagesRead,
+    pagesFailed: totalPagesFailed,
+    followUpQuestion,
+    followUpStatus
+  };
 }

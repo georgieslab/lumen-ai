@@ -128,6 +128,9 @@ export const TRANSLATIONS = {
     starterChips: {
       researchReport: "🔎 Research + PDF",
       researchReportPrompt: "Research a topic and provide a sourced PDF report about ",
+      decisionMission: "🧭 Decision mission",
+      decisionMissionTooltip: "Review a plan, compare evidence, and allow one bounded follow-up search.",
+      decisionMissionPrompt: "Research and compare [option A] with [option B] to help me decide, then create a PDF report with sources.",
       cityWeather: "🔍 Weather by City...",
       cityWeatherTooltip: "Search weather for any city worldwide",
       createPdf: "📄 Create PDF File",
@@ -384,6 +387,9 @@ export const TRANSLATIONS = {
     starterChips: {
       researchReport: "🔎 Investigación + PDF",
       researchReportPrompt: "Investiga un tema y crea un informe PDF con fuentes sobre ",
+      decisionMission: "🧭 Misión para decidir",
+      decisionMissionTooltip: "Revisa un plan, compara las pruebas y permite una búsqueda adicional limitada.",
+      decisionMissionPrompt: "Investiga y compara [opción A] con [opción B] para ayudarme a decidir y crea un informe PDF con fuentes.",
       cityWeather: "🔍 Clima por ciudad...",
       cityWeatherTooltip: "Buscar clima de cualquier ciudad del mundo",
       createPdf: "📄 Crear archivo PDF",
@@ -640,6 +646,9 @@ export const TRANSLATIONS = {
     starterChips: {
       researchReport: "🔎 Recherche + PDF",
       researchReportPrompt: "Recherche un sujet et crée un rapport PDF avec des sources sur ",
+      decisionMission: "🧭 Mission de décision",
+      decisionMissionTooltip: "Validez un plan, comparez les preuves et autorisez une recherche complémentaire limitée.",
+      decisionMissionPrompt: "Recherche et compare [option A] et [option B] pour m’aider à décider, puis crée un rapport PDF sourcé.",
       cityWeather: "🔍 Météo par ville...",
       cityWeatherTooltip: "Rechercher la météo de n'importe quelle ville",
       createPdf: "📄 Créer un fichier PDF",
@@ -896,6 +905,9 @@ export const TRANSLATIONS = {
     starterChips: {
       researchReport: "🔎 Recherche + PDF",
       researchReportPrompt: "Recherchiere ein Thema und erstelle einen PDF-Bericht mit Quellen zu ",
+      decisionMission: "🧭 Entscheidungsmission",
+      decisionMissionTooltip: "Plan prüfen, Belege vergleichen und eine begrenzte Folgesuche erlauben.",
+      decisionMissionPrompt: "Recherchiere und vergleiche [Option A] mit [Option B], damit ich entscheiden kann. Erstelle einen PDF-Bericht mit Quellen.",
       cityWeather: "🔍 Wetter nach Stadt...",
       cityWeatherTooltip: "Wetter für jede Stadt weltweit suchen",
       createPdf: "📄 PDF-Datei erstellen",
@@ -1152,6 +1164,9 @@ export const TRANSLATIONS = {
     starterChips: {
       researchReport: "🔎 調査 + PDF",
       researchReportPrompt: "次のテーマを調査し、出典付きPDFレポートを作成してください: ",
+      decisionMission: "🧭 判断ミッション",
+      decisionMissionTooltip: "計画を確認し、根拠を比較して、範囲を限定した追加検索を許可します。",
+      decisionMissionPrompt: "[選択肢A]と[選択肢B]を調査・比較して、判断を手伝ってください。出典付きPDFレポートも作成してください。",
       cityWeather: "🔍 都市別天気...",
       cityWeatherTooltip: "世界中の都市の天気を検索",
       createPdf: "📄 PDFファイル作成",
@@ -1408,6 +1423,9 @@ export const TRANSLATIONS = {
     starterChips: {
       researchReport: "🔎 Ricerca + PDF",
       researchReportPrompt: "Fai una ricerca e crea un rapporto PDF con le fonti su ",
+      decisionMission: "🧭 Missione decisionale",
+      decisionMissionTooltip: "Rivedi un piano, confronta le prove e consenti una ricerca aggiuntiva limitata.",
+      decisionMissionPrompt: "Cerca e confronta [opzione A] e [opzione B] per aiutarmi a decidere, poi crea un report PDF con fonti.",
       cityWeather: "🔍 Meteo per città...",
       cityWeatherTooltip: "Cerca il meteo di qualsiasi città nel mondo",
       createPdf: "📄 Crea file PDF",
@@ -1558,7 +1576,12 @@ export const TRANSLATIONS = {
 
 const memoryManagerTranslations = {
   'en-US': {
-    title: "Profile & Memory", subtitle: "Personal context synced to your account.", close: "Close",
+    title: "Profile & Memory", launcher: "Memory", personaLauncher: "Persona Card", launcherHint: "Open your saved profile, memories, and Persona Card.", subtitle: "Personal context synced to your account.", close: "Close",
+    signInTitle: "Sign in to use Memory", signInHint: "Saved profiles and memories belong to your account. Once sign-in is configured, you can create a Persona Card from them.",
+    personaHeading: "Your Persona Card", personaCreate: "Create card", personaRefresh: "Refresh card", personaCreating: "Creating…",
+    personaHint: "Lumen summarizes only your saved profile and memories. This is sent to your configured AI provider and isn't saved separately.",
+    personaNeedsKnowledge: "Save a profile or at least one memory to create your card.", personaSaveFirst: "Save your profile edits first, then create the card.", personaError: "Could not create your persona card.",
+    personaSummary: "At a glance", personaPreferences: "Preferences", personaFocus: "Current focus", personaWorksBest: "How Lumen can help",
     privacyNote: "Stored in Lumen's DynamoDB table and sent to your configured AI provider with chats. Do not add secrets or highly sensitive details.",
     profileHeading: "Your profile", profilePlaceholder: "Add background, preferences, interests, or goals for Lumen...",
     upload: "Import .txt, .md, or .json", saveProfile: "Save profile", saved: "Saved",
@@ -1573,7 +1596,12 @@ const memoryManagerTranslations = {
     autoSaved: "Lumen saved {count} new memory item(s).", autoSaveError: "Automatic memory could not be updated."
   },
   'es-ES': {
-    title: "Perfil y memoria", subtitle: "Contexto personal sincronizado con tu cuenta.", close: "Cerrar",
+    title: "Perfil y memoria", launcher: "Memoria", personaLauncher: "Tarjeta personal", launcherHint: "Abre tu perfil, recuerdos y tarjeta personal guardados.", subtitle: "Contexto personal sincronizado con tu cuenta.", close: "Cerrar",
+    signInTitle: "Inicia sesión para usar la memoria", signInHint: "Los perfiles y recuerdos guardados pertenecen a tu cuenta. Cuando se configure el inicio de sesión, podrás crear una tarjeta personal a partir de ellos.",
+    personaHeading: "Tu tarjeta de perfil", personaCreate: "Crear tarjeta", personaRefresh: "Actualizar tarjeta", personaCreating: "Creando…",
+    personaHint: "Lumen resume solo tu perfil y tus recuerdos guardados. Se envía a tu proveedor de IA configurado y no se guarda por separado.",
+    personaNeedsKnowledge: "Guarda un perfil o al menos un recuerdo para crear tu tarjeta.", personaSaveFirst: "Guarda primero los cambios del perfil y luego crea la tarjeta.", personaError: "No se pudo crear tu tarjeta de perfil.",
+    personaSummary: "En pocas palabras", personaPreferences: "Preferencias", personaFocus: "Enfoque actual", personaWorksBest: "Cómo puede ayudarte Lumen",
     privacyNote: "Se guarda en la tabla DynamoDB de Lumen y se envía al proveedor de IA configurado con tus chats. No añadas secretos ni datos muy sensibles.",
     profileHeading: "Tu perfil", profilePlaceholder: "Añade contexto, preferencias, intereses u objetivos para Lumen...",
     upload: "Importar .txt, .md o .json", saveProfile: "Guardar perfil", saved: "Guardado",
@@ -1588,7 +1616,12 @@ const memoryManagerTranslations = {
     autoSaved: "Lumen guardó {count} recuerdo(s) nuevo(s).", autoSaveError: "No se pudo actualizar la memoria automática."
   },
   'fr-FR': {
-    title: "Profil et mémoire", subtitle: "Contexte personnel synchronisé avec votre compte.", close: "Fermer",
+    title: "Profil et mémoire", launcher: "Mémoire", personaLauncher: "Carte de profil", launcherHint: "Ouvrir votre profil, vos souvenirs et votre carte de profil.", subtitle: "Contexte personnel synchronisé avec votre compte.", close: "Fermer",
+    signInTitle: "Connectez-vous pour utiliser la mémoire", signInHint: "Les profils et souvenirs enregistrés sont liés à votre compte. Une fois la connexion configurée, vous pourrez en créer une carte de profil.",
+    personaHeading: "Votre carte de profil", personaCreate: "Créer la carte", personaRefresh: "Actualiser la carte", personaCreating: "Création…",
+    personaHint: "Lumen résume uniquement votre profil et vos souvenirs enregistrés. Ces données sont envoyées à votre fournisseur d’IA configuré et ne sont pas enregistrées séparément.",
+    personaNeedsKnowledge: "Enregistrez un profil ou au moins un souvenir pour créer votre carte.", personaSaveFirst: "Enregistrez d’abord les modifications du profil, puis créez la carte.", personaError: "Impossible de créer votre carte de profil.",
+    personaSummary: "En bref", personaPreferences: "Préférences", personaFocus: "Priorités actuelles", personaWorksBest: "Comment Lumen peut vous aider",
     privacyNote: "Stocké dans la table DynamoDB de Lumen et envoyé au fournisseur d’IA configuré avec vos conversations. N’ajoutez pas de secrets ni de données très sensibles.",
     profileHeading: "Votre profil", profilePlaceholder: "Ajoutez du contexte, des préférences, des centres d’intérêt ou des objectifs...",
     upload: "Importer .txt, .md ou .json", saveProfile: "Enregistrer le profil", saved: "Enregistré",
@@ -1603,7 +1636,12 @@ const memoryManagerTranslations = {
     autoSaved: "Lumen a enregistré {count} nouveau(x) souvenir(s).", autoSaveError: "La mémoire automatique n’a pas pu être mise à jour."
   },
   'de-DE': {
-    title: "Profil & Erinnerungen", subtitle: "Persönlicher Kontext wird mit deinem Konto synchronisiert.", close: "Schließen",
+    title: "Profil & Erinnerungen", launcher: "Erinnerungen", personaLauncher: "Persona-Karte", launcherHint: "Gespeichertes Profil, Erinnerungen und Persona-Karte öffnen.", subtitle: "Persönlicher Kontext wird mit deinem Konto synchronisiert.", close: "Schließen",
+    signInTitle: "Für Erinnerungen anmelden", signInHint: "Gespeicherte Profile und Erinnerungen gehören zu deinem Konto. Sobald die Anmeldung eingerichtet ist, kannst du daraus eine Persona-Karte erstellen.",
+    personaHeading: "Deine Persona-Karte", personaCreate: "Karte erstellen", personaRefresh: "Karte aktualisieren", personaCreating: "Wird erstellt…",
+    personaHint: "Lumen fasst nur dein gespeichertes Profil und deine Erinnerungen zusammen. Die Daten werden an deinen konfigurierten KI-Anbieter gesendet und nicht separat gespeichert.",
+    personaNeedsKnowledge: "Speichere ein Profil oder mindestens eine Erinnerung, um deine Karte zu erstellen.", personaSaveFirst: "Speichere zuerst deine Profiländerungen und erstelle dann die Karte.", personaError: "Deine Persona-Karte konnte nicht erstellt werden.",
+    personaSummary: "Auf einen Blick", personaPreferences: "Vorlieben", personaFocus: "Aktuelle Themen", personaWorksBest: "So kann Lumen helfen",
     privacyNote: "Wird in Lumens DynamoDB-Tabelle gespeichert und bei Chats an den konfigurierten KI-Anbieter gesendet. Keine Geheimnisse oder hochsensiblen Daten hinzufügen.",
     profileHeading: "Dein Profil", profilePlaceholder: "Ergänze Hintergrund, Vorlieben, Interessen oder Ziele für Lumen...",
     upload: ".txt, .md oder .json importieren", saveProfile: "Profil speichern", saved: "Gespeichert",
@@ -1618,7 +1656,12 @@ const memoryManagerTranslations = {
     autoSaved: "Lumen hat {count} neue Erinnerung(en) gespeichert.", autoSaveError: "Die automatische Erinnerung konnte nicht aktualisiert werden."
   },
   'ja-JP': {
-    title: "プロフィールとメモリー", subtitle: "サインインしたアカウントに個人コンテキストを同期します。", close: "閉じる",
+    title: "プロフィールとメモリー", launcher: "メモリー", personaLauncher: "ペルソナカード", launcherHint: "保存したプロフィール、メモリー、ペルソナカードを開きます。", subtitle: "サインインしたアカウントに個人コンテキストを同期します。", close: "閉じる",
+    signInTitle: "メモリーを使うにはサインインしてください", signInHint: "保存したプロフィールとメモリーはアカウントに紐づいています。サインイン設定後に、内容からペルソナカードを作成できます。",
+    personaHeading: "あなたのペルソナカード", personaCreate: "カードを作成", personaRefresh: "カードを更新", personaCreating: "作成中…",
+    personaHint: "保存したプロフィールとメモリーだけを要約します。設定済みのAIプロバイダーに送信され、別途保存されません。",
+    personaNeedsKnowledge: "カードを作成するにはプロフィールかメモリーを保存してください。", personaSaveFirst: "プロフィールの変更を保存してからカードを作成してください。", personaError: "ペルソナカードを作成できませんでした。",
+    personaSummary: "概要", personaPreferences: "好み", personaFocus: "現在の目標", personaWorksBest: "Lumenができること",
     privacyNote: "LumenのDynamoDBテーブルに保存され、チャット時に設定済みAIプロバイダーへ送信されます。秘密情報や非常に機微な情報は追加しないでください。",
     profileHeading: "プロフィール", profilePlaceholder: "Lumenに考慮してほしい背景、好み、興味、目標を入力...",
     upload: ".txt、.md、.jsonを読み込む", saveProfile: "プロフィールを保存", saved: "保存済み",
@@ -1634,7 +1677,12 @@ const memoryManagerTranslations = {
     autoSaved: "Lumenが新しいメモリーを{count}件保存しました。", autoSaveError: "自動メモリーを更新できませんでした。"
   },
   'it-IT': {
-    title: "Profilo e memoria", subtitle: "Contesto personale sincronizzato con il tuo account.", close: "Chiudi",
+    title: "Profilo e memoria", launcher: "Memoria", personaLauncher: "Scheda personale", launcherHint: "Apri il profilo, i ricordi e la scheda personale salvati.", subtitle: "Contesto personale sincronizzato con il tuo account.", close: "Chiudi",
+    signInTitle: "Accedi per usare la memoria", signInHint: "I profili e i ricordi salvati sono legati al tuo account. Dopo aver configurato l’accesso, potrai creare una scheda personale.",
+    personaHeading: "La tua scheda personale", personaCreate: "Crea scheda", personaRefresh: "Aggiorna scheda", personaCreating: "Creazione…",
+    personaHint: "Lumen riassume solo il profilo e i ricordi che hai salvato. I dati vengono inviati al provider IA configurato e non sono salvati separatamente.",
+    personaNeedsKnowledge: "Salva un profilo o almeno un ricordo per creare la scheda.", personaSaveFirst: "Salva prima le modifiche al profilo, poi crea la scheda.", personaError: "Impossibile creare la scheda personale.",
+    personaSummary: "In breve", personaPreferences: "Preferenze", personaFocus: "Obiettivi attuali", personaWorksBest: "Come può aiutarti Lumen",
     privacyNote: "Salvato nella tabella DynamoDB di Lumen e inviato al provider IA configurato insieme alle chat. Non aggiungere segreti o dati altamente sensibili.",
     profileHeading: "Il tuo profilo", profilePlaceholder: "Aggiungi contesto, preferenze, interessi o obiettivi per Lumen...",
     upload: "Importa .txt, .md o .json", saveProfile: "Salva profilo", saved: "Salvato",
