@@ -1,0 +1,136 @@
+/* Gooey bubble orb. Its colours come from the atmosphere: --circadian-glow-1/2/3 are set per phase (and
+   per theme) on .lumen-app-stage, so the bubbles always match the glow behind them. Registering them as
+   colours lets them cross-fade when the atmosphere changes. */
+@property --goo-a {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #38bdf8;
+}
+
+@property --goo-b {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #8b5cf6;
+}
+
+@property --goo-c {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #ec4899;
+}
+
+/* Orb state: size and punch only. The glow behind the orb carries the state colour. */
+.sphere-stage {
+  --goo-scale: 1;
+  --goo-sat: 1;
+  --goo-bright: 1;
+}
+
+.sphere-stage.listening {
+  --goo-scale: 1.06;
+  --goo-sat: 1.1;
+  --goo-bright: 1.06;
+}
+
+.sphere-stage.thinking {
+  --goo-scale: 0.86;
+  --goo-sat: 1.22;
+  --goo-bright: 1.1;
+}
+
+.sphere-stage.speaking {
+  --goo-scale: 1.1;
+  --goo-sat: 1.12;
+  --goo-bright: 1.1;
+}
+
+.sphere-stage.processing-doc {
+  --goo-scale: 0.92;
+  --goo-sat: 1.15;
+  --goo-bright: 1.08;
+}
+
+.sphere-stage.complete {
+  --goo-scale: 1.14;
+  --goo-sat: 1.2;
+  --goo-bright: 1.14;
+}
+
+.goo-orb {
+  position: absolute;
+  top: -15%;
+  left: -15%;
+  width: 130%;
+  height: 130%;
+  overflow: visible;
+  pointer-events: none;
+  transform: scale(calc(var(--goo-scale, 1) * var(--dynamic-audio-scale, 1)));
+  --goo-a: var(--circadian-glow-1, #38bdf8);
+  --goo-b: var(--circadian-glow-2, #8b5cf6);
+  --goo-c: var(--circadian-glow-3, #ec4899);
+  filter:
+    saturate(var(--goo-sat, 1))
+    brightness(var(--goo-bright, 1))
+    drop-shadow(0 10px 22px color-mix(in srgb, var(--goo-b) 38%, transparent));
+  transition:
+    transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1),
+    filter 0.8s ease,
+    --goo-a 0.9s ease,
+    --goo-b 0.9s ease,
+    --goo-c 0.9s ease;
+}
+
+.sphere-stage.listening .goo-orb,
+.sphere-stage.speaking .goo-orb {
+  transition:
+    transform 0.12s linear,
+    filter 0.8s ease,
+    --goo-a 0.9s ease,
+    --goo-b 0.9s ease,
+    --goo-c 0.9s ease;
+}
+
+.goo-orbit,
+.goo-counter {
+  animation: gooTurn var(--dur, 4s) ease-in-out var(--delay, 0s) infinite;
+  transform-box: view-box;
+}
+
+/* Turning back by exactly the same angle keeps each bubble's highlight pointing the same way while it orbits. */
+.goo-counter {
+  animation-direction: reverse;
+}
+
+.goo-body {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: gooBreathe 4.2s ease-in-out infinite;
+}
+
+.sphere-stage.thinking .goo-body {
+  animation-duration: 1.6s;
+}
+
+@keyframes gooTurn {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes gooBreathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.045); }
+}
+
+.goo-orb.is-offscreen .goo-orbit,
+.goo-orb.is-offscreen .goo-counter,
+.goo-orb.is-offscreen .goo-body {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .goo-orbit,
+  .goo-counter,
+  .goo-body {
+    animation: none;
+  }
+}

@@ -22,7 +22,6 @@ RUN npm install --omit=dev
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/server.js ./server.js
 COPY --from=builder /app/services ./services
-COPY --from=builder /app/src/components/ParticleOrb.css ./src/components/ParticleOrb.css
 
 EXPOSE 3000
 

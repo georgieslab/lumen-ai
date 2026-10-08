@@ -1,8 +1,6 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import { getTranslations } from '../utils/translations';
-import './ParticleOrb.css';
-
-const TOTAL_PARTICLES = 300;
+import GooOrb from './GooOrb';
 
 export default function AmbientSphere({
   isListening,
@@ -17,7 +15,6 @@ export default function AmbientSphere({
   activeLanguage = 'en-US',
   sphereLabels
 }) {
-  const particles = useMemo(() => Array.from({ length: TOTAL_PARTICLES }), []);
   const t = sphereLabels || getTranslations(activeLanguage).sphere;
 
   const getStatusText = () => {
@@ -63,9 +60,9 @@ export default function AmbientSphere({
         }}
       ></div>
 
-      {/* Main interactive neural 3D particle sphere */}
+      {/* Main interactive gooey bubble orb */}
       <div 
-        className="siri-sphere-wrap particle-orb-wrap"
+        className="siri-sphere-wrap goo-orb-wrap"
         onClick={onToggleListen}
         role="button"
         tabIndex={0}
@@ -79,20 +76,7 @@ export default function AmbientSphere({
         }}
       >
         <div className="siri-core">
-          {/* Inner ambient glow nucleus */}
-          <div className="orb-center-nucleus"></div>
-
-          {/* 3D Particle Orb Scene */}
-          <div className={`orb-3d-scene ${stateClass}`}>
-            <div className="orb-3d-wrap">
-              {particles.map((_, i) => (
-                <div key={i} className="c" />
-              ))}
-            </div>
-          </div>
-
-          {/* visionOS Specular Lens Refraction */}
-          <div className="siri-specular-lens"></div>
+          <GooOrb stateClass={stateClass} audioLevel={audioLevel} />
         </div>
       </div>
 

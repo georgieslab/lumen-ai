@@ -1,3 +1,7 @@
+import { isAbortError } from './mission';
+import { defaultPlan, sanitizePlan, topicFromRequest } from '../../services/missionPlan.js';
+import { defaultBrief, sanitizeBrief } from '../../services/pageBrief.js';
+
 const API_URL = import.meta.env.VITE_API_URL || '';
 
 /**
@@ -149,7 +153,7 @@ export async function clearUserMemory() {
 /**
  * Send voice transcript or text query along with optional image or PDF payload to Lumen backend
  */
-export async function converseWithLumen({ transcript, message, text, history = [], file = null, image = null, webMode = 'auto', language = 'en-US', voiceId = null, tone = 'friendly', responseStyle = 'concise', pageContext = null }) {
+export async function converseWithLumen({ transcript, message, text, history = [], file = null, image = null, webMode = 'auto', language = 'en-US', voiceId = null, tone = 'friendly', responseStyle = 'concise', pageContext = null, signal = null }) {
   const targetFile = file || image;
   const payload = {
     transcript: transcript || message || text || '',
@@ -179,6 +183,7 @@ export async function converseWithLumen({ transcript, message, text, history = [
   const response = await fetch(`${API_URL}/api/converse`, {
     method: 'POST',
     credentials: 'include',
+    signal,
     headers: {
       'Content-Type': 'application/json'
     },
@@ -209,6 +214,7 @@ export async function converseWithLumenStream({
   tone = 'friendly',
   responseStyle = 'concise',
   pageContext = null,
+  signal = null,
   onMemoryStatus,
   onToken,
   onToolStart,
@@ -216,7 +222,8 @@ export async function converseWithLumenStream({
   onAudio,
   onVoiceChange,
   onDone,
-  onError
+  onError,
+  onAbort
 }) {
   const targetFile = file || image;
   const payload = {
@@ -248,6 +255,7 @@ export async function converseWithLumenStream({
     const response = await fetch(`${API_URL}/api/converse/stream`, {
       method: 'POST',
       credentials: 'include',
+      signal,
       headers: {
         'Content-Type': 'application/json'
       },
@@ -319,6 +327,11 @@ export async function converseWithLumenStream({
       onDone({ replyText: '', widgets: [], toolsUsed: [], webSources: [] });
     }
   } catch (err) {
+    // Stop was pressed: end quietly. Retrying through the non-streaming route would run the whole request again.
+    if (isAbortError(err) || signal?.aborted) {
+      if (onAbort) onAbort();
+      return;
+    }
     console.warn("Stream failed, attempting standard converse fallback:", err.message);
     if (onError) onError(err);
     try {
@@ -333,7 +346,8 @@ export async function converseWithLumenStream({
         language,
         voiceId,
         tone,
-        responseStyle
+        responseStyle,
+        signal
       });
       if (fallbackData.memoryStatus && onMemoryStatus) {
         onMemoryStatus(fallbackData.memoryStatus);
@@ -351,6 +365,10 @@ export async function converseWithLumenStream({
         onDone(fallbackData);
       }
     } catch (fallbackErr) {
+      if (isAbortError(fallbackErr)) {
+        if (onAbort) onAbort();
+        return;
+      }
       if (onError) onError(fallbackErr);
     }
   }
@@ -363,6 +381,8 @@ export async function researchWithLumenStream({
   language = 'en-US',
   tone = 'friendly',
   responseStyle = 'concise',
+  plan = null,
+  signal = null,
   onMemoryStatus,
   onProgress,
   onDone
@@ -370,6 +390,7 @@ export async function researchWithLumenStream({
   const response = await fetch(`${API_URL}/api/research/stream`, {
     method: 'POST',
     credentials: 'include',
+    signal,
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       transcript,
@@ -379,7 +400,8 @@ export async function researchWithLumenStream({
       })),
       language,
       tone,
-      responseStyle
+      responseStyle,
+      plan
     })
   });
 
@@ -406,7 +428,10 @@ export async function researchWithLumenStream({
       completed = true;
       onDone(event);
     } else if (event.type === 'error') {
-      throw new Error(event.error || 'Research could not be completed.');
+      const error = new Error(event.error || 'Research could not be completed.');
+      error.stage = typeof event.stage === 'string' ? event.stage : null;
+      error.webSources = Array.isArray(event.webSources) ? event.webSources : [];
+      throw error;
     }
   };
 
@@ -425,6 +450,50 @@ export async function researchWithLumenStream({
   if (buffer.trim()) handleEvent(buffer);
   if (!completed) {
     throw new Error('The research service ended before returning a report.');
+  }
+}
+
+/**
+ * Ask Lumen for the plan it would follow for a research request. Nothing is searched yet; the caller
+ * shows the plan for approval. Falls back to the default plan if the service cannot be reached.
+ */
+export async function planResearchWithLumen({ transcript, language = 'en-US', signal = null }) {
+  try {
+    const response = await fetch(`${API_URL}/api/mission/plan`, {
+      method: 'POST',
+      credentials: 'include',
+      signal,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ transcript, language })
+    });
+    if (!response.ok) throw new Error(`Planning failed (${response.status})`);
+    const data = await response.json();
+    return sanitizePlan(data.plan, topicFromRequest(transcript));
+  } catch (error) {
+    if (isAbortError(error)) throw error;
+    return defaultPlan(topicFromRequest(transcript));
+  }
+}
+
+/**
+ * Ask Lumen for the design brief it would follow to build a page. Nothing is written yet; the caller shows
+ * the brief for approval. Falls back to a default brief if the service cannot be reached.
+ */
+export async function planPageWithLumen({ transcript, language = 'en-US', signal = null }) {
+  try {
+    const response = await fetch(`${API_URL}/api/mission/page-brief`, {
+      method: 'POST',
+      credentials: 'include',
+      signal,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ transcript, language })
+    });
+    if (!response.ok) throw new Error(`Planning failed (${response.status})`);
+    const data = await response.json();
+    return sanitizeBrief(data.brief, transcript);
+  } catch (error) {
+    if (isAbortError(error)) throw error;
+    return defaultBrief(transcript);
   }
 }
 

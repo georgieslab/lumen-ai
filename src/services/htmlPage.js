@@ -1,11 +1,33 @@
 ﻿const HTML_FENCE = /```html[^\S\n]*\n([\s\S]*?)```/gi;
 
+// Models sometimes open the block twice ("```html" then "```html" again) or run out of room before
+// closing it. Either way the page should still be found, so tidy the fences before parsing.
+export function repairHtmlFences(text) {
+  let source = String(text || '').replace(/(```html[^\S\n]*\n)(?:[^\S\n]*```html[^\S\n]*\n)+/gi, '$1');
+  const opens = (source.match(/```html/gi) || []).length;
+  const fences = (source.match(/```/g) || []).length;
+  if (opens > 0 && fences % 2 === 1) source = `${source.replace(/\s+$/, '')}\n\`\`\``;
+  return source;
+}
+
+// While a reply is still streaming, an opened HTML block is half-written code. Show only the words before it
+// and report how much code has arrived, so the chat can say "writing the page" instead of showing raw markup.
+export function hideStreamingHtml(text) {
+  const source = String(text || '');
+  const open = source.search(/```html/i);
+  if (open < 0) return { text: source, writing: false, codeChars: 0 };
+  const afterFence = source.slice(open).replace(/^```html[^\S\n]*\n?/i, '');
+  const closed = afterFence.indexOf('```');
+  if (closed >= 0) return { text: source, writing: false, codeChars: closed };
+  return { text: source.slice(0, open).trimEnd(), writing: true, codeChars: afterFence.length };
+}
+
 // Splits assistant text into plain-text and generated-HTML segments.
 export function splitHtmlBlocks(text) {
   const segments = [];
   let last = 0;
   let match;
-  const source = String(text || '');
+  const source = repairHtmlFences(text);
   HTML_FENCE.lastIndex = 0;
   while ((match = HTML_FENCE.exec(source)) !== null) {
     if (match.index > last) segments.push({ type: 'text', content: source.slice(last, match.index) });

@@ -2,6 +2,10 @@
 import { fetchLiveWeatherDirect } from '../services/api';
 import { getTranslations } from '../utils/translations';
 import HtmlPageCard from './HtmlPageCard';
+import { MissionCard, MissionActivity, writingLabel } from './MissionCard';
+import PlanCard from './PlanCard';
+import BriefCard from './BriefCard';
+import { hideStreamingHtml } from '../services/htmlPage';
 import { splitHtmlBlocks } from '../services/htmlPage';
 
 function parseFormattedText(text) {
@@ -40,7 +44,7 @@ function parseFormattedText(text) {
   return parts;
 }
 
-function getFollowUpKeys(message, previousUserMessage) {
+export function getFollowUpKeys(message, previousUserMessage) {
   if (!previousUserMessage || message.isError) return [];
 
   const widgetTypes = new Set(
@@ -659,7 +663,7 @@ export function LiveJobsRadarCard({
   );
 }
 
-function FormattedBubbleText({ text }) {
+export function FormattedBubbleText({ text }) {
   if (!text) return null;
   const parts = parseFormattedText(text);
 
@@ -699,7 +703,7 @@ function FormattedBubbleText({ text }) {
   );
 }
 
-function CopyAnswerButton({ text }) {
+export function CopyAnswerButton({ text }) {
   const [copied, setCopied] = React.useState(false);
   const copy = async () => {
     try {
@@ -722,6 +726,9 @@ function CopyAnswerButton({ text }) {
   );
 }
 
+const STOP_LABELS = { en: 'Stop', es: 'Detener', fr: 'Arrêter', de: 'Stoppen', ja: '停止', it: 'Ferma' };
+const stopLabel = (language) => STOP_LABELS[String(language || 'en').slice(0, 2)] || STOP_LABELS.en;
+
 export default function ConversationFeed({
   messages,
   liveTranscript,
@@ -729,14 +736,32 @@ export default function ConversationFeed({
   onClearHistory,
   onExportPdf,
   onSendMessage,
+  onStop,
+  onPlanStart,
+  onPlanCancel,
+  onBriefBuild,
+  onBriefSkip,
+  onBriefCancel,
   activeLanguage = 'en-US'
 }) {
   const t = getTranslations(activeLanguage).feed;
   const feedEndRef = useRef(null);
+  const stageRef = useRef(null);
 
   useEffect(() => {
+    // A plan waiting for approval is read from its top; everything else follows the newest message.
+    if (messages[messages.length - 1]?.planCard || messages[messages.length - 1]?.briefCard) {
+      const cards = stageRef.current?.querySelectorAll('.plan-card');
+      if (cards?.length) {
+        cards[cards.length - 1].scrollIntoView({ behavior: 'smooth', block: 'start' });
+        return;
+      }
+    }
     feedEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, liveTranscript, isThinking]);
+
+  const lastMessage = messages[messages.length - 1];
+  const showsOwnProgress = Boolean(lastMessage?.isStreaming && lastMessage.mission?.steps?.length);
 
   return (
     <div className="conversation-feed-card">
@@ -766,7 +791,7 @@ export default function ConversationFeed({
         </div>
       </div>
 
-      <div className="feed-scroll-stage">
+      <div className="feed-scroll-stage" ref={stageRef}>
         {messages.map((msg, messageIndex) => {
           const previousUserMessage = messages
             .slice(0, messageIndex)
@@ -775,9 +800,16 @@ export default function ConversationFeed({
           const followUpKeys = messageIndex === messages.length - 1 &&
             msg.role === 'assistant' &&
             !msg.isStreaming &&
+            !msg.planCard &&
+            !msg.briefCard &&
+            !msg.isStopped &&
+            !msg.isNotice &&
             !isThinking
             ? getFollowUpKeys(msg, previousUserMessage)
             : [];
+
+          // While a page is being written, show its progress instead of half-finished code.
+          const streamView = msg.role === 'assistant' && msg.isStreaming ? hideStreamingHtml(msg.text) : null;
 
           return (
           <div key={msg.id} className={`dialogue-bubble ${msg.role}`}>
@@ -814,7 +846,14 @@ export default function ConversationFeed({
               ? splitHtmlBlocks(msg.text).map((seg, i) => seg.type === 'html'
                 ? <HtmlPageCard key={i} html={seg.content} />
                 : <FormattedBubbleText key={i} text={seg.content} />)
-              : <FormattedBubbleText text={msg.text} />}
+              : <FormattedBubbleText text={streamView ? streamView.text : msg.text} />}
+            {streamView?.writing && (
+              <div className="page-writing" role="status" aria-live="polite">
+                <span className="research-progress-beacon" />
+                <span>{writingLabel(activeLanguage)}</span>
+                <span className="page-writing-size">{streamView.codeChars >= 1000 ? `${(streamView.codeChars / 1000).toFixed(1)}k` : streamView.codeChars}</span>
+              </div>
+            )}
             {msg.taskProgress && (
               <div
                 className="research-progress"
@@ -838,9 +877,35 @@ export default function ConversationFeed({
                 </div>
               </div>
             )}
-            {msg.isStreaming && (
+            {msg.planCard && (
+              <PlanCard
+                key={msg.id}
+                plan={msg.planCard.plan}
+                language={activeLanguage}
+                onStart={(plan) => onPlanStart?.(msg.id, plan)}
+                onCancel={() => onPlanCancel?.(msg.id)}
+              />
+            )}
+            {msg.briefCard && (
+              <BriefCard
+                key={msg.id}
+                brief={msg.briefCard.brief}
+                language={activeLanguage}
+                onBuild={(brief) => onBriefBuild?.(msg.id, brief)}
+                onSkip={() => onBriefSkip?.(msg.id)}
+                onCancel={() => onBriefCancel?.(msg.id)}
+              />
+            )}
+            {msg.mission && <MissionCard mission={msg.mission} language={activeLanguage} />}
+            {msg.isStreaming && !msg.mission?.steps?.length && (
               <span className="streaming-cursor-pulse" title={t.streamingAria} aria-hidden="true">▍</span>
             )}
+            {msg.isStreaming && onStop && (
+              <button type="button" className="mission-stop-btn" onClick={onStop} title="Esc">
+                <span aria-hidden="true">■</span> {stopLabel(activeLanguage)}
+              </button>
+            )}
+            {!msg.isStreaming && msg.activity && <MissionActivity activity={msg.activity} language={activeLanguage} />}
 
             {/* Real-Time Interactive Live Data & Document Widgets */}
             {Array.isArray(msg.widgets) && msg.widgets.length > 0 && (
@@ -923,7 +988,7 @@ export default function ConversationFeed({
           </div>
         )}
 
-        {isThinking && (
+        {isThinking && !showsOwnProgress && (
           <div className="dialogue-bubble assistant thinking">
             <span className="bubble-speaker">{t.lumen}</span>
             <div className="thinking-dots">

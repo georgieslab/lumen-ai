@@ -8,6 +8,22 @@
  */
 
 import { URL } from 'url';
+import { safeFetchText } from './urlGuard.js';
+
+function linkedAbortController(parentSignal, timeoutMs) {
+  const controller = new AbortController();
+  const abortFromParent = () => controller.abort(parentSignal?.reason);
+  if (parentSignal?.aborted) abortFromParent();
+  else parentSignal?.addEventListener('abort', abortFromParent, { once: true });
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  return {
+    signal: controller.signal,
+    cleanup() {
+      clearTimeout(timeout);
+      parentSignal?.removeEventListener('abort', abortFromParent);
+    }
+  };
+}
 
 /**
  * SSRF Guard: Validates that target URL is a public web resource
@@ -94,18 +110,19 @@ export class WebBrowserTool {
   /**
    * Search the live web (DuckDuckGo fallback to Wikipedia)
    */
-  async search(query, maxResults = 4) {
-    return searchDuckDuckGo(query, maxResults);
+  async search(query, maxResults = 4, options = {}) {
+    return searchDuckDuckGo(query, maxResults, options);
   }
 
   /**
    * Navigate to a URL and extract clean text, headings, and metadata
    */
-  async navigateAndExtract(targetUrl) {
+  async navigateAndExtract(targetUrl, options = {}) {
     return fetchUrlContent(targetUrl, {
       timeoutMs: this.timeoutMs,
       maxContentLength: this.maxContentLength,
-      userAgent: this.userAgent
+      userAgent: this.userAgent,
+      ...options
     });
   }
 }
@@ -115,32 +132,30 @@ export const webBrowser = new WebBrowserTool();
 /**
  * Perform a DuckDuckGo web search without any API keys
  */
-export async function searchDuckDuckGo(query, maxResults = 4) {
+export async function searchDuckDuckGo(query, maxResults = 4, options = {}) {
   const cleanQuery = query.replace(/[^\w\s\-\.\,\?\!\'\"]/g, ' ').trim();
   if (!cleanQuery) return [];
 
   const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(cleanQuery)}`;
   
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 7000);
+  const linked = linkedAbortController(options.signal, 7000);
 
   try {
-    const res = await fetch(url, {
-      signal: controller.signal,
+    const res = await safeFetchText(url, {
+      signal: linked.signal,
+      maxBytes: 1_000_000,
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.9'
       }
     });
-    clearTimeout(timeout);
-
     if (!res.ok) {
       console.warn(`DuckDuckGo returned status ${res.status}`);
-      return await searchWikipedia(cleanQuery, maxResults);
+      return await searchWikipedia(cleanQuery, maxResults, options);
     }
 
-    const html = await res.text();
+    const html = res.text;
     const results = [];
     const sections = html.split(/<div class="[^"]*web-result[^"]*"/i);
 
@@ -170,23 +185,30 @@ export async function searchDuckDuckGo(query, maxResults = 4) {
     }
 
     // Fallback to Wikipedia search API if DuckDuckGo HTML is challenged/empty
-    return await searchWikipedia(cleanQuery, maxResults);
+    return await searchWikipedia(cleanQuery, maxResults, options);
   } catch (err) {
-    clearTimeout(timeout);
+    if (options.signal?.aborted) throw err;
     console.warn('DuckDuckGo search fallback to Wikipedia:', err.message);
-    return await searchWikipedia(cleanQuery, maxResults);
+    return await searchWikipedia(cleanQuery, maxResults, options);
+  } finally {
+    linked.cleanup();
   }
 }
 
 /**
  * Search Wikipedia public API for facts, people, history, science, events
  */
-export async function searchWikipedia(query, maxResults = 4) {
+export async function searchWikipedia(query, maxResults = 4, options = {}) {
+  const linked = linkedAbortController(options.signal, 7000);
   try {
     const wikiUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&format=json&utf8=`;
-    const res = await fetch(wikiUrl);
+    const res = await safeFetchText(wikiUrl, {
+      signal: linked.signal,
+      maxBytes: 500_000,
+      headers: { Accept: 'application/json' }
+    });
     if (!res.ok) return [];
-    const data = await res.json();
+    const data = JSON.parse(res.text);
     const hits = data.query?.search || [];
     return hits.slice(0, maxResults).map(h => ({
       title: h.title,
@@ -194,8 +216,11 @@ export async function searchWikipedia(query, maxResults = 4) {
       url: `https://en.wikipedia.org/wiki/${encodeURIComponent(h.title.replace(/ /g, '_'))}`
     }));
   } catch (err) {
+    if (options.signal?.aborted) throw err;
     console.warn('Wikipedia search error:', err.message);
     return [];
+  } finally {
+    linked.cleanup();
   }
 }
 
@@ -221,27 +246,26 @@ export async function fetchUrlContent(targetUrl, options = {}) {
   const maxLen = options.maxContentLength || 3500;
   const userAgent = options.userAgent || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  const linked = linkedAbortController(options.signal, timeoutMs);
 
   try {
-    const res = await fetch(cleanUrl, {
-      signal: controller.signal,
+    // safeFetchText re-checks the address (and what the name resolves to) on every redirect and caps the size.
+    const res = await safeFetchText(cleanUrl, {
+      signal: linked.signal,
+      maxBytes: 1_500_000,
       headers: {
         'User-Agent': userAgent,
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
       }
     });
-    clearTimeout(timeout);
-
     if (!res.ok) throw new Error(`HTTP status ${res.status}: ${res.statusText}`);
 
-    const contentType = res.headers.get('content-type') || '';
+    const contentType = res.contentType;
     if (!contentType.includes('text/html') && !contentType.includes('text/plain') && !contentType.includes('application/json')) {
       return { success: false, error: `Unsupported media format: ${contentType}`, url: cleanUrl };
     }
 
-    const html = await res.text();
+    const html = res.text;
 
     // Strip scripts, styles, svg, and HTML comments
     const cleaned = html
@@ -292,14 +316,18 @@ export async function fetchUrlContent(targetUrl, options = {}) {
       timestamp: new Date().toISOString()
     };
   } catch (err) {
-    clearTimeout(timeout);
+    if (options.signal?.aborted) {
+      return { success: false, url: cleanUrl, title: cleanUrl, error: 'Request cancelled.' };
+    }
     console.warn(`URL Reader error for ${cleanUrl}:`, err.message);
     return {
       success: false,
       url: cleanUrl,
       title: cleanUrl,
-      error: err.message
+      error: err.name === 'UrlBlockedError' ? `URL blocked by security guard: ${err.message}` : err.message
     };
+  } finally {
+    linked.cleanup();
   }
 }
 
@@ -348,7 +376,7 @@ export async function getWebGroundingContext(promptText, options = {}) {
   const detectedUrl = extractUrlFromText(promptText);
   if (detectedUrl) {
     console.log(`[Web Engine] Detected URL: ${detectedUrl}. Reading page content...`);
-    const pageData = await fetchUrlContent(detectedUrl);
+    const pageData = await fetchUrlContent(detectedUrl, options);
     if (pageData.success && pageData.content) {
       return {
         type: 'url_reader',
@@ -376,7 +404,7 @@ export async function getWebGroundingContext(promptText, options = {}) {
   }
 
   console.log(`[Web Engine] Searching DuckDuckGo for: "${cleanQuery}"...`);
-  const searchResults = await searchDuckDuckGo(cleanQuery, 4);
+  const searchResults = await searchDuckDuckGo(cleanQuery, 4, options);
 
   if (!searchResults || searchResults.length === 0) {
     return null;

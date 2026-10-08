@@ -215,8 +215,8 @@ export default function TechStackModal({
                         <span className="card-icon">🔮</span>
                         <span className="card-tag">Web Audio API</span>
                       </div>
-                      <h5>3D Ambient Particle Sphere</h5>
-                      <p>300 orbital nodes pulsating in exact sync with acoustic frequency energy.</p>
+                      <h5>Gooey Bubble Orb</h5>
+                      <p>Glossy SVG bubbles that melt together and pinch apart, speeding up with acoustic frequency energy.</p>
                     </div>
                   </div>
                 </div>
@@ -570,9 +570,9 @@ export default function TechStackModal({
                 </div>
 
                 <div className="spec-card">
-                  <h4>3D Particle Scene</h4>
-                  <div className="spec-value">300 Spheroid Nodes</div>
-                  <p className="spec-desc">Hardware-accelerated CSS 3D spherical projection responding to vocal acoustic energy.</p>
+                  <h4>Gooey Bubble Scene</h4>
+                  <div className="spec-value">9 Metaball Bubbles</div>
+                  <p className="spec-desc">SVG goo filter over CSS-animated circles; playback speed eases with the state and vocal acoustic energy.</p>
                 </div>
               </div>
             </div>

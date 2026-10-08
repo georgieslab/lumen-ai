@@ -1,0 +1,318 @@
+/* Atmosphere + Visual theme: small icon-only controls in the top bar */
+.ambient-bar {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.05);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+/* On phones the action group hugs the logo; let it fill the bar and keep this pair at the right-hand end,
+   next to the account buttons. */
+@media (max-width: 768px) {
+  .lumen-header .mobile-header-actions {
+    flex: 1 1 auto;
+  }
+
+  .lumen-header .mobile-header-actions .ambient-bar {
+    order: 3;
+    margin-left: auto;
+  }
+}
+
+.ambient-btn {
+  --ambient-accent: #7dd3fc;
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  color: var(--ambient-accent);
+  background: transparent;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease, color 0.5s ease;
+}
+
+.ambient-btn svg {
+  width: 22px;
+  height: 22px;
+  overflow: visible;
+}
+
+.ambient-btn:hover {
+  transform: translateY(-1px) scale(1.08);
+  border-color: rgba(255, 255, 255, 0.3);
+  box-shadow: 0 0 12px rgba(125, 190, 255, 0.35);
+}
+
+.ambient-btn:active {
+  transform: scale(0.92);
+}
+
+.ambient-btn:focus-visible {
+  outline: 2px solid rgba(160, 200, 255, 0.95);
+  outline-offset: 1px;
+}
+
+.atmosphere-btn.phase-morning {
+  --ambient-accent: #fbbf24;
+  background: rgba(245, 158, 11, 0.14);
+  border-color: rgba(245, 158, 11, 0.4);
+}
+
+.atmosphere-btn.phase-day {
+  --ambient-accent: #38bdf8;
+  background: rgba(6, 182, 212, 0.14);
+  border-color: rgba(6, 182, 212, 0.4);
+}
+
+.atmosphere-btn.phase-evening {
+  --ambient-accent: #f472b6;
+  background: rgba(236, 72, 153, 0.14);
+  border-color: rgba(236, 72, 153, 0.4);
+}
+
+.atmosphere-btn.phase-night {
+  --ambient-accent: #c084fc;
+  background: rgba(139, 92, 246, 0.16);
+  border-color: rgba(139, 92, 246, 0.4);
+}
+
+/* One label under the pair: the hovered or focused button, or the new setting for a moment after a tap */
+.ambient-tip {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 60;
+  padding: 0.36rem 0.65rem;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 10px;
+  color: var(--text-primary, #fff);
+  background: rgba(8, 12, 28, 0.95);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35);
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+  animation: ambient-tip-in 0.16s ease-out both;
+}
+
+.ambient-tip.is-flash {
+  animation: ambient-flash 1.9s ease both;
+}
+
+@keyframes ambient-tip-in {
+  from { opacity: 0; transform: translateY(-3px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes ambient-flash {
+  0% { opacity: 0; transform: translateY(-5px); }
+  10%, 80% { opacity: 1; transform: none; }
+  100% { opacity: 0; transform: translateY(-3px); }
+}
+
+/* ---- Atmosphere scene ---- */
+.atmo-icon {
+  --sun: #fde047;
+}
+
+.atmo-icon.phase-morning { --sun: #fbbf24; }
+.atmo-icon.phase-day { --sun: #fde047; }
+.atmo-icon.phase-evening { --sun: #fb7185; }
+
+.atmo-ring {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.1;
+  stroke-linecap: round;
+  stroke-dasharray: 1.4 3.8;
+  opacity: 0;
+  transform-box: view-box;
+  transform-origin: 16px 16px;
+  transition: opacity 0.5s ease;
+}
+
+.atmo-icon.is-auto .atmo-ring {
+  opacity: 0.65;
+  animation: ambient-spin 22s linear infinite;
+}
+
+.atmo-horizon {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  opacity: 0.9;
+}
+
+.atmo-water {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.2;
+  stroke-linecap: round;
+  opacity: 0.4;
+}
+
+.atmo-glow {
+  opacity: 0;
+  transition: opacity 0.6s ease;
+}
+
+.atmo-icon.phase-morning .atmo-glow,
+.atmo-icon.phase-evening .atmo-glow {
+  opacity: 0.85;
+  animation: ambient-breathe 3.4s ease-in-out infinite;
+}
+
+.atmo-sun {
+  transition: transform 0.85s cubic-bezier(0.34, 1.3, 0.64, 1), opacity 0.5s ease;
+}
+
+.atmo-icon.phase-morning .atmo-sun { transform: translateY(8.5px); }
+.atmo-icon.phase-evening .atmo-sun { transform: translateY(9.5px); }
+.atmo-icon.phase-night .atmo-sun { transform: translateY(16px); opacity: 0; }
+
+.atmo-sun-disc {
+  fill: var(--sun);
+  transition: fill 0.6s ease;
+}
+
+.atmo-sun-shine {
+  fill: #fff;
+  opacity: 0.45;
+}
+
+.atmo-rays {
+  transform-box: view-box;
+  transform-origin: 16px 12px;
+  animation: ambient-spin 18s linear infinite;
+}
+
+.atmo-rays path {
+  fill: none;
+  stroke: var(--sun);
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  transition: stroke 0.6s ease;
+}
+
+.atmo-icon.phase-morning .atmo-rays,
+.atmo-icon.phase-evening .atmo-rays {
+  animation: ambient-spin 30s linear infinite, ambient-breathe 3.4s ease-in-out infinite;
+}
+
+.atmo-moon {
+  fill: #e9d5ff;
+  opacity: 0;
+  transform-box: view-box;
+  transform-origin: 16px 11px;
+  transform: translate(-5px, 7px) scale(0.7);
+  transition: transform 0.85s cubic-bezier(0.34, 1.3, 0.64, 1), opacity 0.5s ease;
+}
+
+.atmo-icon.phase-night .atmo-moon {
+  opacity: 1;
+  transform: none;
+}
+
+.atmo-star {
+  fill: #fff;
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: opacity 0.6s ease;
+}
+
+.atmo-icon.phase-night .atmo-star {
+  opacity: 1;
+  animation: ambient-twinkle 2.4s ease-in-out infinite;
+}
+
+/* ---- Theme palette ---- */
+.palette-body {
+  fill: rgba(255, 255, 255, 0.08);
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+}
+
+.palette-sweep {
+  fill: rgba(255, 255, 255, 0.32);
+  transform: skewX(-18deg);
+  transform-box: fill-box;
+  animation: ambient-sweep 5s ease-in-out infinite;
+}
+
+.paint {
+  stroke: rgba(255, 255, 255, 0.55);
+  stroke-width: 0.7;
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: fill 0.5s ease;
+  animation:
+    ambient-pop 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) var(--d, 0s) backwards,
+    ambient-bob 2.8s ease-in-out calc(var(--d, 0s) + 0.55s) infinite;
+}
+
+.paint-1 { fill: var(--c1); }
+.paint-2 { fill: var(--c2); }
+.paint-3 { fill: var(--c3); }
+.paint-4 { fill: var(--c4); }
+
+@keyframes ambient-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes ambient-breathe {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+@keyframes ambient-twinkle {
+  0%, 100% { opacity: 0.35; transform: scale(0.7); }
+  50% { opacity: 1; transform: scale(1.35); }
+}
+
+@keyframes ambient-sweep {
+  0%, 55% { transform: translateX(0) skewX(-18deg); }
+  100% { transform: translateX(46px) skewX(-18deg); }
+}
+
+@keyframes ambient-pop {
+  from { transform: scale(0); }
+  to { transform: scale(1); }
+}
+
+@keyframes ambient-bob {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.16); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .atmo-ring,
+  .atmo-rays,
+  .atmo-glow,
+  .atmo-star,
+  .palette-sweep,
+  .paint,
+  .ambient-tip {
+    animation: none;
+  }
+
+  .ambient-btn,
+  .atmo-sun,
+  .atmo-moon {
+    transition: none;
+  }
+}

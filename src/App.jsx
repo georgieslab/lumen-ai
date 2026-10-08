@@ -10,8 +10,25 @@ import WorkspaceShareModal from './components/WorkspaceShareModal';
 import SharedTabChip from './components/SharedTabChip';
 import OpenLinkApproval from './components/OpenLinkApproval';
 import EmbeddedTabPanel from './components/EmbeddedTabPanel';
+import AmbientControls from './components/AmbientControls';
 import HtmlWindowPanel from './components/HtmlWindowPanel';
 import OpenWebPageButton from './components/OpenWebPageButton';
+import { stoppedMessage } from './components/MissionCard';
+import { planLabels } from './components/PlanCard';
+import { briefLabels } from './components/BriefCard';
+import { isPageRequest } from '../services/replyBudget.js';
+import { buildPagePrompt } from '../services/pageBrief.js';
+import {
+  activityFromTools,
+  applyProgress,
+  applyToolStart,
+  createMission,
+  finishMission,
+  isAbortError,
+  markWriting,
+  missionActivity,
+  researchTopic
+} from './services/mission';
 import { splitHtmlBlocks } from './services/htmlPage';
 import { extractOpenLinkRequest } from './services/openLink';
 import { captureSharedTabFrame, isTabCaptureSupported } from './services/tabCapture';
@@ -19,7 +36,7 @@ import WebcamLensModal from './components/WebcamLensModal';
 import LumenVoiceModal, { VOICE_PERSONAS } from './components/LumenVoiceModal';
 import TechStackModal from './components/TechStackModal';
 import { useAudioVisualizer } from './hooks/useAudioVisualizer';
-import { converseWithLumenStream, researchWithLumenStream, processFile, fetchAmbientData, exportConversationPdfDirect, getAuthSession } from './services/api';
+import { converseWithLumenStream, researchWithLumenStream, planResearchWithLumen, planPageWithLumen, processFile, fetchAmbientData, exportConversationPdfDirect, getAuthSession } from './services/api';
 import { getTranslations, formatString, DEFAULT_VOICES_BY_LANG } from './utils/translations';
 
 function getCircadianPhase() {
@@ -590,6 +607,20 @@ export default function App() {
 
   const transcriptRef = useRef('');
   const sendRef = useRef(null);
+  const runAbortRef = useRef(null);
+
+  // Stop whatever Lumen is currently working on (the Stop button and Escape both land here).
+  const handleStopRun = () => {
+    runAbortRef.current?.abort();
+  };
+
+  useEffect(() => {
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape' && runAbortRef.current) runAbortRef.current.abort();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
 
   useEffect(() => {
     sendRef.current = handleSendMessage;
@@ -653,7 +684,11 @@ export default function App() {
   }, [activeLanguage]);
 
   // Dispatch message to backend with Real-Time SSE Token Streaming
-  const handleSendMessage = async (textToSend, filePayload = selectedFile) => {
+  const handleSendMessage = async (textToSend, filePayload = selectedFile, options = {}) => {
+    // Set when the user approved a research plan or a page brief: the question is already in the conversation.
+    const approvedPlan = options.plan || null;
+    const approvedBrief = options.brief || null;
+    const resumed = Boolean(options.baseMessages);
     unlockAudio();
     const userPrompt = (textToSend || liveTranscript || textInput).trim();
     if (!userPrompt && !filePayload) return;
@@ -673,24 +708,83 @@ export default function App() {
       timestamp: Date.now()
     };
 
-    setPendingOpenUrl(extractOpenLinkRequest(userPrompt));
-    const nextMessages = [...messages, userMessage];
+    if (!resumed) setPendingOpenUrl(extractOpenLinkRequest(userPrompt));
+    const nextMessages = resumed ? options.baseMessages : [...messages, userMessage];
     persistMessages(nextMessages);
 
-    setLiveTranscript('');
-    setTextInput('');
-    if (filePayload) {
-      setProcessingFile(filePayload);
+    if (!resumed) {
+      setLiveTranscript('');
+      setTextInput('');
+      if (filePayload) {
+        setProcessingFile(filePayload);
+      }
+      setSelectedFile(null);
     }
-    setSelectedFile(null);
     setIsThinking(true);
     setIsTaskComplete(false);
+
+    // A research request first becomes a plan the user reviews; nothing is searched until they approve it.
+    if (!resumed && isResearchReportRequest(userPrompt) && !filePayload) {
+      const planController = new AbortController();
+      runAbortRef.current = planController;
+      try {
+        const plan = await planResearchWithLumen({ transcript: userPrompt, language: activeLanguage, signal: planController.signal });
+        persistMessages([...nextMessages, {
+          id: `plan-${Date.now()}`,
+          role: 'assistant',
+          text: '',
+          planCard: { prompt: userPrompt, plan },
+          timestamp: Date.now()
+        }]);
+      } catch (err) {
+        if (!isAbortError(err)) console.warn('Could not prepare a research plan:', err);
+      } finally {
+        if (runAbortRef.current === planController) runAbortRef.current = null;
+        setIsThinking(false);
+      }
+      return;
+    }
+
+    // A request to build a page first becomes a design brief the user reviews, unless they are changing a page
+    // Lumen just wrote. Nothing is written until they approve it.
+    const editingPage = messages.slice(-3).some((message) => message.role === 'assistant' && /```html/i.test(message.text || ''));
+    if (!resumed && !filePayload && !editingPage && isPageRequest(userPrompt)) {
+      const briefController = new AbortController();
+      runAbortRef.current = briefController;
+      try {
+        const brief = await planPageWithLumen({ transcript: userPrompt, language: activeLanguage, signal: briefController.signal });
+        persistMessages([...nextMessages, {
+          id: `brief-${Date.now()}`,
+          role: 'assistant',
+          text: '',
+          briefCard: { prompt: userPrompt, brief },
+          timestamp: Date.now()
+        }]);
+      } catch (err) {
+        if (!isAbortError(err)) console.warn('Could not prepare a design brief:', err);
+      } finally {
+        if (runAbortRef.current === briefController) runAbortRef.current = null;
+        setIsThinking(false);
+      }
+      return;
+    }
 
     // Initialize Assistant Streaming Message Bubble
     const assistantMsgId = `ast-${Date.now()}`;
     let accumulatedText = "";
     const accumulatedWidgets = [];
     let audioPlayed = false;
+
+    const isResearchRun = isResearchReportRequest(userPrompt) && !filePayload;
+    const controller = new AbortController();
+    runAbortRef.current = controller;
+    const startedAt = Date.now();
+    let mission = isResearchRun
+      ? createMission({ kind: 'research', title: researchTopic(userPrompt), now: startedAt })
+      : approvedBrief
+        ? createMission({ kind: 'page', title: approvedBrief.title, now: startedAt })
+        : null;
+    let runFinished = false;
 
     const assistantPlaceholder = {
       id: assistantMsgId,
@@ -700,12 +794,46 @@ export default function App() {
       webType: null,
       widgets: [],
       isStreaming: true,
+      mission,
       timestamp: Date.now()
     };
 
     setMessages([...nextMessages, assistantPlaceholder]);
 
+    const updateMission = (next) => {
+      if (next === mission) return;
+      mission = next;
+      setMessages(prev => prev.map(m => m.id === assistantMsgId ? { ...m, mission: next } : m));
+    };
+
+    // The user pressed Stop (or Escape): keep what has streamed so far and record that the run was stopped.
+    const finishStopped = () => {
+      if (runFinished) return;
+      runFinished = true;
+      if (window.speechSynthesis) window.speechSynthesis.cancel();
+      if (currentAudioRef.current) currentAudioRef.current.pause();
+      setIsSpeaking(false);
+      const stopped = finishMission(mission || createMission({ kind: 'chat', now: startedAt }), { status: 'stopped' });
+      persistMessages([...nextMessages, {
+        id: assistantMsgId,
+        role: 'assistant',
+        text: accumulatedText || stoppedMessage(activeLanguage),
+        webSources: [],
+        webType: accumulatedWidgets.length ? 'live_widget' : null,
+        widgets: accumulatedWidgets,
+        isStreaming: false,
+        isStopped: true,
+        activity: missionActivity(stopped),
+        timestamp: Date.now()
+      }]);
+      setIsThinking(false);
+      setIsTaskComplete(false);
+      setProcessingFile(null);
+    };
+
     const completeResponse = (data) => {
+      if (runFinished) return;
+      runFinished = true;
       setIsThinking(false);
       if (data.voiceChanged) {
         setActiveVoice(data.voiceChanged);
@@ -725,6 +853,9 @@ export default function App() {
         webType: data.webType || (finalWidgets.length ? 'live_widget' : null),
         widgets: finalWidgets,
         isStreaming: false,
+        activity: mission
+          ? missionActivity(finishMission(mission, { status: 'done' }))
+          : activityFromTools(data.toolsUsed, Date.now() - startedAt),
         timestamp: Date.now()
       };
 
@@ -751,8 +882,10 @@ export default function App() {
     };
 
     try {
-      if (isResearchReportRequest(userPrompt) && !filePayload) {
+      if (isResearchRun) {
         await researchWithLumenStream({
+          signal: controller.signal,
+          plan: approvedPlan,
           transcript: userPrompt,
           history: nextMessages,
           language: activeLanguage,
@@ -765,15 +898,17 @@ export default function App() {
               : ''),
           onProgress: (progress) => {
             setIsThinking(true);
+            mission = applyProgress(mission, progress);
             setMessages(prev => prev.map(message => message.id === assistantMsgId
-              ? { ...message, taskProgress: progress }
+              ? { ...message, taskProgress: progress, mission }
               : message));
           },
           onDone: completeResponse
         });
       } else {
         await converseWithLumenStream({
-          transcript: userPrompt,
+          signal: controller.signal,
+          transcript: approvedBrief ? buildPagePrompt(userPrompt, approvedBrief) : userPrompt,
           history: nextMessages,
           file: filePayload,
           webMode,
@@ -787,8 +922,11 @@ export default function App() {
             : status.saved
               ? formatString(t.memoryManager.autoSaved, { count: status.saved })
               : ''),
+          onToolStart: (event) => updateMission(applyToolStart(mission, event)),
+          onAbort: finishStopped,
           onToken: (token) => {
             accumulatedText += token;
+            updateMission(markWriting(mission));
             setIsThinking(false);
             setMessages(prev => prev.map(m => m.id === assistantMsgId ? { ...m, text: accumulatedText } : m));
           },
@@ -820,13 +958,23 @@ export default function App() {
         });
       }
     } catch (err) {
+      if (isAbortError(err) || controller.signal.aborted) {
+        finishStopped();
+        return;
+      }
       console.error("Converse error:", err);
+      runFinished = true;
+      const failedMission = mission
+        ? finishMission(mission, { status: 'failed' })
+        : null;
       const errorMessage = {
         id: `err-${Date.now()}`,
         role: 'assistant',
         isError: true,
+        webSources: Array.isArray(err.webSources) ? err.webSources : [],
+        activity: failedMission ? missionActivity(failedMission) : null,
         text: isResearchReportRequest(userPrompt)
-          ? `I couldn’t complete that research task: ${err.message}. Your request is still in the conversation; please try again.`
+          ? `I couldn’t complete that research task${err.stage ? ` during ${err.stage}` : ''}: ${err.message}. Any sources collected so far are listed below. Your request is still in the conversation; please try again.`
           : "I am having trouble connecting to my neural network. Please check connection and try again.",
         timestamp: Date.now()
       };
@@ -834,8 +982,43 @@ export default function App() {
       setIsTaskComplete(false);
       setProcessingFile(null);
     } finally {
+      if (runAbortRef.current === controller) runAbortRef.current = null;
       setIsThinking(false);
     }
+  };
+
+  // The user approved (possibly edited) the plan: drop the plan card and run the research.
+  const handleStartPlan = (messageId, plan) => {
+    if (isThinking) return;
+    const index = messages.findIndex((message) => message.id === messageId);
+    const card = index >= 0 ? messages[index].planCard : null;
+    if (!card) return;
+    const baseMessages = messages.slice(0, index);
+    persistMessages(baseMessages);
+    handleSendMessage(card.prompt, null, { plan, baseMessages });
+  };
+
+  // The user approved (or skipped) the design brief: drop the brief card and build the page.
+  const handleStartBrief = (messageId, brief) => {
+    if (isThinking) return;
+    const index = messages.findIndex((message) => message.id === messageId);
+    const card = index >= 0 ? messages[index].briefCard : null;
+    if (!card) return;
+    const baseMessages = messages.slice(0, index);
+    persistMessages(baseMessages);
+    handleSendMessage(card.prompt, null, { brief: brief || null, baseMessages });
+  };
+
+  const handleCancelBrief = (messageId) => {
+    persistMessages(messages.map((message) => (message.id === messageId
+      ? { id: message.id, role: 'assistant', text: briefLabels(activeLanguage).cancelledText, isNotice: true, timestamp: Date.now() }
+      : message)));
+  };
+
+  const handleCancelPlan = (messageId) => {
+    persistMessages(messages.map((message) => (message.id === messageId
+      ? { id: message.id, role: 'assistant', text: planLabels(activeLanguage).cancelledText, isNotice: true, timestamp: Date.now() }
+      : message)));
   };
 
   // Play audio from Amazon Polly base64 payload
@@ -969,20 +1152,6 @@ export default function App() {
   };
 
   const controlMenuActions = [
-    {
-      icon: getCircadianInfo().icon,
-      label: t.header.atmosphere,
-      description: getCircadianInfo().label,
-      onSelect: handleCycleCircadian,
-      keepOpen: true
-    },
-    {
-      icon: getThemeInfo().icon,
-      label: t.header.visualTheme,
-      description: getThemeInfo().label,
-      onSelect: handleCycleTheme,
-      keepOpen: true
-    },
     {
       icon: getLanguageInfo().flag,
       label: getLanguageInfo().code,
@@ -1316,6 +1485,17 @@ export default function App() {
           </a>
         </div>
         <div className="mobile-header-actions">
+          {/* Atmosphere + Visual theme: small icon-only, animated controls */}
+          <AmbientControls
+            phase={activeCircadian}
+            auto={circadianSetting === 'auto'}
+            atmosphereTip={`${t.header.atmosphere}: ${getCircadianInfo().label}`}
+            themeId={currentTheme}
+            themeTip={`${t.header.visualTheme}: ${getThemeInfo().label}`}
+            groupLabel={`${t.header.atmosphere} · ${t.header.visualTheme}`}
+            onCycleAtmosphere={handleCycleCircadian}
+            onCycleTheme={handleCycleTheme}
+          />
           <button
             type="button"
             className="chat-panel-trigger"
@@ -1833,6 +2013,12 @@ export default function App() {
             onClearHistory={handleClearHistory}
             onExportPdf={handleExportConversationPdf}
             onSendMessage={handleSendMessage}
+            onStop={handleStopRun}
+            onPlanStart={handleStartPlan}
+            onPlanCancel={handleCancelPlan}
+            onBriefBuild={handleStartBrief}
+            onBriefSkip={(messageId) => handleStartBrief(messageId, null)}
+            onBriefCancel={handleCancelBrief}
             activeLanguage={activeLanguage}
           />
         </div>
