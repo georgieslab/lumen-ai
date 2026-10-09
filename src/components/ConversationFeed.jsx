@@ -1,4 +1,4 @@
-﻿import React, { useRef, useEffect, useState } from 'react';
+﻿import React, { useRef, useEffect, useMemo, useState } from 'react';
 import { fetchLiveWeatherDirect } from '../services/api';
 import { getTranslations } from '../utils/translations';
 import HtmlPageCard from './HtmlPageCard';
@@ -729,6 +729,30 @@ export function CopyAnswerButton({ text }) {
 const STOP_LABELS = { en: 'Stop', es: 'Detener', fr: 'Arrêter', de: 'Stoppen', ja: '停止', it: 'Ferma' };
 const stopLabel = (language) => STOP_LABELS[String(language || 'en').slice(0, 2)] || STOP_LABELS.en;
 
+const SEARCH_LABELS = {
+  en: { open: 'Search conversation', close: 'Close search', placeholder: 'Search messages, sources, and results…', empty: 'Type to search this conversation', none: 'No matches', previous: 'Previous result', next: 'Next result' },
+  es: { open: 'Buscar conversación', close: 'Cerrar búsqueda', placeholder: 'Buscar mensajes, fuentes y resultados…', empty: 'Escribe para buscar en esta conversación', none: 'Sin resultados', previous: 'Resultado anterior', next: 'Resultado siguiente' },
+  fr: { open: 'Rechercher la conversation', close: 'Fermer la recherche', placeholder: 'Rechercher messages, sources et résultats…', empty: 'Saisissez pour rechercher dans cette conversation', none: 'Aucun résultat', previous: 'Résultat précédent', next: 'Résultat suivant' },
+  de: { open: 'Unterhaltung durchsuchen', close: 'Suche schließen', placeholder: 'Nachrichten, Quellen und Ergebnisse durchsuchen…', empty: 'Text eingeben, um diese Unterhaltung zu durchsuchen', none: 'Keine Treffer', previous: 'Vorheriger Treffer', next: 'Nächster Treffer' },
+  ja: { open: '会話を検索', close: '検索を閉じる', placeholder: 'メッセージ、情報源、結果を検索…', empty: 'この会話を検索する語句を入力', none: '一致する結果はありません', previous: '前の結果', next: '次の結果' },
+  it: { open: 'Cerca nella conversazione', close: 'Chiudi ricerca', placeholder: 'Cerca messaggi, fonti e risultati…', empty: 'Scrivi per cercare in questa conversazione', none: 'Nessun risultato', previous: 'Risultato precedente', next: 'Risultato successivo' }
+};
+
+function searchableMessageText(message) {
+  const parts = [message.text, message.fileName, message.taskProgress?.message];
+  for (const source of message.webSources || []) parts.push(source.title, source.url, source.snippet);
+  for (const widget of message.widgets || []) {
+    for (const key of ['title', 'summary', 'name', 'role', 'location', 'company', 'url', 'snippet', 'description', 'category', 'city', 'symbol', 'subtitle', 'text']) {
+      if (typeof widget?.[key] === 'string') parts.push(widget[key]);
+    }
+  }
+  const plan = message.planCard?.plan;
+  if (plan) parts.push(plan.topic, ...(Array.isArray(plan.questions) ? plan.questions : []));
+  const brief = message.briefCard?.brief;
+  if (brief) parts.push(brief.title, brief.audience, brief.goal);
+  return parts.filter((part) => typeof part === 'string').join(' ').toLocaleLowerCase();
+}
+
 export default function ConversationFeed({
   messages,
   liveTranscript,
@@ -742,11 +766,47 @@ export default function ConversationFeed({
   onBriefBuild,
   onBriefSkip,
   onBriefCancel,
+  onClose,
   activeLanguage = 'en-US'
 }) {
   const t = getTranslations(activeLanguage).feed;
+  const searchLabels = SEARCH_LABELS[String(activeLanguage || 'en-US').slice(0, 2)] || SEARCH_LABELS.en;
   const feedEndRef = useRef(null);
   const stageRef = useRef(null);
+  const searchInputRef = useRef(null);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeSearchIndex, setActiveSearchIndex] = useState(0);
+
+  const searchMatches = useMemo(() => {
+    const query = searchQuery.trim().toLocaleLowerCase();
+    if (!query) return [];
+    return messages.reduce((matches, message, index) => {
+      if (searchableMessageText(message).includes(query)) matches.push(index);
+      return matches;
+    }, []);
+  }, [messages, searchQuery]);
+
+  const safeSearchIndex = Math.min(activeSearchIndex, Math.max(0, searchMatches.length - 1));
+  const navigateSearch = (offset) => {
+    if (!searchMatches.length) return;
+    const nextIndex = (safeSearchIndex + offset + searchMatches.length) % searchMatches.length;
+    setActiveSearchIndex(nextIndex);
+    const messageIndex = searchMatches[nextIndex];
+    stageRef.current?.querySelector(`[data-message-index="${messageIndex}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
+
+  useEffect(() => {
+    if (!isSearchOpen || !searchMatches.length) return;
+    const messageIndex = searchMatches[safeSearchIndex];
+    stageRef.current?.querySelector(`[data-message-index="${messageIndex}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [isSearchOpen, searchMatches, safeSearchIndex]);
+
+  const closeSearch = () => {
+    setIsSearchOpen(false);
+    setSearchQuery('');
+    setActiveSearchIndex(0);
+  };
 
   useEffect(() => {
     // A plan waiting for approval is read from its top; everything else follows the newest message.
@@ -768,6 +828,33 @@ export default function ConversationFeed({
       <div className="feed-header">
         <span className="feed-title">{t.logTitle}</span>
         <div className="feed-header-actions">
+          {onClose && (
+            <button
+              type="button"
+              className="feed-close-btn"
+              onClick={onClose}
+              title={getTranslations(activeLanguage).header.transcriptClose}
+              aria-label={getTranslations(activeLanguage).header.transcriptClose}
+            >
+              ×
+            </button>
+          )}
+          <button
+            type="button"
+            className="feed-search-toggle-btn"
+            onClick={() => {
+              if (isSearchOpen) closeSearch();
+              else {
+                setIsSearchOpen(true);
+                setTimeout(() => searchInputRef.current?.focus(), 0);
+              }
+            }}
+            title={isSearchOpen ? searchLabels.close : searchLabels.open}
+            aria-label={isSearchOpen ? searchLabels.close : searchLabels.open}
+            aria-expanded={isSearchOpen}
+          >
+            {isSearchOpen ? '×' : '⌕'}
+          </button>
           {messages.length > 1 && onExportPdf && (
             <button 
               type="button" 
@@ -791,6 +878,39 @@ export default function ConversationFeed({
         </div>
       </div>
 
+      {isSearchOpen && (
+        <div className="feed-search-panel" role="search">
+          <input
+            ref={searchInputRef}
+            type="search"
+            value={searchQuery}
+            onChange={(event) => {
+              setSearchQuery(event.target.value);
+              setActiveSearchIndex(0);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                navigateSearch(event.shiftKey ? -1 : 1);
+              } else if (event.key === 'Escape') {
+                closeSearch();
+              }
+            }}
+            placeholder={searchLabels.placeholder}
+            aria-label={searchLabels.open}
+          />
+          <span className="feed-search-status" aria-live="polite">
+            {!searchQuery.trim()
+              ? searchLabels.empty
+              : searchMatches.length
+                ? `${safeSearchIndex + 1} / ${searchMatches.length}`
+                : searchLabels.none}
+          </span>
+          <button type="button" className="feed-search-nav-btn" onClick={() => navigateSearch(-1)} disabled={!searchMatches.length} title={searchLabels.previous} aria-label={searchLabels.previous}>↑</button>
+          <button type="button" className="feed-search-nav-btn" onClick={() => navigateSearch(1)} disabled={!searchMatches.length} title={searchLabels.next} aria-label={searchLabels.next}>↓</button>
+        </div>
+      )}
+
       <div className="feed-scroll-stage" ref={stageRef}>
         {messages.map((msg, messageIndex) => {
           const previousUserMessage = messages
@@ -812,7 +932,11 @@ export default function ConversationFeed({
           const streamView = msg.role === 'assistant' && msg.isStreaming ? hideStreamingHtml(msg.text) : null;
 
           return (
-          <div key={msg.id} className={`dialogue-bubble ${msg.role}`}>
+          <div
+            key={msg.id}
+            data-message-index={messageIndex}
+            className={`dialogue-bubble ${msg.role} ${searchMatches.includes(messageIndex) ? 'search-hit' : ''} ${searchMatches[safeSearchIndex] === messageIndex && searchQuery.trim() ? 'search-hit-active' : ''}`}
+          >
             <div className="bubble-meta">
               <span className="bubble-speaker">{msg.role === 'user' ? t.you : t.lumen}</span>
               {msg.timestamp && (

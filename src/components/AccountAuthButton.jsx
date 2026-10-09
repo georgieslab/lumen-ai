@@ -91,6 +91,22 @@ export default function AccountAuthButton({
 
           <button
             type="button"
+            className="account-settings-button"
+            onClick={() => onOpenSettings?.()}
+            title="Open Lumen settings and navigation"
+            aria-label="Open Lumen settings and navigation"
+            aria-haspopup="dialog"
+          >
+            <svg className="account-settings-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M4 6h16M4 12h16M4 18h16" />
+              <circle cx="8" cy="6" r="2" fill="currentColor" />
+              <circle cx="15" cy="12" r="2" fill="currentColor" />
+              <circle cx="10" cy="18" r="2" fill="currentColor" />
+            </svg>
+          </button>
+
+          <button
+            type="button"
             className="account-user-pill"
             onClick={() => setShowDropdown(!showDropdown)}
             title={`Signed in with ${currentUser.provider || 'GitHub'} as ${currentUser.name}${currentUser.email ? ` (${currentUser.email})` : ''}`}

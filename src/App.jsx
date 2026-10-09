@@ -5,6 +5,7 @@ import VisionScanner, { SpatialMediaIcon } from './components/VisionScanner';
 import ConversationFeed, { LiveWeatherCard, LiveCryptoCard, LivePdfCard, LiveJobsRadarCard } from './components/ConversationFeed';
 import LumenLogo from './components/LumenLogo';
 import AccountAuthButton from './components/AccountAuthButton';
+import FeedbackModal, { getFeedbackCopy } from './components/FeedbackModal';
 import UserMemoryModal from './components/UserMemoryModal';
 import WorkspaceShareModal from './components/WorkspaceShareModal';
 import SharedTabChip from './components/SharedTabChip';
@@ -13,6 +14,7 @@ import EmbeddedTabPanel from './components/EmbeddedTabPanel';
 import AmbientControls from './components/AmbientControls';
 import HtmlWindowPanel from './components/HtmlWindowPanel';
 import OpenWebPageButton from './components/OpenWebPageButton';
+import DraggableDesktopPill from './components/DraggableDesktopPill';
 import { stoppedMessage } from './components/MissionCard';
 import { planLabels } from './components/PlanCard';
 import { briefLabels } from './components/BriefCard';
@@ -70,6 +72,26 @@ function getConversationStorageKey(user) {
   if (!user) return 'lumen_standalone_history';
   if (user.provider === 'google' && user.email) return `lumen_history_${user.email}`;
   return `lumen_history_${user.provider || 'account'}_${user.id}`;
+}
+
+function loadPersonaCardOffset() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('lumen_persona_card_position') || 'null');
+    if (saved && Number.isFinite(saved.x) && Number.isFinite(saved.y)) {
+      return { x: Math.max(-2000, Math.min(2000, saved.x)), y: Math.max(-2000, Math.min(2000, saved.y)) };
+    }
+  } catch (_) {}
+  return { x: 0, y: 0 };
+}
+
+function loadWeatherTileOffset() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('lumen_weather_tile_position') || 'null');
+    if (saved && Number.isFinite(saved.x) && Number.isFinite(saved.y)) {
+      return { x: Math.max(-2000, Math.min(2000, saved.x)), y: Math.max(-2000, Math.min(2000, saved.y)) };
+    }
+  } catch (_) {}
+  return { x: 0, y: 0 };
 }
 
 export default function App() {
@@ -152,6 +174,7 @@ export default function App() {
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [sharedTab, setSharedTab] = useState(null);
   const [pendingOpenUrl, setPendingOpenUrl] = useState(null);
+  const [openWebPageRequest, setOpenWebPageRequest] = useState(0);
   const [embeddedUrl, setEmbeddedUrl] = useState(null);
   const [htmlWindow, setHtmlWindow] = useState(null);
 
@@ -178,6 +201,7 @@ export default function App() {
   const [isMemoryModalOpen, setIsMemoryModalOpen] = useState(false);
   const [memoryNotice, setMemoryNotice] = useState('');
   const [isTechStackModalOpen, setIsTechStackModalOpen] = useState(false);
+  const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
   const [jobFilter, setJobFilter] = useState(() => {
     try {
       const saved = localStorage.getItem('lumen_job_filter');
@@ -202,8 +226,18 @@ export default function App() {
   };
   const [currentUser, setCurrentUser] = useState(null);
   const [personaCard, setPersonaCard] = useState(null);
+  const [personaCardOffset, setPersonaCardOffset] = useState(loadPersonaCardOffset);
+  const [isPersonaDragging, setIsPersonaDragging] = useState(false);
+  const personaDragRef = useRef(null);
+  const suppressPersonaClickRef = useRef(false);
+  const [weatherTileOffset, setWeatherTileOffset] = useState(loadWeatherTileOffset);
+  const [isWeatherTileDragging, setIsWeatherTileDragging] = useState(false);
+  const weatherTileDragRef = useRef(null);
+  const suppressWeatherTileClickRef = useRef(false);
+  const [showWelcomeGreeting, setShowWelcomeGreeting] = useState(false);
 
   const t = getTranslations(activeLanguage);
+  const feedbackCopy = getFeedbackCopy(activeLanguage);
 
   useEffect(() => {
     try {
@@ -213,6 +247,16 @@ export default function App() {
       .then(({ user }) => setCurrentUser(user || null))
       .catch(error => console.warn('Could not restore the signed-in account:', error.message));
   }, []);
+
+  useEffect(() => {
+    if (!currentUser) {
+      setShowWelcomeGreeting(false);
+      return undefined;
+    }
+    setShowWelcomeGreeting(true);
+    const timer = window.setTimeout(() => setShowWelcomeGreeting(false), 12000);
+    return () => window.clearTimeout(timer);
+  }, [currentUser?.id]);
 
   useEffect(() => {
     let active = true;
@@ -227,6 +271,128 @@ export default function App() {
       .catch(error => console.warn('Could not load the saved Persona Card:', error.message));
     return () => { active = false; };
   }, [currentUser?.id]);
+
+  const handlePersonaDragStart = (event) => {
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
+    const card = event.currentTarget.closest('.persona-profile-card');
+    const stage = card?.closest('.lumen-app-stage');
+    if (!card || !stage) return;
+
+    const zoomStyle = getComputedStyle(document.documentElement).zoom;
+    const parsedZoom = parseFloat(zoomStyle);
+    const scale = zoomStyle.endsWith('%') ? parsedZoom / 100 : parsedZoom || 1;
+    personaDragRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      cardRect: card.getBoundingClientRect(),
+      stageRect: stage.getBoundingClientRect(),
+      startOffset: personaCardOffset,
+      nextOffset: personaCardOffset,
+      scale: scale > 0 ? scale : 1,
+      moved: false
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const handlePersonaDragMove = (event) => {
+    const drag = personaDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const rawX = event.clientX - drag.startX;
+    const rawY = event.clientY - drag.startY;
+    if (!drag.moved && Math.hypot(rawX, rawY) < 5) return;
+    if (!drag.moved) setIsPersonaDragging(true);
+    drag.moved = true;
+
+    const margin = 12;
+    const minX = drag.stageRect.left + margin - drag.cardRect.left;
+    const maxX = drag.stageRect.right - margin - drag.cardRect.right;
+    const minY = drag.stageRect.top + margin - drag.cardRect.top;
+    const maxY = drag.stageRect.bottom - margin - drag.cardRect.bottom;
+    const deltaX = Math.max(minX, Math.min(maxX, rawX));
+    const deltaY = Math.max(minY, Math.min(maxY, rawY));
+    drag.nextOffset = {
+      x: drag.startOffset.x + deltaX / drag.scale,
+      y: drag.startOffset.y + deltaY / drag.scale
+    };
+    setPersonaCardOffset(drag.nextOffset);
+  };
+
+  const handlePersonaDragEnd = (event) => {
+    const drag = personaDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    personaDragRef.current = null;
+    if (!drag.moved) return;
+
+    setIsPersonaDragging(false);
+    setPersonaCardOffset(drag.nextOffset);
+    try {
+      localStorage.setItem('lumen_persona_card_position', JSON.stringify(drag.nextOffset));
+    } catch (_) {}
+    suppressPersonaClickRef.current = true;
+    window.setTimeout(() => { suppressPersonaClickRef.current = false; }, 0);
+  };
+
+  const handleWeatherTileDragStart = (event) => {
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
+    const tile = event.currentTarget.closest('.weather-tile-wrap');
+    const stage = tile?.closest('.lumen-app-stage');
+    if (!tile || !stage) return;
+
+    const zoomStyle = getComputedStyle(document.documentElement).zoom;
+    const parsedZoom = parseFloat(zoomStyle);
+    const scale = zoomStyle.endsWith('%') ? parsedZoom / 100 : parsedZoom || 1;
+    weatherTileDragRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      tileRect: tile.getBoundingClientRect(),
+      stageRect: stage.getBoundingClientRect(),
+      startOffset: weatherTileOffset,
+      nextOffset: weatherTileOffset,
+      scale: scale > 0 ? scale : 1,
+      moved: false
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const handleWeatherTileDragMove = (event) => {
+    const drag = weatherTileDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const rawX = event.clientX - drag.startX;
+    const rawY = event.clientY - drag.startY;
+    if (!drag.moved && Math.hypot(rawX, rawY) < 5) return;
+    if (!drag.moved) setIsWeatherTileDragging(true);
+    drag.moved = true;
+
+    const margin = 12;
+    const minX = drag.stageRect.left + margin - drag.tileRect.left;
+    const maxX = drag.stageRect.right - margin - drag.tileRect.right;
+    const minY = drag.stageRect.top + margin - drag.tileRect.top;
+    const maxY = drag.stageRect.bottom - margin - drag.tileRect.bottom;
+    const deltaX = Math.max(minX, Math.min(maxX, rawX));
+    const deltaY = Math.max(minY, Math.min(maxY, rawY));
+    drag.nextOffset = {
+      x: drag.startOffset.x + deltaX / drag.scale,
+      y: drag.startOffset.y + deltaY / drag.scale
+    };
+    setWeatherTileOffset(drag.nextOffset);
+  };
+
+  const handleWeatherTileDragEnd = (event) => {
+    const drag = weatherTileDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    weatherTileDragRef.current = null;
+    if (!drag.moved) return;
+
+    setIsWeatherTileDragging(false);
+    setWeatherTileOffset(drag.nextOffset);
+    try {
+      localStorage.setItem('lumen_weather_tile_position', JSON.stringify(drag.nextOffset));
+    } catch (_) {}
+    suppressWeatherTileClickRef.current = true;
+    window.setTimeout(() => { suppressWeatherTileClickRef.current = false; }, 0);
+  };
 
   const handleCycleTheme = () => {
     const themes = ['visionos', 'cyberpunk', 'obsidian', 'solardawn', 'highcontrast'];
@@ -1230,6 +1396,12 @@ export default function App() {
       onSelect: handleToggleFullscreen
     },
     {
+      icon: '💡',
+      label: feedbackCopy.action,
+      description: feedbackCopy.description,
+      onSelect: () => setIsFeedbackOpen(true)
+    },
+    {
       icon: '⌘',
       label: 'GitHub',
       description: t.header.githubTooltip,
@@ -1322,6 +1494,36 @@ export default function App() {
     setIsMobileControlsOpen(true);
   };
 
+  const navigationActions = [
+    {
+      id: 'explore',
+      icon: '✦',
+      label: t.explorePanel.title,
+      description: t.explorePanel.intro,
+      onSelect: openExplorePanel
+    },
+    {
+      id: 'open-web-page',
+      icon: '🌐',
+      label: t.header.openWebPageLabel,
+      description: t.header.openWebPageDescription,
+      onSelect: () => {
+        setIsMobileControlsOpen(false);
+        setOpenWebPageRequest((request) => request + 1);
+      }
+    },
+    {
+      id: 'memory',
+      icon: currentUser ? '🧠' : '🔐',
+      label: currentUser ? t.memoryManager.launcher : t.memoryManager.signInTitle,
+      description: currentUser ? t.memoryManager.launcherHint : t.memoryManager.signInHint,
+      onSelect: () => {
+        setIsMobileControlsOpen(false);
+        setIsMemoryModalOpen(true);
+      }
+    }
+  ];
+
   const dismissQuickStart = () => {
     setIsQuickStartVisible(false);
     try {
@@ -1355,6 +1557,16 @@ export default function App() {
 
   const isIosDevice = /iPad|iPhone|iPod/.test(window.navigator.userAgent) ||
     (window.navigator.platform === 'MacIntel' && window.navigator.maxTouchPoints > 1);
+  const greetingName = String(currentUser?.givenName || currentUser?.name || '').trim().split(/\s+/)[0];
+  const prepareDesktopPillPrompt = (prompt) => {
+    setTextInput(prompt);
+    setTimeout(() => {
+      const input = textInputRef.current;
+      if (!input) return;
+      input.focus();
+      input.setSelectionRange(input.value.length, input.value.length);
+    }, 0);
+  };
 
   return (
     <div 
@@ -1447,6 +1659,7 @@ export default function App() {
             className={`web-toggle-btn mode-${webMode}`}
             onClick={handleCycleWebMode}
             title={formatString(t.header.webTooltip, { mode: t.header.webModes[webMode] || webMode.toUpperCase() })}
+            aria-label={formatString(t.header.webTooltip, { mode: t.header.webModes[webMode] || webMode.toUpperCase() })}
           >
             <span className="web-icon">🌐</span>
             <span className="web-label">{t.header.webPrefix}{t.header.webModes[webMode] || webMode}</span>
@@ -1745,6 +1958,29 @@ export default function App() {
               </div>
             ) : (
               <>
+                <section className="control-menu-nav-section" aria-labelledby="control-menu-nav-title">
+                  <h3 id="control-menu-nav-title" className="control-menu-section-title">{t.header.navigationTitle}</h3>
+                  <div className="control-menu-grid control-menu-nav-grid">
+                    {navigationActions.map((action) => (
+                      <button
+                        key={action.id}
+                        type="button"
+                        className="control-menu-action"
+                        aria-label={`${action.label}: ${action.description}`}
+                        title={action.description}
+                        onClick={action.onSelect}
+                      >
+                        <span className="control-menu-icon" aria-hidden="true">{action.icon}</span>
+                        <span className="control-menu-copy">
+                          <span className="control-menu-label">{action.label}</span>
+                          <span className="control-menu-description">{action.description}</span>
+                        </span>
+                        <span className="control-menu-nav-arrow" aria-hidden="true">→</span>
+                      </button>
+                    ))}
+                  </div>
+                </section>
+                <div className="control-menu-section-divider" aria-hidden="true" />
                 <div className="control-menu-grid">
                   {controlMenuActions.map((action) => (
                     <button
@@ -1770,7 +2006,36 @@ export default function App() {
       )}
 
       {/* Main Focus Stage */}
-      <main className={`lumen-main-stage ${showLogDrawer ? 'chat-open' : 'chat-closed'}`}>
+      {showWelcomeGreeting && currentUser && !showLogDrawer && (
+        <aside className="welcome-greeting" role="status" aria-live="polite">
+          <span className="welcome-greeting-spark" aria-hidden="true">✦</span>
+          <span className="welcome-greeting-text">
+            {formatString(
+              greetingName ? t.returningGreeting : t.returningGreetingGeneric,
+              { name: greetingName }
+            )}
+          </span>
+          <button
+            type="button"
+            className="welcome-greeting-dismiss"
+            onClick={() => setShowWelcomeGreeting(false)}
+            aria-label={t.dismissGreeting}
+            title={t.dismissGreeting}
+          >×</button>
+        </aside>
+      )}
+
+      <main
+        className={`lumen-main-stage ${showLogDrawer ? 'chat-open' : 'chat-closed'}`}
+        onClick={(event) => {
+          if (
+            showLogDrawer &&
+            !event.target.closest('#conversation-panel, .desktop-action-pill')
+          ) {
+            setShowLogDrawer(false);
+          }
+        }}
+      >
         {/* Interactive Neural Morphing Sphere */}
         <AmbientSphere 
           isListening={isListening}
@@ -1798,7 +2063,7 @@ export default function App() {
         <EmbeddedTabPanel url={embeddedUrl} onClose={() => setEmbeddedUrl(null)} />
         <HtmlWindowPanel html={htmlWindow} onClose={() => setHtmlWindow(null)} />
         <div className="open-web-dock">
-          <OpenWebPageButton onOpen={(u) => { setPendingOpenUrl(null); setEmbeddedUrl(u); }} />
+          <OpenWebPageButton triggerOnly openRequest={openWebPageRequest} onOpen={(u) => { setPendingOpenUrl(null); setEmbeddedUrl(u); }} />
         </div>
 
         {/* Vision & Document Scanner Drop Zone */}
@@ -1819,18 +2084,37 @@ export default function App() {
         {(
           <button
             type="button"
-            className="persona-profile-card"
-            onClick={() => setIsMemoryModalOpen(true)}
+            className={`persona-profile-card ${isPersonaDragging ? 'is-dragging' : ''}`}
+            style={{
+              '--persona-drag-x': `${personaCardOffset.x}px`,
+              '--persona-drag-y': `${personaCardOffset.y}px`
+            }}
+            onClick={(event) => {
+              if (suppressPersonaClickRef.current) {
+                event.preventDefault();
+                event.stopPropagation();
+                suppressPersonaClickRef.current = false;
+                return;
+              }
+              setIsMemoryModalOpen(true);
+            }}
             title={personaCard?.summary || t.memoryManager.launcherHint}
             aria-label={t.memoryManager.personaLauncher}
           >
-            <span className="persona-profile-head">
+            <span
+              className="persona-profile-head persona-profile-drag-handle"
+              onPointerDown={handlePersonaDragStart}
+              onPointerMove={handlePersonaDragMove}
+              onPointerUp={handlePersonaDragEnd}
+              onPointerCancel={handlePersonaDragEnd}
+              title={t.personaDragHint}
+            >
               <span className="persona-profile-mark" aria-hidden="true">✦</span>
               <span className="persona-profile-title">
                 <strong>{t.memoryManager.personaLauncher}</strong>
                 <small>{personaCard ? t.memoryManager.personaSummary : currentUser ? t.memoryManager.personaCreate : t.memoryManager.signInTitle}</small>
               </span>
-              <span className="persona-profile-open" aria-hidden="true">↗</span>
+              <span className="persona-profile-open" aria-hidden="true">⠿</span>
             </span>
             {personaCard ? (
               <>
@@ -1863,44 +2147,106 @@ export default function App() {
           </button>
         )}
 
+        {ambientData.weather && !showLogDrawer && (
+          <div
+            className={`weather-tile-wrap weather-desktop-widget ${isWeatherTileDragging ? 'is-dragging' : ''}`}
+            style={{
+              '--weather-drag-x': `${weatherTileOffset.x}px`,
+              '--weather-drag-y': `${weatherTileOffset.y}px`
+            }}
+          >
+            <button
+              type="button"
+              className={`ambient-glance-pill weather-glance ${activeStageWidget?.widgetType === 'weather' ? 'active' : ''}`}
+              onClick={(event) => {
+                if (suppressWeatherTileClickRef.current) {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  suppressWeatherTileClickRef.current = false;
+                  return;
+                }
+                setActiveStageWidget(activeStageWidget?.widgetType === 'weather' ? null : ambientData.weather);
+              }}
+              title={t.glance.weatherTooltip}
+            >
+              <span
+                className="weather-drag-handle"
+                aria-hidden="true"
+                onPointerDown={handleWeatherTileDragStart}
+                onPointerMove={handleWeatherTileDragMove}
+                onPointerUp={handleWeatherTileDragEnd}
+                onPointerCancel={handleWeatherTileDragEnd}
+                title={t.weatherDragHint}
+              >⠿</span>
+              <span className="glance-pulse"></span>
+              <span className="glance-icon">{ambientData.weather.icon}</span>
+              <span className="glance-title">{ambientData.weather.city?.split(',')[0]}</span>
+              <span className="glance-value">{ambientData.weather.temp}°C</span>
+              <span className="glance-sub">{ambientData.weather.condition}</span>
+            </button>
+            <button
+              type="button"
+              className="weather-settings-btn"
+              aria-label="Change city"
+              title="Change city"
+              onClick={() => setActiveStageWidget({
+                widgetType: 'weather',
+                city: ambientData.weather.city || 'Vienna',
+                temp: ambientData.weather.temp ?? '--',
+                condition: ambientData.weather.condition || t.glance.liveGlobalWeather,
+                icon: ambientData.weather.icon || '🌤️',
+                high: ambientData.weather.high ?? '--',
+                low: ambientData.weather.low ?? '--',
+                humidity: ambientData.weather.humidity ?? '--',
+                wind: ambientData.weather.wind ?? '--',
+                forecast: ambientData.weather.forecast || [],
+                initialSearching: true
+              })}
+            >⚙</button>
+          </div>
+        )}
+
+        <DraggableDesktopPill
+          id="code-analysis"
+          icon="</>"
+          label={t.desktopPills.codeAnalysis}
+          title={t.desktopPills.codeAnalysisTooltip}
+          position={{ left: '78%', top: '28%' }}
+          onSelect={() => prepareDesktopPillPrompt(t.desktopPills.codeAnalysisPrompt)}
+        />
+        <DraggableDesktopPill
+          id="seo-analysis"
+          icon="⌕"
+          label={t.starterChips.seoInspect}
+          title={t.starterChips.seoInspectTooltip}
+          position={{ left: '78%', top: '43%' }}
+          onSelect={() => prepareDesktopPillPrompt(t.starterChips.seoInspectPrompt)}
+        />
+        <DraggableDesktopPill
+          id="daily-brief"
+          icon="☀"
+          label={t.desktopPills.dailyBrief}
+          title={t.desktopPills.dailyBriefTooltip}
+          position={{ left: '78%', top: '58%' }}
+          onSelect={() => handleSendMessage(formatString(t.desktopPills.dailyBriefPrompt, {
+            city: ambientData.weather?.city || 'your chosen city',
+            date: new Intl.DateTimeFormat(activeLanguage, { dateStyle: 'long' }).format(new Date())
+          }), null)}
+        />
+        <DraggableDesktopPill
+          id="open-web-page"
+          icon="🌐"
+          label={t.header.openWebPageLabel}
+          title={t.header.openWebPageDescription}
+          position={{ left: '82%', top: '12%' }}
+          size="large"
+          onSelect={() => setOpenWebPageRequest((request) => request + 1)}
+        />
+
         {/* Real-Time Ambient Live Bar & Interactive Glanceable Pills */}
         <div className="ambient-live-bar">
           <div className="ambient-glance-row">
-            {ambientData.weather ? (
-              <div className="weather-tile-wrap">
-                <button
-                type="button"
-                className={`ambient-glance-pill weather-glance ${activeStageWidget?.widgetType === 'weather' ? 'active' : ''}`}
-                onClick={() => setActiveStageWidget(activeStageWidget?.widgetType === 'weather' ? null : ambientData.weather)}
-                title={t.glance.weatherTooltip}
-              >
-                <span className="glance-pulse"></span>
-                <span className="glance-icon">{ambientData.weather.icon}</span>
-                <span className="glance-title">{ambientData.weather.city?.split(',')[0]}</span>
-                <span className="glance-value">{ambientData.weather.temp}°C</span>
-                <span className="glance-sub">{ambientData.weather.condition}</span>
-              </button>
-                <button
-                  type="button"
-                  className="weather-settings-btn"
-                  aria-label="Change city"
-                  title="Change city"
-                  onClick={() => setActiveStageWidget({
-                    widgetType: 'weather',
-                    city: ambientData.weather.city || 'Vienna',
-                    temp: ambientData.weather.temp ?? '--',
-                    condition: ambientData.weather.condition || t.glance.liveGlobalWeather,
-                    icon: ambientData.weather.icon || '🌤️',
-                    high: ambientData.weather.high ?? '--',
-                    low: ambientData.weather.low ?? '--',
-                    humidity: ambientData.weather.humidity ?? '--',
-                    wind: ambientData.weather.wind ?? '--',
-                    forecast: ambientData.weather.forecast || [],
-                    initialSearching: true
-                  })}
-                >⚙</button>
-              </div>
-            ) : (
+            {!ambientData.weather && (
               <button
                 type="button"
                 className="ambient-glance-pill placeholder"
@@ -2046,6 +2392,7 @@ export default function App() {
                 className="stage-widget-close-btn"
                 onClick={() => setActiveStageWidget(null)}
                 title={t.stageWidget.dismissTooltip}
+                aria-label={t.stageWidget.dismissTooltip}
               >
                 ✕
               </button>
@@ -2105,6 +2452,7 @@ export default function App() {
         {/* Conversation Feed Drawer (Toggleable) */}
         <div id="conversation-panel" className={`conversation-panel ${showLogDrawer ? 'open' : ''}`}>
           <ConversationFeed 
+            onClose={() => setShowLogDrawer(false)}
             messages={messages}
             liveTranscript={liveTranscript}
             isThinking={isThinking}
@@ -2195,6 +2543,8 @@ export default function App() {
                 setIsAttachmentMenuOpen(false);
                 setIsWebcamOpen(true);
               }}
+              title={t.footer.takePhoto}
+              aria-label={t.footer.takePhoto}
             >
               <span className="attachment-sheet-icon" aria-hidden="true">📷</span>
               <span>{t.footer.takePhoto}</span>
@@ -2206,12 +2556,14 @@ export default function App() {
                 setIsAttachmentMenuOpen(false);
                 fileInputRef.current?.click();
               }}
+              title={t.footer.chooseFile}
+              aria-label={t.footer.chooseFile}
             >
               <span className="attachment-sheet-icon" aria-hidden="true">▧</span>
               <span>{t.footer.chooseFile}</span>
             </button>
             {isTabCaptureSupported() && (
-              <button type="button" className="attachment-sheet-action" onClick={handleShareTabSnapshot}>
+              <button type="button" className="attachment-sheet-action" onClick={handleShareTabSnapshot} title="Capture one frame of a tab, window, or screen for Lumen to inspect." aria-label="Capture one screen snapshot">
                 <span className="attachment-sheet-icon" aria-hidden="true">🖥️</span>
                 <span>Share a tab or window (snapshot)</span>
               </button>
@@ -2294,6 +2646,12 @@ export default function App() {
         statusNotice={memoryNotice}
         isSignedIn={Boolean(currentUser)}
         onPersonaCardChange={setPersonaCard}
+      />
+
+      <FeedbackModal
+        isOpen={isFeedbackOpen}
+        onClose={() => setIsFeedbackOpen(false)}
+        activeLanguage={activeLanguage}
       />
     </div>
   );

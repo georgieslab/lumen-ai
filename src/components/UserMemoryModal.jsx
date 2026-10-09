@@ -280,6 +280,60 @@ export default function UserMemoryModal({ isOpen, onClose, activeLanguage = 'en-
     }
   };
 
+  const renderMemoriesSection = () => (
+    <section className="memory-section memory-saved-section">
+      <div className="memory-section-heading">
+        <h3>{labels.memoriesTitle}</h3>
+        <span className="memory-count" aria-live="polite">{memories.length}</span>
+      </div>
+      <form className="memory-add-form" onSubmit={handleAddMemory}>
+        <input
+          value={newMemory}
+          maxLength={MAX_MEMORY_LENGTH}
+          onChange={event => setNewMemory(event.target.value)}
+          placeholder={labels.addPlaceholder}
+          aria-label={labels.addPlaceholder}
+        />
+        <button type="submit" className="memory-primary-button" disabled={saving || !newMemory.trim()}>
+          {labels.addMemory}
+        </button>
+      </form>
+      {memories.length === 0 ? (
+        <p className="memory-empty">{labels.empty}</p>
+      ) : (
+        <ul className="memory-list">
+          {memories.map(memory => (
+            <li key={memory.id} className="memory-list-item">
+              {editingId === memory.id ? (
+                <div className="memory-edit-row">
+                  <input
+                    value={editingText}
+                    maxLength={MAX_MEMORY_LENGTH}
+                    onChange={event => setEditingText(event.target.value)}
+                    aria-label={labels.edit}
+                  />
+                  <button type="button" onClick={() => handleSaveEdit(memory.id)} disabled={saving}>{labels.update}</button>
+                  <button type="button" onClick={() => setEditingId(null)}>{labels.cancel}</button>
+                </div>
+              ) : (
+                <>
+                  <span>{memory.text}</span>
+                  <div className="memory-item-actions">
+                    <button type="button" onClick={() => {
+                      setEditingId(memory.id);
+                      setEditingText(memory.text);
+                    }}>{labels.edit}</button>
+                    <button type="button" onClick={() => handleDeleteMemory(memory.id)} disabled={saving}>{labels.delete}</button>
+                  </div>
+                </>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+
   if (!isOpen) return null;
 
   return (
@@ -315,6 +369,7 @@ export default function UserMemoryModal({ isOpen, onClose, activeLanguage = 'en-
           <p className="memory-loading">{labels.loading}</p>
         ) : (
           <div className="memory-modal-content" ref={contentRef}>
+            {renderMemoriesSection()}
             <section className="memory-section memory-persona-section">
               <div className="memory-section-heading memory-persona-heading">
                 <h3>{labels.personaHeading}</h3>
@@ -359,7 +414,6 @@ export default function UserMemoryModal({ isOpen, onClose, activeLanguage = 'en-
                 </article>
               )}
             </section>
-
             <section className="memory-section">
               <div className="memory-section-heading">
                 <h3>{labels.profileHeading}</h3>
@@ -450,54 +504,6 @@ export default function UserMemoryModal({ isOpen, onClose, activeLanguage = 'en-
               <p className="memory-hint">{labels.autoHint}</p>
             </section>
 
-            <section className="memory-section">
-              <h3>{labels.memoriesTitle}</h3>
-              <form className="memory-add-form" onSubmit={handleAddMemory}>
-                <input
-                  value={newMemory}
-                  maxLength={MAX_MEMORY_LENGTH}
-                  onChange={event => setNewMemory(event.target.value)}
-                  placeholder={labels.addPlaceholder}
-                  aria-label={labels.addPlaceholder}
-                />
-                <button type="submit" className="memory-primary-button" disabled={saving || !newMemory.trim()}>
-                  {labels.addMemory}
-                </button>
-              </form>
-              {memories.length === 0 ? (
-                <p className="memory-empty">{labels.empty}</p>
-              ) : (
-                <ul className="memory-list">
-                  {memories.map(memory => (
-                    <li key={memory.id} className="memory-list-item">
-                      {editingId === memory.id ? (
-                        <div className="memory-edit-row">
-                          <input
-                            value={editingText}
-                            maxLength={MAX_MEMORY_LENGTH}
-                            onChange={event => setEditingText(event.target.value)}
-                            aria-label={labels.edit}
-                          />
-                          <button type="button" onClick={() => handleSaveEdit(memory.id)} disabled={saving}>{labels.update}</button>
-                          <button type="button" onClick={() => setEditingId(null)}>{labels.cancel}</button>
-                        </div>
-                      ) : (
-                        <>
-                          <span>{memory.text}</span>
-                          <div className="memory-item-actions">
-                            <button type="button" onClick={() => {
-                              setEditingId(memory.id);
-                              setEditingText(memory.text);
-                            }}>{labels.edit}</button>
-                            <button type="button" onClick={() => handleDeleteMemory(memory.id)} disabled={saving}>{labels.delete}</button>
-                          </div>
-                        </>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
             <button type="button" className="memory-clear-button" onClick={handleClearAll} disabled={saving}>
               {labels.clearAll}
             </button>

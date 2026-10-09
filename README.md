@@ -24,14 +24,14 @@
   <img alt="Manifest V3 extension" src="https://img.shields.io/badge/Browser_extension-Manifest_V3-4285F4?logo=googlechrome&logoColor=white" />
 </p>
 
-Lumen is a voice- and vision-enabled AI copilot built with React, Vite, and Express. Have a spoken conversation, inspect an image or PDF, research the web, or bring in a page by explicitly sharing its text.
+Lumen is a voice- and vision-enabled AI copilot built with React, Vite, and Express. Have a spoken conversation, inspect an image, PDF, or one-time screen snapshot, research the web, or bring in a page by explicitly sharing its text.
 
 The public landing page is at `/`. Open the existing copilot with **Talk with Lumen** or go directly to `/#app`; the hash route works on static hosts without server-side routing.
 
 ## Features
 
 - **🎙️ Voice conversation:** speak with Lumen using browser speech recognition, with an AWS Transcribe fallback if the browser speech service is unreachable. Amazon Polly neural voices are used when configured.
-- **🖼️ Image and PDF analysis:** attach a photo or PDF and ask Lumen to inspect it.
+- **🖼️ Image, PDF, and screen analysis:** attach a photo or PDF, or share a one-time screenshot of a tab, window, or screen, then ask Lumen to inspect it.
 - **🔎 Web research:** request sourced research reports; Lumen searches and reads public web pages, then can create a downloadable PDF.
 - **🧭 Adaptive decision missions:** give Lumen a research goal, review its plan, then choose whether it may run one targeted follow-up search after checking the first-pass evidence. The extra read stays within the approved page limit; the query and progress remain visible, and you can cancel. Missions are bounded research workflows, not unrestricted browser control.
 - **🌦️ Live information:** ask about weather or cryptocurrency prices to show interactive data cards.

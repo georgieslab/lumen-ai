@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 
 // Turns what the user typed into a safe http(s) URL, or null.
 export function normalizeWebUrl(input) {
@@ -14,10 +14,17 @@ export function normalizeWebUrl(input) {
 }
 
 // The user's own click and typed address count as approval to open the page.
-export default function OpenWebPageButton({ onOpen }) {
+export default function OpenWebPageButton({ onOpen, openRequest = 0, triggerOnly = false }) {
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState('');
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (openRequest > 0) {
+      setEditing(true);
+      setError('');
+    }
+  }, [openRequest]);
 
   const submit = (event) => {
     event.preventDefault();
@@ -33,8 +40,9 @@ export default function OpenWebPageButton({ onOpen }) {
   };
 
   if (!editing) {
+    if (triggerOnly) return null;
     return (
-      <button type="button" className="open-web-btn" onClick={() => setEditing(true)}>
+      <button type="button" className="open-web-btn" onClick={() => setEditing(true)} title="Enter a web address to view it inside Lumen. Some sites may block embedded viewing." aria-label="Open a web page inside Lumen">
         <span className="open-web-btn-label">🌐 Open web page</span>
       </button>
     );
@@ -42,17 +50,32 @@ export default function OpenWebPageButton({ onOpen }) {
 
   return (
     <form className="open-web-form glass-panel" onSubmit={submit}>
-      <input
-        className="open-web-input"
-        type="text"
-        value={value}
-        onChange={(e) => { setValue(e.target.value); setError(''); }}
-        placeholder="reflection-writer.web.app"
-        aria-label="Web address"
-        autoFocus
-      />
-      <button type="submit" className="shared-tab-stop">Open</button>
-      <button type="button" className="shared-tab-stop" onClick={() => { setEditing(false); setError(''); }}>Cancel</button>
+      <div className="open-web-tabbar">
+        <span className="open-web-tab-dots" aria-hidden="true"><i /><i /><i /></span>
+        <span className="open-web-tab-title">New tab</span>
+        <button
+          type="button"
+          className="open-web-tab-close"
+          onClick={() => { setEditing(false); setError(''); }}
+          aria-label="Close address entry"
+          title="Close"
+        >×</button>
+      </div>
+      <div className="open-web-address-row">
+        <span className="open-web-address-icon" aria-hidden="true">🌐</span>
+        <input
+          className="open-web-input"
+          type="text"
+          value={value}
+          onChange={(e) => { setValue(e.target.value); setError(''); }}
+          placeholder="Enter a web address"
+          aria-label="Web address"
+          autoFocus
+        />
+        <button type="submit" className="open-web-go" aria-label="Go to web address" title="Go">
+          <span aria-hidden="true">→</span>
+        </button>
+      </div>
       {error && <span className="open-web-error" role="alert">{error}</span>}
     </form>
   );

@@ -1,0 +1,5 @@
+GITHUB_OAUTH_CLIENT_ID =Ov23lipL3Iaxbr95pU6h
+GITHUB_OAUTH_CLIENT_SECRET =680c5f75aa12c54b2ac5aaf4aacb035a40a01430
+GITHUB_OAUTH_CALLBACK_URL = https://lumen-ai-0cje.onrender.com/api/auth/github/callback
+LUMEN_APP_URL = https://lumen-ai-0cje.onrender.com
+LUMEN_SESSION_SECRET =halfboyhalfgirlisagreatbookwrittenin2026
