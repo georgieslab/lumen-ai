@@ -18,10 +18,10 @@ const en = {
     title1: 'Your thoughts,',
     title2: 'in a ',
     title3: 'new light.',
-    intro: 'Meet Lumen: an ambient AI companion for real conversations, curious questions, and the things you want to understand.',
+    intro: 'Meet Lumen: an ambient AI companion for real conversations, curious questions, and bounded research missions—with a plan, visible progress, and checkpoints you control.',
     primary: 'Talk with Lumen',
     quiet: 'Discover what’s possible',
-    note: 'Voice, vision, and research—in one thoughtful space.',
+    note: 'Voice, vision, and research—with useful next steps kept in your hands.',
     coverAlt: 'A luminous Lumen orb, woven from cyan, violet, and rose light.',
     cardVoiceTitle: 'Always in the conversation',
     cardVoiceSub: 'Voice · text · your pace',
@@ -37,13 +37,13 @@ const en = {
     voice: 'VOICE',
     vision: 'VISION',
     research: 'RESEARCH',
-    pace: 'YOUR PACE'
+    pace: 'YOUR CONTEXT'
   },
   capabilities: {
     kicker: 'A COMPANION THAT KEEPS UP',
     title1: 'More than an answer.',
     title2: 'A space to explore.',
-    intro: 'Start with a thought, a picture, or a question. Lumen brings the right kind of attention to the moment.',
+    intro: 'Start with a thought, a picture, or a goal. Lumen brings the right tool to the moment and keeps the next step visible.',
     topline: 'LUMEN CAPABILITY'
   },
   features: [
@@ -59,12 +59,12 @@ const en = {
     },
     {
       title: 'Turn curiosity into clarity.',
-      detail: 'Research public web sources, get live information, and create a report you can take with you.',
-      action: 'Explore research'
+      detail: 'Research public sources and create a cited report—or start a Decision Mission. Review its plan, approve one targeted follow-up search, track progress, and cancel anytime.',
+      action: 'Explore research & missions'
     },
     {
       title: 'Make the space your own.',
-      detail: 'Choose a voice, language, and response style. Review, edit, or pause saved memories whenever you like.',
+      detail: 'Create a grounded Persona Card from your saved profile and memories. Choose a voice and response style, and review or change what Lumen remembers.',
       action: 'Meet your copilot'
     }
   ],
@@ -153,7 +153,7 @@ const en = {
     items: [
       {
         question: 'What is Lumen?',
-        answer: 'Lumen is a voice- and vision-enabled AI copilot for conversation, image and PDF analysis, web research, and live information.'
+        answer: 'Lumen is a voice- and vision-enabled AI copilot for conversation, image and PDF analysis, web research, live information, and bounded Decision Missions.'
       },
       {
         question: 'How do I use it?',
@@ -161,7 +161,11 @@ const en = {
       },
       {
         question: 'Can I control what Lumen remembers?',
-        answer: 'Yes. You can review, edit, or delete saved memories, and automatic memory can be paused from the account controls.'
+        answer: 'Yes. You can review, edit, or delete saved memories, pause automatic memory, and create a Persona Card from your saved profile and memories.'
+      },
+      {
+        question: 'How do Decision Missions work?',
+        answer: 'Lumen drafts a research plan for you to review. You can approve one targeted follow-up search after the first results; progress is visible, the search is bounded, and you can cancel the mission.'
       },
       {
         question: 'Does Lumen work offline?',
@@ -200,10 +204,10 @@ const de = {
     title1: 'Deine Gedanken,',
     title2: 'in ',
     title3: 'neuem Licht.',
-    intro: 'Lerne Lumen kennen: einen ambienten KI-Begleiter für echte Gespräche, neugierige Fragen und alles, was du verstehen möchtest.',
+    intro: 'Lerne Lumen kennen: einen ambienten KI-Begleiter für echte Gespräche, neugierige Fragen und begrenzte Recherchemissionen – mit Plan, sichtbarem Fortschritt und Kontrollpunkten, die du freigibst.',
     primary: 'Mit Lumen sprechen',
     quiet: 'Entdecke, was möglich ist',
-    note: 'Sprache, Sehen und Recherche – in einem durchdachten Raum.',
+    note: 'Sprache, Sehen und Recherche – mit nächsten Schritten in deiner Hand.',
     coverAlt: 'Eine leuchtende Lumen-Kugel, gewoben aus cyanfarbenem, violettem und rosafarbenem Licht.',
     cardVoiceTitle: 'Immer im Gespräch',
     cardVoiceSub: 'Sprache · Text · dein Tempo',
@@ -219,13 +223,13 @@ const de = {
     voice: 'SPRACHE',
     vision: 'SEHEN',
     research: 'RECHERCHE',
-    pace: 'DEIN TEMPO'
+    pace: 'DEIN KONTEXT'
   },
   capabilities: {
     kicker: 'EIN BEGLEITER, DER MITHÄLT',
     title1: 'Mehr als eine Antwort.',
     title2: 'Ein Raum zum Entdecken.',
-    intro: 'Beginne mit einem Gedanken, einem Bild oder einer Frage. Lumen schenkt dem Moment die passende Aufmerksamkeit.',
+    intro: 'Beginne mit einem Gedanken, einem Bild oder einem Ziel. Lumen wählt das passende Werkzeug und macht den nächsten Schritt sichtbar.',
     topline: 'LUMEN-FUNKTION'
   },
   features: [
@@ -241,12 +245,12 @@ const de = {
     },
     {
       title: 'Aus Neugier wird Klarheit.',
-      detail: 'Recherchiere öffentliche Webquellen, erhalte aktuelle Informationen und erstelle einen Bericht zum Mitnehmen.',
-      action: 'Recherche entdecken'
+      detail: 'Recherchiere öffentliche Quellen und erstelle einen belegten Bericht – oder starte eine Entscheidungsmission. Prüfe den Plan, gib eine gezielte Folgesuche frei und stoppe jederzeit.',
+      action: 'Recherche & Missionen'
     },
     {
       title: 'Mach den Raum zu deinem.',
-      detail: 'Wähle Stimme, Sprache und Antwortstil. Gespeicherte Erinnerungen kannst du jederzeit ansehen, bearbeiten oder pausieren.',
+      detail: 'Erstelle eine fundierte Persona-Karte aus deinem gespeicherten Profil und deinen Erinnerungen. Wähle Stimme und Antwortstil und bestimme, was Lumen behalten darf.',
       action: 'Deinen Copilot kennenlernen'
     }
   ],
@@ -335,7 +339,7 @@ const de = {
     items: [
       {
         question: 'Was ist Lumen?',
-        answer: 'Lumen ist ein KI-Copilot mit Sprach- und Bildverständnis für Gespräche, Bild- und PDF-Analyse, Webrecherche und aktuelle Informationen.'
+        answer: 'Lumen ist ein KI-Copilot mit Sprach- und Bildverständnis für Gespräche, Bild- und PDF-Analyse, Webrecherche, aktuelle Informationen und begrenzte Entscheidungsmissionen.'
       },
       {
         question: 'Wie nutze ich es?',
@@ -343,7 +347,11 @@ const de = {
       },
       {
         question: 'Kann ich steuern, woran sich Lumen erinnert?',
-        answer: 'Ja. Du kannst gespeicherte Erinnerungen ansehen, bearbeiten oder löschen, und die automatische Erinnerung lässt sich in den Kontoeinstellungen pausieren.'
+        answer: 'Ja. Du kannst gespeicherte Erinnerungen ansehen, bearbeiten oder löschen, die automatische Erinnerung pausieren und aus deinem Profil und deinen Erinnerungen eine Persona-Karte erstellen.'
+      },
+      {
+        question: 'Wie funktionieren Entscheidungsmissionen?',
+        answer: 'Lumen erstellt einen Rechercheplan, den du zuerst prüfst. Danach kannst du eine gezielte Folgesuche freigeben. Fortschritt und Umfang bleiben sichtbar und du kannst die Mission jederzeit abbrechen.'
       },
       {
         question: 'Funktioniert Lumen offline?',

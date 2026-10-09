@@ -5,11 +5,12 @@
 <h1 align="center">Lumen AI</h1>
 
 <p align="center">
-  <strong>Voice, vision, and curiosity—together in one AI copilot.</strong><br />
-  Talk through ideas, understand your files, explore the web, or share a browser tab when you choose.
+  <strong>Voice, vision, research, and bounded Decision Missions—in one thoughtful AI copilot.</strong><br />
+  Work through questions with clear plans, visible progress, and checkpoints you approve. Your saved context stays reviewable and under your control.
 </p>
 
 <p align="center">
+  <a href="https://lumen-ai-0cje.onrender.com/">Open the live Lumen experience</a> ·
   <a href="#features">Explore features</a> ·
   <a href="#run-locally">Run it locally</a> ·
   <a href="#browser-tab-sharing-extension-mvp">Share a tab</a> ·
@@ -32,9 +33,9 @@ The public landing page is at `/`. Open the existing copilot with **Talk with Lu
 - **🎙️ Voice conversation:** speak with Lumen using browser speech recognition, with an AWS Transcribe fallback if the browser speech service is unreachable. Amazon Polly neural voices are used when configured.
 - **🖼️ Image and PDF analysis:** attach a photo or PDF and ask Lumen to inspect it.
 - **🔎 Web research:** request sourced research reports; Lumen searches and reads public web pages, then can create a downloadable PDF.
-- **🧭 Adaptive decision missions:** start from the Decision mission pill, review Lumen’s research plan, and choose whether it may run one targeted follow-up search after checking the first-pass evidence. The extra read stays within the approved page limit; progress and the follow-up query remain visible, and the task can be cancelled.
+- **🧭 Adaptive decision missions:** give Lumen a research goal, review its plan, then choose whether it may run one targeted follow-up search after checking the first-pass evidence. The extra read stays within the approved page limit; the query and progress remain visible, and you can cancel. Missions are bounded research workflows, not unrestricted browser control.
 - **🌦️ Live information:** ask about weather or cryptocurrency prices to show interactive data cards.
-- **🧠 Personalization and memory:** choose a response tone and style, upload a text/Markdown/JSON profile, import reviewed context from another AI with a copy-and-paste prompt, and manage cloud-synced memories. Automatic memory can be paused; saved items can be reviewed, edited, or deleted.
+- **🧠 Personalization, memory, and Persona Card:** choose a response tone and style, upload a text/Markdown/JSON profile, import reviewed context from another AI with a copy-and-paste prompt, and manage cloud-synced memories. Create a grounded Persona Card from your saved profile and memories. Automatic memory can be paused; saved items can be reviewed, edited, or deleted.
 - **🔐 Sign-in:** authenticate with GitHub. The server verifies the OAuth session; repository access is not requested.
 - **✨ Conversation tools:** use prompt starters, choose a voice and language, export a conversation, and adjust the visual theme. A dismissible quick-start guide points out the sphere, chat, Explore examples, and attachments on first visit.
 - **📲 Installable PWA:** install Lumen on Android from a supported browser, or add it to the iPhone/iPad Home Screen from Safari. The app needs an internet connection for AI and live-data features.
