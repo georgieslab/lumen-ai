@@ -36,7 +36,7 @@ import WebcamLensModal from './components/WebcamLensModal';
 import LumenVoiceModal, { VOICE_PERSONAS } from './components/LumenVoiceModal';
 import TechStackModal from './components/TechStackModal';
 import { useAudioVisualizer } from './hooks/useAudioVisualizer';
-import { converseWithLumenStream, researchWithLumenStream, planResearchWithLumen, planPageWithLumen, processFile, fetchAmbientData, exportConversationPdfDirect, getAuthSession } from './services/api';
+import { converseWithLumenStream, researchWithLumenStream, planResearchWithLumen, planPageWithLumen, processFile, fetchAmbientData, exportConversationPdfDirect, getAuthSession, getUserMemory } from './services/api';
 import { getTranslations, formatString, DEFAULT_VOICES_BY_LANG } from './utils/translations';
 
 function getCircadianPhase() {
@@ -201,6 +201,7 @@ export default function App() {
     }
   };
   const [currentUser, setCurrentUser] = useState(null);
+  const [personaCard, setPersonaCard] = useState(null);
 
   const t = getTranslations(activeLanguage);
 
@@ -212,6 +213,20 @@ export default function App() {
       .then(({ user }) => setCurrentUser(user || null))
       .catch(error => console.warn('Could not restore the signed-in account:', error.message));
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    if (!currentUser) {
+      setPersonaCard(null);
+      return () => { active = false; };
+    }
+    getUserMemory()
+      .then(data => {
+        if (active) setPersonaCard(data.personaCard || null);
+      })
+      .catch(error => console.warn('Could not load the saved Persona Card:', error.message));
+    return () => { active = false; };
+  }, [currentUser?.id]);
 
   const handleCycleTheme = () => {
     const themes = ['visionos', 'cyberpunk', 'obsidian', 'solardawn', 'highcontrast'];
@@ -1801,6 +1816,53 @@ export default function App() {
           activeLanguage={activeLanguage}
         />
 
+        {(
+          <button
+            type="button"
+            className="persona-profile-card"
+            onClick={() => setIsMemoryModalOpen(true)}
+            title={personaCard?.summary || t.memoryManager.launcherHint}
+            aria-label={t.memoryManager.personaLauncher}
+          >
+            <span className="persona-profile-head">
+              <span className="persona-profile-mark" aria-hidden="true">✦</span>
+              <span className="persona-profile-title">
+                <strong>{t.memoryManager.personaLauncher}</strong>
+                <small>{personaCard ? t.memoryManager.personaSummary : currentUser ? t.memoryManager.personaCreate : t.memoryManager.signInTitle}</small>
+              </span>
+              <span className="persona-profile-open" aria-hidden="true">↗</span>
+            </span>
+            {personaCard ? (
+              <>
+                <span className="persona-profile-summary">{personaCard.summary}</span>
+                {personaCard.currentFocus?.length > 0 && (
+                  <span className="persona-profile-info">
+                    <small>{t.memoryManager.personaFocus}</small>
+                    <span>{personaCard.currentFocus.slice(0, 2).join(' · ')}</span>
+                  </span>
+                )}
+                {personaCard.preferences?.length > 0 && (
+                  <span className="persona-profile-info">
+                    <small>{t.memoryManager.personaPreferences}</small>
+                    <span>{personaCard.preferences.slice(0, 2).join(' · ')}</span>
+                  </span>
+                )}
+                {personaCard.worksBest?.length > 0 && (
+                  <span className="persona-profile-info persona-profile-works">
+                    <small>{t.memoryManager.personaWorksBest}</small>
+                    <span>{personaCard.worksBest[0]}</span>
+                  </span>
+                )}
+              </>
+            ) : (
+              <>
+                <span className="persona-profile-empty">{currentUser ? t.memoryManager.personaNeedsKnowledge : t.memoryManager.signInHint}</span>
+                <span className="persona-profile-cta">{currentUser ? t.memoryManager.personaCreate : t.memoryManager.signInTitle} <span aria-hidden="true">→</span></span>
+              </>
+            )}
+          </button>
+        )}
+
         {/* Real-Time Ambient Live Bar & Interactive Glanceable Pills */}
         <div className="ambient-live-bar">
           <div className="ambient-glance-row">
@@ -2231,6 +2293,7 @@ export default function App() {
         activeLanguage={activeLanguage}
         statusNotice={memoryNotice}
         isSignedIn={Boolean(currentUser)}
+        onPersonaCardChange={setPersonaCard}
       />
     </div>
   );

@@ -14,7 +14,7 @@ import { getTranslations } from '../utils/translations';
 const MAX_PROFILE_LENGTH = 10000;
 const MAX_MEMORY_LENGTH = 280;
 
-export default function UserMemoryModal({ isOpen, onClose, activeLanguage = 'en-US', statusNotice = '', isSignedIn = false }) {
+export default function UserMemoryModal({ isOpen, onClose, activeLanguage = 'en-US', statusNotice = '', isSignedIn = false, onPersonaCardChange = () => {} }) {
   const labels = getTranslations(activeLanguage).memoryManager;
   const [profile, setProfile] = useState('');
   const [memories, setMemories] = useState([]);
@@ -46,6 +46,7 @@ export default function UserMemoryModal({ isOpen, onClose, activeLanguage = 'en-
     setPersonaLoading(false);
     setPersonaCard(null);
     setPersonaError('');
+    onPersonaCardChange(null);
   };
 
   useEffect(() => {
@@ -78,6 +79,8 @@ export default function UserMemoryModal({ isOpen, onClose, activeLanguage = 'en-
         setProfileIsDirty(false);
         setMemories(data.memories || []);
         setAutoEnabled(data.autoMemoryEnabled !== false);
+        setPersonaCard(data.personaCard || null);
+        onPersonaCardChange(data.personaCard || null);
       })
       .catch(memoryError => {
         if (active) setError(memoryError.message || labels.loadError);
@@ -265,7 +268,10 @@ export default function UserMemoryModal({ isOpen, onClose, activeLanguage = 'en-
     setPersonaError('');
     try {
       const result = await generateUserPersonaCard(activeLanguage, controller.signal);
-      if (!controller.signal.aborted) setPersonaCard(result.card);
+      if (!controller.signal.aborted) {
+        setPersonaCard(result.card);
+        onPersonaCardChange(result.card);
+      }
     } catch (personaRequestError) {
       if (!controller.signal.aborted) setPersonaError(personaRequestError.message || labels.personaError);
     } finally {

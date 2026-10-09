@@ -7101,6 +7101,94 @@ body {
 .weather-tile-wrap .weather-glance { padding: 16px 52px 16px 20px; min-width: 240px; font-size: 1.15em; }
 .weather-tile-wrap .glance-icon { font-size: 2em; }
 .weather-tile-wrap .glance-value { font-size: 1.6em; font-weight: 700; }
+.persona-profile-card {
+  position: absolute;
+  z-index: 12;
+  top: 50%;
+  left: clamp(14px, 2.2vw, 36px);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: clamp(250px, 22vw, 310px);
+  aspect-ratio: 4 / 3;
+  padding: 16px;
+  overflow: hidden;
+  transform: translateY(-50%);
+  border: 1px solid rgba(190,165,255,0.4);
+  border-radius: 24px;
+  color: var(--text-primary);
+  text-align: left;
+  font-family: inherit;
+  background: linear-gradient(145deg, rgba(37,31,70,0.86), rgba(12,18,38,0.88) 60%, rgba(30,25,57,0.9));
+  backdrop-filter: blur(24px) saturate(155%);
+  -webkit-backdrop-filter: blur(24px) saturate(155%);
+  box-shadow: 0 18px 48px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.16), 0 0 34px rgba(145,105,255,0.12);
+  cursor: pointer;
+  transition: transform .22s ease, border-color .22s ease, box-shadow .22s ease;
+}
+.persona-profile-card:hover {
+  transform: translateY(calc(-50% - 3px));
+  border-color: rgba(210,190,255,0.78);
+  box-shadow: 0 22px 52px rgba(0,0,0,0.46), 0 0 28px rgba(160,120,255,0.28), inset 0 1px 0 rgba(255,255,255,0.2);
+}
+.persona-profile-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.persona-profile-mark {
+  display: grid;
+  flex: 0 0 42px;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border-radius: 50%;
+  color: #f7f1ff;
+  font-size: 1.3rem;
+  background: radial-gradient(circle at 32% 28%, rgba(255,255,255,0.88), rgba(194,155,255,0.72) 30%, rgba(112,77,200,0.58) 65%, rgba(35,25,75,0.86));
+  box-shadow: 0 0 20px rgba(175,135,255,0.45), inset -4px -6px 10px rgba(0,0,0,0.28), inset 3px 3px 8px rgba(255,255,255,0.32);
+}
+.persona-profile-title { display: flex; flex: 1; flex-direction: column; min-width: 0; gap: 3px; }
+.persona-profile-title strong { color: #fff; font-size: 0.92rem; }
+.persona-profile-title small { color: rgba(235,228,255,0.64); font-size: 0.68rem; }
+.persona-profile-open { align-self: flex-start; color: rgba(235,228,255,0.58); }
+.persona-profile-summary {
+  display: -webkit-box;
+  overflow: hidden;
+  color: rgba(250,248,255,0.92);
+  font-size: 0.82rem;
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+.persona-profile-info { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.persona-profile-info small { color: #c2aaff; font-size: 0.63rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.persona-profile-info > span { display: -webkit-box; overflow: hidden; color: rgba(238,236,248,0.76); font-size: 0.72rem; line-height: 1.35; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.persona-profile-empty { color: rgba(238,236,248,0.74); font-size: 0.82rem; line-height: 1.5; }
+.persona-profile-cta { display: flex; align-items: center; justify-content: space-between; margin-top: auto; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.11); color: #d5c4ff; font-size: 0.76rem; font-weight: 700; }
+@media (max-width: 768px) {
+  .persona-profile-card {
+    top: 12px;
+    left: 10px;
+    width: min(210px, 52vw);
+    padding: 11px;
+    gap: 8px;
+    transform: none;
+    border-radius: 18px;
+  }
+  .persona-profile-card:hover { transform: translateY(-2px); }
+  .persona-profile-mark { flex-basis: 34px; width: 34px; height: 34px; font-size: 1.05rem; }
+  .persona-profile-title strong { font-size: 0.8rem; }
+  .persona-profile-title small { font-size: 0.6rem; }
+  .persona-profile-summary { font-size: 0.7rem; -webkit-line-clamp: 2; }
+  .persona-profile-info { gap: 2px; }
+  .persona-profile-info small { font-size: 0.56rem; }
+  .persona-profile-info > span { font-size: 0.62rem; -webkit-line-clamp: 1; }
+  .persona-profile-works { display: none; }
+  .persona-profile-cta { font-size: 0.66rem; }
+  .lumen-main-stage.chat-open .persona-profile-card { display: none; }
+}
 .weather-settings-btn {
   position: absolute;
   top: 8px;

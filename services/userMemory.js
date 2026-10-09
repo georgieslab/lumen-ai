@@ -48,7 +48,7 @@ async function getAllUserItems(userId) {
 
 export async function getUserMemory(userId) {
   const table = requireTable();
-  const [profileResult, settingsResult, memoriesResult] = await Promise.all([
+  const [profileResult, settingsResult, memoriesResult, personaResult] = await Promise.all([
     getClient().send(new GetCommand({
       TableName: table,
       Key: { userId, recordId: 'PROFILE' }
@@ -66,18 +66,23 @@ export async function getUserMemory(userId) {
       },
       ScanIndexForward: false,
       Limit: 100
+    })),
+    getClient().send(new GetCommand({
+      TableName: table,
+      Key: { userId, recordId: 'PERSONA' }
     }))
   ]);
 
   return {
     profile: profileResult.Item?.text || '',
     autoMemoryEnabled: settingsResult.Item?.autoMemoryEnabled !== false,
-    memories: (memoriesResult.Items || []).map(({ memoryId, text, createdAt, updatedAt }) => ({
-      id: memoryId,
+    memories: (memoriesResult.Items || []).map(({ memoryId, recordId, text, createdAt, updatedAt }) => ({
+      id: memoryId || recordId?.slice('MEMORY#'.length),
       text,
       createdAt,
       updatedAt
-    }))
+    })).filter(memory => memory.id && typeof memory.text === 'string'),
+    personaCard: personaResult.Item?.personaCard || null
   };
 }
 
@@ -87,7 +92,24 @@ export async function saveUserProfile(userId, text) {
     TableName: requireTable(),
     Item: { userId, recordId: 'PROFILE', text, updatedAt: now }
   }));
+  await deleteUserPersonaCard(userId);
   return { text, updatedAt: now };
+}
+
+export async function saveUserPersonaCard(userId, personaCard) {
+  const now = new Date().toISOString();
+  await getClient().send(new PutCommand({
+    TableName: requireTable(),
+    Item: { userId, recordId: 'PERSONA', personaCard, updatedAt: now }
+  }));
+  return { personaCard, updatedAt: now };
+}
+
+export async function deleteUserPersonaCard(userId) {
+  await getClient().send(new DeleteCommand({
+    TableName: requireTable(),
+    Key: { userId, recordId: 'PERSONA' }
+  }));
 }
 
 export async function setAutoMemoryEnabled(userId, enabled) {
@@ -112,6 +134,7 @@ export async function addUserMemory(userId, text) {
       updatedAt: now
     }
   }));
+  await deleteUserPersonaCard(userId);
   return { id: memoryId, text, createdAt: now, updatedAt: now };
 }
 
@@ -126,6 +149,7 @@ export async function updateUserMemory(userId, memoryId, text) {
     ReturnValues: 'ALL_NEW',
     ConditionExpression: 'attribute_exists(userId) AND attribute_exists(recordId)'
   }));
+  await deleteUserPersonaCard(userId);
   return {
     id: memoryId,
     text: result.Attributes?.text || text,
@@ -140,6 +164,7 @@ export async function deleteUserMemory(userId, memoryId) {
     Key: { userId, recordId: `MEMORY#${memoryId}` },
     ConditionExpression: 'attribute_exists(userId) AND attribute_exists(recordId)'
   }));
+  await deleteUserPersonaCard(userId);
 }
 
 export async function clearUserMemory(userId) {
