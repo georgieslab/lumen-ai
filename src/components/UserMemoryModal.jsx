@@ -79,8 +79,8 @@ export default function UserMemoryModal({ isOpen, onClose, activeLanguage = 'en-
         setMemories(data.memories || []);
         setAutoEnabled(data.autoMemoryEnabled !== false);
       })
-      .catch(() => {
-        if (active) setError(labels.loadError);
+      .catch(memoryError => {
+        if (active) setError(memoryError.message || labels.loadError);
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -169,8 +169,8 @@ export default function UserMemoryModal({ isOpen, onClose, activeLanguage = 'en-
       setProfileIsDirty(false);
       invalidatePersonaCard();
       setImportNotice('');
-    } catch {
-      setError(labels.saveError);
+    } catch (saveError) {
+      setError(saveError.message || labels.saveError);
     } finally {
       setSaving(false);
     }

@@ -2238,10 +2238,22 @@ function githubCallbackUrl(req) {
 
 function sendMemoryRouteError(res, error) {
   console.error('Cloud memory request failed:', error);
-  res.status(error.name === 'ConditionalCheckFailedException' ? 404 : 500).json({
+  const missingTableConfiguration = !process.env.LUMEN_MEMORY_TABLE_NAME;
+  const tableNotFound = error.name === 'ResourceNotFoundException';
+  const accessDenied = ['AccessDeniedException', 'UnrecognizedClientException', 'CredentialsProviderError'].includes(error.name);
+  const status = error.name === 'ConditionalCheckFailedException'
+    ? 404
+    : missingTableConfiguration || tableNotFound || accessDenied ? 503 : 500;
+  res.status(status).json({
     error: error.name === 'ConditionalCheckFailedException'
       ? 'That memory no longer exists.'
-      : 'Cloud memory could not be saved. Check the server and DynamoDB configuration.'
+      : missingTableConfiguration
+        ? 'Cloud memory is not configured on the server. Set LUMEN_MEMORY_TABLE_NAME.'
+        : tableNotFound
+          ? `The DynamoDB memory table "${process.env.LUMEN_MEMORY_TABLE_NAME}" was not found in ${process.env.AWS_REGION || 'eu-north-1'}.`
+          : accessDenied
+            ? 'The server could not access the DynamoDB memory table. Check its AWS credentials and table permissions.'
+            : 'Cloud memory could not be saved. Check the server and DynamoDB configuration.'
   });
 }
 
