@@ -1,10 +1,15 @@
-﻿import React, { useRef, useEffect, useMemo, useState } from 'react';
+import React, { useRef, useEffect, useMemo, useState } from 'react';
 import { fetchLiveWeatherDirect } from '../services/api';
 import { getTranslations } from '../utils/translations';
 import HtmlPageCard from './HtmlPageCard';
 import { MissionCard, MissionActivity, writingLabel } from './MissionCard';
 import PlanCard from './PlanCard';
 import BriefCard from './BriefCard';
+import ChecklistCard from './ChecklistCard';
+import ComparisonCard from './ComparisonCard';
+import ScheduleCard from './ScheduleCard';
+import BudgetCard from './BudgetCard';
+import DailyBriefCard from './DailyBriefCard';
 import { hideStreamingHtml } from '../services/htmlPage';
 import { splitHtmlBlocks } from '../services/htmlPage';
 
@@ -54,6 +59,10 @@ export function getFollowUpKeys(message, previousUserMessage) {
 
   if (widgetTypes.has('weather')) return ['weatherAdvice', 'otherCity', 'nextStep'];
   if (widgetTypes.has('jobs')) return ['mockInterview', 'skills', 'nextStep'];
+  if (widgetTypes.has('budget')) return ['budgetTips', 'adjustExpenses', 'nextStep'];
+  if (widgetTypes.has('schedule')) return ['addBreaks', 'reschedule', 'nextStep'];
+  if (widgetTypes.has('comparison')) return ['compare', 'deeper', 'nextStep'];
+  if (widgetTypes.has('checklist')) return ['prioritize', 'nextStep', 'example'];
   if (message.webSources?.length || message.webType === 'research_report') {
     return widgetTypes.has('pdf_document')
       ? ['compare', 'deeper', 'nextStep']
@@ -663,36 +672,145 @@ export function LiveJobsRadarCard({
   );
 }
 
+export function splitMarkdownTableBlocks(text) {
+  if (!text || typeof text !== 'string' || !text.includes('|')) {
+    return [{ type: 'text', content: text || '' }];
+  }
+
+  const lines = text.split('\n');
+  const segments = [];
+  let currentTextLines = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i].trim();
+    // Check if line looks like start of a markdown table with header and separator
+    if (line.startsWith('|') && line.endsWith('|') && line.split('|').length >= 3 && i + 1 < lines.length) {
+      const nextLine = lines[i + 1].trim();
+      const isSep = /^\|?\s*[-:]+\s*\|[\s-:|]*$/.test(nextLine);
+      if (isSep) {
+        if (currentTextLines.length > 0) {
+          segments.push({ type: 'text', content: currentTextLines.join('\n') });
+          currentTextLines = [];
+        }
+
+        const rawHeaders = line.split('|').map(c => c.trim()).filter((_, idx, arr) => idx > 0 && idx < arr.length - 1);
+        const rows = [];
+        i += 2; // skip header and separator
+
+        while (i < lines.length) {
+          const rowLine = lines[i].trim();
+          if (rowLine.startsWith('|') && rowLine.endsWith('|')) {
+            const cells = rowLine.split('|').map(c => c.trim()).filter((_, idx, arr) => idx > 0 && idx < arr.length - 1);
+            rows.push(cells);
+            i++;
+          } else {
+            break;
+          }
+        }
+
+        segments.push({
+          type: 'table',
+          headers: rawHeaders,
+          rows
+        });
+        continue;
+      }
+    }
+
+    currentTextLines.push(lines[i]);
+    i++;
+  }
+
+  if (currentTextLines.length > 0) {
+    segments.push({ type: 'text', content: currentTextLines.join('\n') });
+  }
+
+  return segments;
+}
+
+export function renderInlineContent(content) {
+  if (!content) return null;
+  const parts = parseFormattedText(content);
+  return parts.map((part, i) => {
+    if (part.type === 'link') {
+      return (
+        <a
+          key={i}
+          href={part.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="bubble-inline-link"
+          title={part.url}
+        >
+          <span className="link-title">{part.title}</span>
+          <span className="link-glyph">↗</span>
+        </a>
+      );
+    }
+
+    // Split on **bold** formatting
+    const boldRegex = /\*\*(.*?)\*\*/g;
+    const subParts = [];
+    let last = 0;
+    let match;
+    while ((match = boldRegex.exec(part.content)) !== null) {
+      if (match.index > last) {
+        subParts.push({ bold: false, text: part.content.slice(last, match.index) });
+      }
+      subParts.push({ bold: true, text: match[1] });
+      last = boldRegex.lastIndex;
+    }
+    if (last < part.content.length) {
+      subParts.push({ bold: false, text: part.content.slice(last) });
+    }
+
+    return (
+      <React.Fragment key={i}>
+        {subParts.map((sp, spIdx) => sp.bold ? <strong key={spIdx}>{sp.text}</strong> : sp.text)}
+      </React.Fragment>
+    );
+  });
+}
+
 export function FormattedBubbleText({ text }) {
   if (!text) return null;
-  const parts = parseFormattedText(text);
+  const segments = splitMarkdownTableBlocks(text);
 
   return (
     <div className="bubble-text">
-      {parts.map((part, i) => {
-        if (part.type === 'link') {
+      {segments.map((seg, sIdx) => {
+        if (seg.type === 'table') {
           return (
-            <a
-              key={i}
-              href={part.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="bubble-inline-link"
-              title={part.url}
-            >
-              <span className="link-title">{part.title}</span>
-              <span className="link-glyph">↗</span>
-            </a>
+            <div key={sIdx} className="table-responsive-wrapper">
+              <table className="markdown-bubble-table">
+                <thead>
+                  <tr>
+                    {seg.headers.map((h, hIdx) => (
+                      <th key={hIdx}>{renderInlineContent(h)}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {seg.rows.map((row, rIdx) => (
+                    <tr key={rIdx}>
+                      {row.map((cell, cIdx) => (
+                        <td key={cIdx}>{renderInlineContent(cell)}</td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           );
         }
 
-        // Render text with line breaks preserved
-        const lines = part.content.split('\n');
+        const lines = seg.content.split('\n');
         return (
-          <React.Fragment key={i}>
+          <React.Fragment key={sIdx}>
             {lines.map((line, lIdx) => (
               <React.Fragment key={lIdx}>
-                {line}
+                {renderInlineContent(line)}
                 {lIdx < lines.length - 1 && <br />}
               </React.Fragment>
             ))}
@@ -765,9 +883,12 @@ export default function ConversationFeed({
   onPlanCancel,
   onBriefBuild,
   onBriefSkip,
-  onBriefCancel,
+  onTriggerAgentAction,
   onClose,
-  activeLanguage = 'en-US'
+  activeLanguage = 'en-US',
+  windowOffset: externalWindowOffset,
+  onWindowOffsetChange,
+  onWindowDraggingChange
 }) {
   const t = getTranslations(activeLanguage).feed;
   const searchLabels = SEARCH_LABELS[String(activeLanguage || 'en-US').slice(0, 2)] || SEARCH_LABELS.en;
@@ -808,6 +929,19 @@ export default function ConversationFeed({
     setActiveSearchIndex(0);
   };
 
+  const [isAgentMenuOpen, setIsAgentMenuOpen] = useState(false);
+
+  useEffect(() => {
+    if (!isAgentMenuOpen) return;
+    const handleOutsideClick = (e) => {
+      if (!e.target.closest('.feed-agent-actions-dropdown-wrap')) {
+        setIsAgentMenuOpen(false);
+      }
+    };
+    window.addEventListener('pointerdown', handleOutsideClick);
+    return () => window.removeEventListener('pointerdown', handleOutsideClick);
+  }, [isAgentMenuOpen]);
+
   useEffect(() => {
     // A plan waiting for approval is read from its top; everything else follows the newest message.
     if (messages[messages.length - 1]?.planCard || messages[messages.length - 1]?.briefCard) {
@@ -823,22 +957,468 @@ export default function ConversationFeed({
   const lastMessage = messages[messages.length - 1];
   const showsOwnProgress = Boolean(lastMessage?.isStreaming && lastMessage.mission?.steps?.length);
 
+  const DEFAULT_CHAT_WIDTH = 540;
+  const DEFAULT_CHAT_HEIGHT = 420;
+  const MIN_CHAT_WIDTH = 380;
+  const MIN_CHAT_HEIGHT = 240;
+
+  const [panelSize, setPanelSize] = useState(() => {
+    if (typeof window === 'undefined') {
+      return { width: DEFAULT_CHAT_WIDTH, height: DEFAULT_CHAT_HEIGHT };
+    }
+    try {
+      const savedW = parseInt(localStorage.getItem('lumen_chat_width'), 10);
+      const savedH = parseInt(localStorage.getItem('lumen_chat_height'), 10);
+      return {
+        width: (!isNaN(savedW) && savedW >= MIN_CHAT_WIDTH) ? savedW : DEFAULT_CHAT_WIDTH,
+        height: (!isNaN(savedH) && savedH >= MIN_CHAT_HEIGHT) ? savedH : DEFAULT_CHAT_HEIGHT,
+      };
+    } catch (_) {
+      return { width: DEFAULT_CHAT_WIDTH, height: DEFAULT_CHAT_HEIGHT };
+    }
+  });
+
+  const [isResizing, setIsResizing] = useState(false);
+  const isMaximized = panelSize.width >= 820 || panelSize.height >= 560;
+
+  const [localWindowOffset, setLocalWindowOffset] = useState(() => {
+    if (typeof window === 'undefined') return { x: 0, y: 0 };
+    try {
+      const isSmall = window.innerWidth <= 768;
+      if (isSmall) return { x: 0, y: 0 };
+      const saved = JSON.parse(localStorage.getItem('lumen_chat_window_position') || 'null');
+      if (saved && Number.isFinite(saved.x) && Number.isFinite(saved.y)) {
+        return { x: Math.max(-1400, Math.min(1400, saved.x)), y: Math.max(-1000, Math.min(1000, saved.y)) };
+      }
+    } catch (_) {}
+    return { x: 0, y: 0 };
+  });
+
+  const windowOffset = externalWindowOffset !== undefined ? externalWindowOffset : localWindowOffset;
+
+  const setWindowOffset = (next) => {
+    setLocalWindowOffset(next);
+    if (onWindowOffsetChange) {
+      onWindowOffsetChange(next);
+    }
+  };
+
+  const [isWindowDragging, setIsWindowDragging] = useState(false);
+  const windowDragRef = useRef(null);
+
+  const setDraggingState = (isDragging) => {
+    setIsWindowDragging(isDragging);
+    if (onWindowDraggingChange) {
+      onWindowDraggingChange(isDragging);
+    }
+  };
+
+  const handleResetPosition = () => {
+    setWindowOffset({ x: 0, y: 0 });
+    try {
+      localStorage.removeItem('lumen_chat_window_position');
+    } catch (_) {}
+  };
+
+  const handleResetSize = () => {
+    setPanelSize({ width: DEFAULT_CHAT_WIDTH, height: DEFAULT_CHAT_HEIGHT });
+    handleResetPosition();
+    try {
+      localStorage.removeItem('lumen_chat_width');
+      localStorage.removeItem('lumen_chat_height');
+    } catch (_) {}
+  };
+
+  const handleToggleMaximize = () => {
+    if (isMaximized) {
+      handleResetSize();
+    } else {
+      const maxW = Math.min(940, Math.max(MIN_CHAT_WIDTH, window.innerWidth - 40));
+      const maxH = Math.min(680, Math.max(MIN_CHAT_HEIGHT, Math.floor(window.innerHeight * 0.78)));
+      const target = { width: maxW, height: maxH };
+      setPanelSize(target);
+      handleResetPosition();
+      try {
+        localStorage.setItem('lumen_chat_width', String(target.width));
+        localStorage.setItem('lumen_chat_height', String(target.height));
+      } catch (_) {}
+    }
+  };
+
+  const handleHeaderPointerDown = (event) => {
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
+    if (event.target.closest('button, input, select, textarea, .chat-corner-handle')) return;
+
+    const card = event.currentTarget.closest('.conversation-feed-card');
+    const stage = card?.closest('.lumen-main-stage') || document.body;
+    if (!card || !stage) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    if (typeof window !== 'undefined') {
+      window.__lumen_is_resizing_chat = true;
+    }
+
+    const zoomStyle = getComputedStyle(document.documentElement).zoom;
+    const parsedZoom = parseFloat(zoomStyle);
+    const scale = zoomStyle.endsWith('%') ? parsedZoom / 100 : parsedZoom || 1;
+
+    windowDragRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      cardRect: card.getBoundingClientRect(),
+      stageRect: stage.getBoundingClientRect(),
+      startOffset: windowOffset,
+      nextOffset: windowOffset,
+      scale: scale > 0 ? scale : 1,
+      moved: false
+    };
+
+    const targetHeader = event.currentTarget;
+    try {
+      targetHeader.setPointerCapture(event.pointerId);
+    } catch (_) {}
+
+    const onPointerMove = (moveEvent) => {
+      const drag = windowDragRef.current;
+      if (!drag || drag.pointerId !== moveEvent.pointerId) return;
+      moveEvent.preventDefault();
+      moveEvent.stopPropagation();
+
+      const rawX = moveEvent.clientX - drag.startX;
+      const rawY = moveEvent.clientY - drag.startY;
+
+      if (!drag.moved && Math.hypot(rawX, rawY) < 4) return;
+      if (!drag.moved) {
+        setDraggingState(true);
+        drag.moved = true;
+      }
+
+      const margin = 10;
+      const minX = drag.stageRect.left + margin - drag.cardRect.left;
+      const maxX = drag.stageRect.right - margin - drag.cardRect.right;
+      const minY = drag.stageRect.top + margin - drag.cardRect.top;
+      const maxY = drag.stageRect.bottom - margin - drag.cardRect.bottom;
+
+      const deltaX = Math.max(minX, Math.min(maxX, rawX));
+      const deltaY = Math.max(minY, Math.min(maxY, rawY));
+
+      drag.nextOffset = {
+        x: Math.round(drag.startOffset.x + deltaX / drag.scale),
+        y: Math.round(drag.startOffset.y + deltaY / drag.scale)
+      };
+      setWindowOffset(drag.nextOffset);
+    };
+
+    const onPointerUp = (upEvent) => {
+      upEvent.preventDefault();
+      upEvent.stopPropagation();
+
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('pointercancel', onPointerUp);
+
+      try {
+        targetHeader.releasePointerCapture(upEvent.pointerId);
+      } catch (_) {}
+
+      const drag = windowDragRef.current;
+      windowDragRef.current = null;
+      setDraggingState(false);
+
+      if (drag && drag.moved) {
+        setWindowOffset(drag.nextOffset);
+        try {
+          localStorage.setItem('lumen_chat_window_position', JSON.stringify(drag.nextOffset));
+        } catch (_) {}
+      }
+
+      setTimeout(() => {
+        if (typeof window !== 'undefined') {
+          window.__lumen_is_resizing_chat = false;
+        }
+      }, 150);
+    };
+
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+    window.addEventListener('pointercancel', onPointerUp);
+  };
+
+  const handleCornerPointerDown = (e, corner) => {
+    if (e.button !== 0 && e.pointerType === 'mouse') return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (typeof window !== 'undefined') {
+      window.__lumen_is_resizing_chat = true;
+    }
+    setIsResizing(true);
+
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const startWidth = panelSize.width;
+    const startHeight = panelSize.height;
+    const isRight = corner === 'ne' || corner === 'se';
+    const isBottom = corner === 'sw' || corner === 'se';
+    const targetHandle = e.currentTarget;
+
+    try {
+      targetHandle.setPointerCapture(e.pointerId);
+    } catch (_) {}
+
+    const onPointerMove = (moveEvent) => {
+      moveEvent.preventDefault();
+      const deltaX = moveEvent.clientX - startX;
+      const deltaY = moveEvent.clientY - startY;
+
+      const maxW = Math.min(1150, Math.max(MIN_CHAT_WIDTH, window.innerWidth - 32));
+      const maxH = Math.min(860, Math.max(MIN_CHAT_HEIGHT, Math.floor(window.innerHeight * 0.78)));
+
+      const widthDelta = isRight ? deltaX * 2 : -deltaX * 2;
+      const heightDelta = isBottom ? deltaY : -deltaY;
+
+      const newWidth = Math.round(Math.min(maxW, Math.max(MIN_CHAT_WIDTH, startWidth + widthDelta)));
+      const newHeight = Math.round(Math.min(maxH, Math.max(MIN_CHAT_HEIGHT, startHeight + heightDelta)));
+
+      setPanelSize({ width: newWidth, height: newHeight });
+    };
+
+    const onPointerUp = (upEvent) => {
+      upEvent.preventDefault();
+      upEvent.stopPropagation();
+
+      setIsResizing(false);
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('pointercancel', onPointerUp);
+
+      try {
+        targetHandle.releasePointerCapture(upEvent.pointerId);
+      } catch (_) {}
+
+      // Discard trailing click event so stage onClick never triggers
+      const blockClick = (clickEvent) => {
+        clickEvent.stopPropagation();
+        clickEvent.preventDefault();
+        window.removeEventListener('click', blockClick, true);
+      };
+      window.addEventListener('click', blockClick, true);
+
+      setTimeout(() => {
+        window.removeEventListener('click', blockClick, true);
+        if (typeof window !== 'undefined') {
+          window.__lumen_is_resizing_chat = false;
+        }
+      }, 200);
+
+      const deltaX = upEvent.clientX - startX;
+      const deltaY = upEvent.clientY - startY;
+      const maxW = Math.min(1150, Math.max(MIN_CHAT_WIDTH, window.innerWidth - 32));
+      const maxH = Math.min(860, Math.max(MIN_CHAT_HEIGHT, Math.floor(window.innerHeight * 0.78)));
+      const widthDelta = isRight ? deltaX * 2 : -deltaX * 2;
+      const heightDelta = isBottom ? deltaY : -deltaY;
+      const finalW = Math.round(Math.min(maxW, Math.max(MIN_CHAT_WIDTH, startWidth + widthDelta)));
+      const finalH = Math.round(Math.min(maxH, Math.max(MIN_CHAT_HEIGHT, startHeight + heightDelta)));
+
+      try {
+        localStorage.setItem('lumen_chat_width', String(finalW));
+        localStorage.setItem('lumen_chat_height', String(finalH));
+      } catch (_) {}
+    };
+
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+    window.addEventListener('pointercancel', onPointerUp);
+  };
+
   return (
-    <div className="conversation-feed-card">
-      <div className="feed-header">
+    <div 
+      className={`conversation-feed-card ${isResizing ? 'is-resizing' : ''} ${isWindowDragging ? 'is-window-dragging' : ''}`}
+      style={{
+        width: `${panelSize.width}px`,
+        height: `${panelSize.height}px`,
+        '--chat-window-drag-x': `${windowOffset.x}px`,
+        '--chat-window-drag-y': `${windowOffset.y}px`
+      }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      {/* Draggable Corner Resizers */}
+      <div
+        className="chat-corner-handle top-left"
+        onPointerDown={(e) => handleCornerPointerDown(e, 'nw')}
+        onDoubleClick={handleResetSize}
+        onClick={(e) => { e.stopPropagation(); e.preventDefault(); }}
+        title="Drag corner to resize (double-click to reset)"
+        aria-label="Resize window top left corner"
+      />
+      <div
+        className="chat-corner-handle top-right"
+        onPointerDown={(e) => handleCornerPointerDown(e, 'ne')}
+        onDoubleClick={handleResetSize}
+        onClick={(e) => { e.stopPropagation(); e.preventDefault(); }}
+        title="Drag corner to resize (double-click to reset)"
+        aria-label="Resize window top right corner"
+      />
+      <div
+        className="chat-corner-handle bottom-left"
+        onPointerDown={(e) => handleCornerPointerDown(e, 'sw')}
+        onDoubleClick={handleResetSize}
+        onClick={(e) => { e.stopPropagation(); e.preventDefault(); }}
+        title="Drag corner to resize (double-click to reset)"
+        aria-label="Resize window bottom left corner"
+      />
+      <div
+        className="chat-corner-handle bottom-right"
+        onPointerDown={(e) => handleCornerPointerDown(e, 'se')}
+        onDoubleClick={handleResetSize}
+        onClick={(e) => { e.stopPropagation(); e.preventDefault(); }}
+        title="Drag corner to resize (double-click to reset)"
+        aria-label="Resize window bottom right corner"
+      />
+
+      <div 
+        className="feed-header"
+        onPointerDown={handleHeaderPointerDown}
+        onDoubleClick={handleResetPosition}
+        title="Drag header to move chat window (double-click to center)"
+      >
         <span className="feed-title">{t.logTitle}</span>
         <div className="feed-header-actions">
-          {onClose && (
-            <button
-              type="button"
-              className="feed-close-btn"
-              onClick={onClose}
-              title={getTranslations(activeLanguage).header.transcriptClose}
-              aria-label={getTranslations(activeLanguage).header.transcriptClose}
-            >
-              ×
-            </button>
+          {onTriggerAgentAction && (
+            <div className="feed-agent-actions-dropdown-wrap">
+              <button
+                type="button"
+                className={`feed-agent-actions-btn ${isAgentMenuOpen ? 'active' : ''}`}
+                onClick={() => setIsAgentMenuOpen((prev) => !prev)}
+                title="Agent Action presets (Code, Schedule, Budget, SEO, Web)"
+                aria-label="Agent Actions Menu"
+                aria-expanded={isAgentMenuOpen}
+              >
+                <span className="actions-spark">⚡</span>
+                <span className="actions-text">Actions</span>
+                <span className="actions-caret">▾</span>
+              </button>
+              {isAgentMenuOpen && (
+                <div className="feed-agent-actions-menu glass-panel animate-scale-up" onClick={(e) => e.stopPropagation()}>
+                  <button
+                    type="button"
+                    className="feed-agent-action-item"
+                    onClick={(e) => {
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      setIsAgentMenuOpen(false);
+                      onTriggerAgentAction('code-analysis', { x: rect.left, y: rect.top, width: rect.width, height: rect.height });
+                    }}
+                  >
+                    <span className="action-item-icon">&lt;/&gt;</span>
+                    <span className="action-item-info">
+                      <strong>Code Analysis</strong>
+                      <small>Inspect bugs, refactor & architecture</small>
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className="feed-agent-action-item"
+                    onClick={(e) => {
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      setIsAgentMenuOpen(false);
+                      onTriggerAgentAction('day-schedule', { x: rect.left, y: rect.top, width: rect.width, height: rect.height });
+                    }}
+                  >
+                    <span className="action-item-icon">📅</span>
+                    <span className="action-item-info">
+                      <strong>Day Schedule</strong>
+                      <small>Interactive timeline & iCal export</small>
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className="feed-agent-action-item"
+                    onClick={(e) => {
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      setIsAgentMenuOpen(false);
+                      onTriggerAgentAction('budget-planner', { x: rect.left, y: rect.top, width: rect.width, height: rect.height });
+                    }}
+                  >
+                    <span className="action-item-icon">💰</span>
+                    <span className="action-item-info">
+                      <strong>Budget Planner</strong>
+                      <small>Financial breakdown & percentages</small>
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className="feed-agent-action-item"
+                    onClick={(e) => {
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      setIsAgentMenuOpen(false);
+                      onTriggerAgentAction('seo-analysis', { x: rect.left, y: rect.top, width: rect.width, height: rect.height });
+                    }}
+                  >
+                    <span className="action-item-icon">⌕</span>
+                    <span className="action-item-info">
+                      <strong>SEO Web Inspector</strong>
+                      <small>Rankings, tags & page audit</small>
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className="feed-agent-action-item"
+                    onClick={(e) => {
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      setIsAgentMenuOpen(false);
+                      onTriggerAgentAction('daily-brief', { x: rect.left, y: rect.top, width: rect.width, height: rect.height });
+                    }}
+                  >
+                    <span className="action-item-icon">☀</span>
+                    <span className="action-item-info">
+                      <strong>Daily Brief</strong>
+                      <small>Verified news & local weather</small>
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className="feed-agent-action-item"
+                    onClick={(e) => {
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      setIsAgentMenuOpen(false);
+                      onTriggerAgentAction('open-web-page', { x: rect.left, y: rect.top, width: rect.width, height: rect.height });
+                    }}
+                  >
+                    <span className="action-item-icon">🌐</span>
+                    <span className="action-item-info">
+                      <strong>Open Web Page</strong>
+                      <small>In-app browsing & agent extraction</small>
+                    </span>
+                  </button>
+                </div>
+              )}
+            </div>
           )}
+          <button
+            type="button"
+            className="feed-resize-btn"
+            onClick={handleToggleMaximize}
+            title={isMaximized ? "Restore default window size" : "Expand window size"}
+            aria-label={isMaximized ? "Restore default window size" : "Expand window size"}
+          >
+            {isMaximized ? (
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <polyline points="4 14 10 14 10 20" />
+                <polyline points="20 10 14 10 14 4" />
+                <line x1="14" y1="10" x2="21" y2="3" />
+                <line x1="3" y1="21" x2="10" y2="14" />
+              </svg>
+            ) : (
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <polyline points="15 3 21 3 21 9" />
+                <polyline points="9 21 3 21 3 15" />
+                <line x1="21" y1="3" x2="14" y2="10" />
+                <line x1="3" y1="21" x2="10" y2="14" />
+              </svg>
+            )}
+          </button>
           <button
             type="button"
             className="feed-search-toggle-btn"
@@ -873,6 +1453,17 @@ export default function ConversationFeed({
               title="Clear conversation history"
             >
               {t.clearLog}
+            </button>
+          )}
+          {onClose && (
+            <button
+              type="button"
+              className="feed-close-btn"
+              onClick={onClose}
+              title={getTranslations(activeLanguage).header.transcriptClose}
+              aria-label={getTranslations(activeLanguage).header.transcriptClose}
+            >
+              ×
             </button>
           )}
         </div>
@@ -1046,6 +1637,21 @@ export default function ConversationFeed({
                   }
                   if (widget.widgetType === 'jobs') {
                     return <LiveJobsRadarCard key={wIdx} data={widget} activeLanguage={activeLanguage} />;
+                  }
+                  if (widget.widgetType === 'checklist') {
+                    return <ChecklistCard key={wIdx} widget={widget} />;
+                  }
+                  if (widget.widgetType === 'comparison') {
+                    return <ComparisonCard key={wIdx} widget={widget} />;
+                  }
+                  if (widget.widgetType === 'schedule') {
+                    return <ScheduleCard key={wIdx} widget={widget} />;
+                  }
+                  if (widget.widgetType === 'budget') {
+                    return <BudgetCard key={wIdx} widget={widget} />;
+                  }
+                  if (widget.widgetType === 'daily_brief') {
+                    return <DailyBriefCard key={wIdx} widget={widget} />;
                   }
                   return null;
                 })}

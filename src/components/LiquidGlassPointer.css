@@ -1,0 +1,210 @@
+/* ==========================================================================
+   Liquid Glass Meniscus (Refractive Floating Glass Lens Pointer)
+   ========================================================================== */
+
+/* Hide native cursor only when custom cursor is active on fine-pointer devices */
+body.has-custom-cursor,
+body.has-custom-cursor * {
+  cursor: none !important;
+}
+
+/* Ensure native pointer styles inside iframes */
+body.has-custom-cursor iframe {
+  cursor: auto !important;
+}
+
+.liquid-pointer-container {
+  position: fixed;
+  inset: 0;
+  pointer-events: none !important;
+  z-index: 999999;
+  overflow: visible;
+  transition: opacity 0.25s ease;
+}
+
+.liquid-pointer-container.is-hidden {
+  opacity: 0;
+}
+
+.liquid-pointer-container.is-visible {
+  opacity: 1;
+}
+
+/* 1. Precision Center Dot */
+.liquid-pointer-dot {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 5px;
+  height: 5px;
+  margin: -2.5px 0 0 -2.5px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 
+    0 0 6px rgba(255, 255, 255, 0.95),
+    0 0 12px var(--brand-accent, #38bdf8);
+  pointer-events: none;
+  z-index: 1000000;
+  transition: width 0.18s ease, height 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+  will-change: transform;
+}
+
+/* 2. Floating Liquid Glass Meniscus Lens */
+.liquid-pointer-meniscus {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 32px;
+  height: 32px;
+  margin: -16px 0 0 -16px;
+  border-radius: 50%;
+  pointer-events: none;
+  background: 
+    radial-gradient(120% 120% at 35% 25%, rgba(255, 255, 255, 0.36) 0%, rgba(255, 255, 255, 0.08) 42%, rgba(56, 189, 248, 0.12) 80%, rgba(0, 0, 0, 0.18) 100%),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.02) 100%);
+  backdrop-filter: blur(14px) saturate(200%) contrast(110%);
+  -webkit-backdrop-filter: blur(14px) saturate(200%) contrast(110%);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-top-color: rgba(255, 255, 255, 0.88);
+  border-bottom-color: rgba(255, 255, 255, 0.18);
+  box-shadow: 
+    0 12px 28px -4px rgba(0, 0, 0, 0.45),
+    0 4px 12px rgba(0, 0, 0, 0.3),
+    0 0 20px var(--brand-accent, rgba(56, 189, 248, 0.35)),
+    inset 0 1.5px 1px rgba(255, 255, 255, 0.9),
+    inset 0 -1.5px 1.5px rgba(0, 0, 0, 0.3);
+  will-change: transform, width, height;
+  transition: width 0.22s cubic-bezier(0.16, 1, 0.3, 1), 
+              height 0.22s cubic-bezier(0.16, 1, 0.3, 1), 
+              margin 0.22s cubic-bezier(0.16, 1, 0.3, 1), 
+              border-radius 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 0.22s ease,
+              background 0.22s ease,
+              box-shadow 0.22s ease;
+}
+
+/* Specular Upper Arc Sheen */
+.meniscus-sheen {
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.5) 0%, rgba(255, 255, 255, 0) 50%);
+  pointer-events: none;
+}
+
+/* Chromatic Refraction Rim */
+.meniscus-chromatic-ring {
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  border: 1px solid transparent;
+  background: radial-gradient(circle at 75% 25%, var(--brand-accent, rgba(56, 189, 248, 0.5)) 0%, transparent 60%) border-box;
+  mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
+  -webkit-mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* ==========================================================================
+   Interactive Hover States
+   ========================================================================== */
+
+/* State: Interactive (Hovering buttons, links, cards, pills) */
+.state-interactive .liquid-pointer-meniscus {
+  width: 48px;
+  height: 48px;
+  margin: -24px 0 0 -24px;
+  background: 
+    radial-gradient(120% 120% at 35% 25%, rgba(255, 255, 255, 0.45) 0%, rgba(255, 255, 255, 0.12) 42%, rgba(56, 189, 248, 0.2) 80%, rgba(0, 0, 0, 0.15) 100%),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.05) 100%);
+  border-color: rgba(255, 255, 255, 0.55);
+  border-top-color: #ffffff;
+  box-shadow: 
+    0 16px 36px -4px rgba(0, 0, 0, 0.5),
+    0 0 28px var(--brand-accent, rgba(56, 189, 248, 0.6)),
+    inset 0 2px 1.5px rgba(255, 255, 255, 0.95),
+    inset 0 -1.5px 2px rgba(0, 0, 0, 0.35);
+}
+
+.state-interactive .liquid-pointer-dot {
+  width: 7px;
+  height: 7px;
+  margin: -3.5px 0 0 -3.5px;
+  background: var(--brand-accent, #38bdf8);
+  box-shadow: 0 0 14px var(--brand-accent, #38bdf8), 0 0 4px #ffffff;
+}
+
+/* State: Text Input (Hovering text areas, inputs) */
+.state-text .liquid-pointer-meniscus {
+  width: 6px;
+  height: 28px;
+  margin: -14px 0 0 -3px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.25);
+  border-color: rgba(255, 255, 255, 0.65);
+  box-shadow: 
+    0 0 16px var(--brand-accent, rgba(56, 189, 248, 0.45)),
+    inset 0 1px 1px rgba(255, 255, 255, 0.9);
+}
+
+.state-text .liquid-pointer-dot {
+  width: 4px;
+  height: 4px;
+  margin: -2px 0 0 -2px;
+  background: #ffffff;
+  box-shadow: 0 0 8px #ffffff;
+}
+
+/* State: Dragging / Window Resizing / Handles */
+.state-drag .liquid-pointer-meniscus {
+  width: 42px;
+  height: 42px;
+  margin: -21px 0 0 -21px;
+  border-color: rgba(56, 189, 248, 0.65);
+  border-top-color: #ffffff;
+  box-shadow: 
+    0 0 24px var(--brand-accent, #38bdf8),
+    inset 0 2px 1.5px rgba(255, 255, 255, 0.95);
+}
+
+.state-drag .liquid-pointer-dot {
+  width: 8px;
+  height: 8px;
+  margin: -4px 0 0 -4px;
+  background: #38bdf8;
+  box-shadow: 0 0 16px #38bdf8;
+}
+
+/* State: MouseDown / Clicking (Elastic surface tension compression) */
+.liquid-pointer-container.is-clicking .liquid-pointer-meniscus {
+  transform-origin: center center;
+  transform: scale(0.8) !important;
+  box-shadow: 
+    0 6px 16px rgba(0, 0, 0, 0.6),
+    0 0 32px var(--brand-accent, rgba(56, 189, 248, 0.8)),
+    inset 0 2px 2px rgba(255, 255, 255, 1);
+}
+
+.liquid-pointer-container.is-clicking .liquid-pointer-dot {
+  transform-origin: center center;
+  transform: scale(0.7) !important;
+}
+
+/* Disable on touch devices / reduced motion */
+@media (pointer: coarse) {
+  .liquid-pointer-container {
+    display: none !important;
+  }
+  body.has-custom-cursor,
+  body.has-custom-cursor * {
+    cursor: auto !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .liquid-pointer-meniscus {
+    transition: none !important;
+  }
+}
+

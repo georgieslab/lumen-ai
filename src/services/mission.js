@@ -99,6 +99,18 @@ export function applyToolStart(mission, event, now = Date.now()) {
   return { ...base, steps: [...closed, step].slice(-MAX_TOOL_STEPS) };
 }
 
+// A tool_result event from the chat stream attaches a summary to the active tool step and completes it.
+export function applyToolResult(mission, event) {
+  if (!mission || mission.status !== 'running') return mission;
+  const steps = mission.steps.map((step) => {
+    if (step.state === 'active' && step.kind === 'tool') {
+      return { ...step, state: 'done', meta: { ...step.meta, summary: clip(event?.summary || event?.result || '', 200) } };
+    }
+    return step;
+  });
+  return { ...mission, steps };
+}
+
 // The answer has started to stream: whatever tool was running has finished.
 export function markWriting(mission) {
   // Streaming words are the page itself being written, so its step stays active until the reply ends.

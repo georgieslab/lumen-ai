@@ -15,6 +15,7 @@ import AmbientControls from './components/AmbientControls';
 import HtmlWindowPanel from './components/HtmlWindowPanel';
 import OpenWebPageButton from './components/OpenWebPageButton';
 import DraggableDesktopPill from './components/DraggableDesktopPill';
+import AgentActionModal from './components/AgentActionModal';
 import { stoppedMessage } from './components/MissionCard';
 import { planLabels } from './components/PlanCard';
 import { briefLabels } from './components/BriefCard';
@@ -23,6 +24,7 @@ import { buildPagePrompt } from '../services/pageBrief.js';
 import {
   activityFromTools,
   applyProgress,
+  applyToolResult,
   applyToolStart,
   createMission,
   finishMission,
@@ -30,7 +32,7 @@ import {
   markWriting,
   missionActivity,
   researchTopic
-} from './services/mission';
+} from './services/mission.js';
 import { splitHtmlBlocks } from './services/htmlPage';
 import { extractOpenLinkRequest } from './services/openLink';
 import { captureSharedTabFrame, isTabCaptureSupported } from './services/tabCapture';
@@ -40,6 +42,8 @@ import TechStackModal from './components/TechStackModal';
 import { useAudioVisualizer } from './hooks/useAudioVisualizer';
 import { converseWithLumenStream, researchWithLumenStream, planResearchWithLumen, planPageWithLumen, processFile, fetchAmbientData, exportConversationPdfDirect, getAuthSession, getUserMemory } from './services/api';
 import { getTranslations, formatString, DEFAULT_VOICES_BY_LANG } from './utils/translations';
+import { PRESET_AURAS, getAuraById, getNextAuraId } from './services/auras';
+
 
 function getCircadianPhase() {
   const h = new Date().getHours();
@@ -125,6 +129,19 @@ export default function App() {
     loadPreference('lumen_response_style', RESPONSE_STYLES, 'concise')
   );
   const [showLogDrawer, setShowLogDrawer] = useState(false);
+  const [chatWindowOffset, setChatWindowOffset] = useState(() => {
+    if (typeof window === 'undefined') return { x: 0, y: 0 };
+    try {
+      const isSmall = window.innerWidth <= 768;
+      if (isSmall) return { x: 0, y: 0 };
+      const saved = JSON.parse(localStorage.getItem('lumen_chat_window_position') || 'null');
+      if (saved && Number.isFinite(saved.x) && Number.isFinite(saved.y)) {
+        return { x: Math.max(-1400, Math.min(1400, saved.x)), y: Math.max(-1000, Math.min(1000, saved.y)) };
+      }
+    } catch (_) {}
+    return { x: 0, y: 0 };
+  });
+  const [isChatWindowDragging, setIsChatWindowDragging] = useState(false);
   const [isAttachmentMenuOpen, setIsAttachmentMenuOpen] = useState(false);
   const [isMobileControlsOpen, setIsMobileControlsOpen] = useState(false);
   const [isExplorePanelOpen, setIsExplorePanelOpen] = useState(false);
@@ -151,11 +168,14 @@ export default function App() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [currentTheme, setCurrentTheme] = useState(() => {
     try {
-      return localStorage.getItem('lumen_theme_setting') || 'visionos';
+      const saved = localStorage.getItem('lumen_theme_setting');
+      return (saved && saved !== 'visionos') ? saved : 'midnight-nebula';
     } catch (_) {
-      return 'visionos';
+      return 'midnight-nebula';
     }
   });
+  const [isAuraMenuOpen, setIsAuraMenuOpen] = useState(false);
+  const auraMenuRef = useRef(null);
   const [activeLanguage, setActiveLanguage] = useState(() => {
     try {
       return localStorage.getItem('lumen_language_setting') || 'en-US';
@@ -177,6 +197,13 @@ export default function App() {
   const [openWebPageRequest, setOpenWebPageRequest] = useState(0);
   const [embeddedUrl, setEmbeddedUrl] = useState(null);
   const [htmlWindow, setHtmlWindow] = useState(null);
+  const [activeAgentAction, setActiveAgentAction] = useState(null);
+  const [agentActionOriginRect, setAgentActionOriginRect] = useState(null);
+
+  const handleOpenAgentAction = (actionId, originRect = null) => {
+    setAgentActionOriginRect(originRect);
+    setActiveAgentAction(actionId);
+  };
 
   // Receive a tab the user explicitly shared through the Lumen browser extension
   useEffect(() => {
@@ -394,25 +421,48 @@ export default function App() {
     window.setTimeout(() => { suppressWeatherTileClickRef.current = false; }, 0);
   };
 
-  const handleCycleTheme = () => {
-    const themes = ['visionos', 'cyberpunk', 'obsidian', 'solardawn', 'highcontrast'];
-    const next = themes[(themes.indexOf(currentTheme) + 1) % themes.length];
+  const currentAura = getAuraById(currentTheme);
+
+  const handleSelectAura = (auraId) => {
+    setCurrentTheme(auraId);
+    try {
+      localStorage.setItem('lumen_theme_setting', auraId);
+    } catch (_) {}
+  };
+
+  const handleCycleAura = () => {
+    const next = getNextAuraId(currentTheme);
     setCurrentTheme(next);
     try {
       localStorage.setItem('lumen_theme_setting', next);
     } catch (_) {}
   };
 
+  const handleCycleTheme = handleCycleAura;
+
   const getThemeInfo = () => {
-    const themes = {
-      visionos: { icon: '🔮', label: t.header.themes.visionos },
-      cyberpunk: { icon: '⚡', label: t.header.themes.cyberpunk },
-      obsidian: { icon: '🌑', label: t.header.themes.obsidian },
-      solardawn: { icon: '🌅', label: t.header.themes.solardawn },
-      highcontrast: { icon: '👁️', label: t.header.themes.highcontrast }
-    };
-    return themes[currentTheme] || { icon: '🔮', label: 'VisionOS' };
+    return { icon: currentAura.icon, label: currentAura.name };
   };
+
+  useEffect(() => {
+    if (!isAuraMenuOpen) return;
+    const handleClickOutside = (e) => {
+      if (auraMenuRef.current && !auraMenuRef.current.contains(e.target)) {
+        setIsAuraMenuOpen(false);
+      }
+    };
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        setIsAuraMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isAuraMenuOpen]);
 
   const handleCycleLanguage = () => {
     const langs = ['en-US', 'es-ES', 'fr-FR', 'de-DE', 'ja-JP', 'it-IT'];
@@ -623,6 +673,17 @@ export default function App() {
   const installPromptRef = useRef(null);
   const [isGlobalDragging, setIsGlobalDragging] = useState(false);
   const dragCounterRef = useRef(0);
+
+  // Auto-grow chat textarea height as user types or text expands
+  useEffect(() => {
+    const textarea = textInputRef.current;
+    if (!textarea) return;
+    textarea.style.height = 'auto';
+    const scrollHeight = textarea.scrollHeight;
+    if (scrollHeight > 0) {
+      textarea.style.height = `${Math.min(scrollHeight, 180)}px`;
+    }
+  }, [textInput]);
 
   useEffect(() => {
     const displayMode = window.matchMedia('(display-mode: standalone)');
@@ -1107,6 +1168,7 @@ export default function App() {
               ? formatString(t.memoryManager.autoSaved, { count: status.saved })
               : ''),
           onToolStart: (event) => updateMission(applyToolStart(mission, event)),
+          onToolResult: (event) => updateMission(applyToolResult(mission, event)),
           onAbort: finishStopped,
           onToken: (token) => {
             accumulatedText += token;
@@ -1573,6 +1635,13 @@ export default function App() {
       className={`lumen-app-stage ${selectedFile || processingFile ? 'has-active-doc' : ''} ${textInput.trim() ? 'has-typing' : ''} ${isThinking ? 'is-thinking' : ''} ${isListening ? 'is-listening' : ''} ${isSpeaking ? 'is-speaking' : ''} ${isTaskComplete ? 'is-complete' : ''}`}
       data-circadian={activeCircadian}
       data-theme={currentTheme}
+      data-aura={currentTheme}
+      style={{
+        '--aura-color-1': currentAura.colors[0],
+        '--aura-color-2': currentAura.colors[1],
+        '--aura-color-3': currentAura.colors[2],
+        '--aura-accent': currentAura.accent,
+      }}
       onDragEnter={handleGlobalDragEnter}
       onDragLeave={handleGlobalDragLeave}
       onDragOver={handleGlobalDragOver}
@@ -1600,34 +1669,118 @@ export default function App() {
       {/* Top Header Navigation */}
       <header className="lumen-header">
         <div className="header-brand">
-          <LumenLogo size={28} />
+          <LumenLogo size={35} />
           <h1 className="brand-title">LUMEN</h1>
         </div>
 
         <div className="header-actions">
-          {/* Circadian Atmosphere Cycle */}
-          <button 
-            type="button" 
-            className={`circadian-toggle-btn phase-${activeCircadian}`}
-            onClick={handleCycleCircadian}
-            title={`${t.header.atmosphere}: ${getCircadianInfo().label}`}
-            aria-label={`${t.header.atmosphere}: ${getCircadianInfo().label}`}
-          >
-            <span className="circadian-icon">{getCircadianInfo().icon}</span>
-            <span className="circadian-label">{getCircadianInfo().label}</span>
-          </button>
+          {/* Ambient Aura Selector System */}
+          <div className="aura-btn-container" ref={auraMenuRef}>
+            <button 
+              type="button" 
+              className={`aura-toggle-btn aura-${currentAura.id}`}
+              onClick={() => setIsAuraMenuOpen((open) => !open)}
+              title={`Aura: ${currentAura.name} — Switch ambient lighting mood`}
+              aria-label={`Aura: ${currentAura.name}`}
+              aria-expanded={isAuraMenuOpen}
+              aria-haspopup="dialog"
+            >
+              <span 
+                className="aura-dot-glow" 
+                style={{ 
+                  background: `linear-gradient(135deg, ${currentAura.colors[0]}, ${currentAura.colors[1]})`,
+                  boxShadow: `0 0 10px ${currentAura.accent}`
+                }} 
+              />
+              <span className="aura-icon">{currentAura.icon}</span>
+              <span className="aura-label">Aura</span>
+              <span className="aura-active-name">{currentAura.name}</span>
+              <span className={`aura-chevron ${isAuraMenuOpen ? 'is-open' : ''}`}>▾</span>
+            </button>
 
-          {/* Visual Theme Mood System */}
-          <button 
-            type="button" 
-            className={`theme-toggle-btn theme-${currentTheme}`}
-            onClick={handleCycleTheme}
-            title={`${t.header.visualTheme}: ${getThemeInfo().label}`}
-            aria-label={`${t.header.visualTheme}: ${getThemeInfo().label}`}
-          >
-            <span className="theme-icon">{getThemeInfo().icon}</span>
-            <span className="theme-label">{getThemeInfo().label}</span>
-          </button>
+            {isAuraMenuOpen && (
+              <div 
+                className="aura-picker-popover animate-fade-in"
+                role="dialog"
+                aria-label="Aura Presets"
+              >
+                <div className="aura-picker-header">
+                  <div className="aura-picker-title-wrap">
+                    <span className="aura-picker-badge">✨ AMBIENT AURA</span>
+                    <h3 className="aura-picker-title">Aura Presets</h3>
+                    <p className="aura-picker-subtitle">Select an ambient visual lighting mood</p>
+                  </div>
+                  <button
+                    type="button"
+                    className="aura-cycle-btn"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleCycleAura();
+                    }}
+                    title="Cycle to next aura"
+                  >
+                    ↻ Next
+                  </button>
+                </div>
+
+                <div className="aura-grid">
+                  {PRESET_AURAS.map((aura) => {
+                    const isSelected = aura.id === currentAura.id;
+                    return (
+                      <button
+                        key={aura.id}
+                        type="button"
+                        className={`aura-card ${isSelected ? 'is-active' : ''}`}
+                        onClick={() => handleSelectAura(aura.id)}
+                      >
+                        <div className="aura-card-orb-wrap">
+                          <span 
+                            className="aura-card-orb"
+                            style={{
+                              background: `linear-gradient(135deg, ${aura.colors[0]}, ${aura.colors[1]}, ${aura.colors[2]})`,
+                              boxShadow: isSelected ? `0 0 16px ${aura.accent}` : `0 0 8px rgba(0,0,0,0.4)`
+                            }}
+                          />
+                          <span className="aura-card-icon">{aura.icon}</span>
+                        </div>
+                        <div className="aura-card-info">
+                          <div className="aura-card-name-row">
+                            <span className="aura-card-name">{aura.name}</span>
+                            {isSelected && <span className="aura-active-check">✓</span>}
+                          </div>
+                          <span className="aura-card-desc">{aura.description}</span>
+                          <div className="aura-palette-swatches">
+                            {aura.colors.map((c, i) => (
+                              <span key={i} className="aura-swatch-dot" style={{ backgroundColor: c }} />
+                            ))}
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="aura-picker-footer">
+                  <button
+                    type="button"
+                    className={`aura-circadian-sync-btn ${circadianSetting === 'auto' ? 'is-synced' : ''}`}
+                    onClick={() => {
+                      const nextSetting = circadianSetting === 'auto' ? activeCircadian : 'auto';
+                      setCircadianSetting(nextSetting);
+                      try { localStorage.setItem('lumen_circadian_setting', nextSetting); } catch (_) {}
+                    }}
+                    title="Automatically adjust atmosphere lighting with time of day"
+                  >
+                    <span className="sync-icon">{circadianSetting === 'auto' ? '☀️' : '🌙'}</span>
+                    <span className="sync-text">
+                      {circadianSetting === 'auto' ? 'Daylight Time Sync: ON' : 'Daylight Time Sync: Manual'}
+                    </span>
+                    <span className="sync-toggle-pill">{circadianSetting === 'auto' ? 'AUTO' : 'MANUAL'}</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* Multilingual Voice & Intelligence Selector */}
           <button 
@@ -1688,14 +1841,42 @@ export default function App() {
             <span className="tech-stack-label">{t.header.techStack || "Architecture"}</span>
           </button>
 
-          {/* Conversation Transcript Toggle */}
+          {/* Conversation Chat Drawer Toggle */}
           <button 
             type="button" 
             className={`log-toggle-btn ${showLogDrawer ? 'active' : ''}`}
             onClick={() => setShowLogDrawer(!showLogDrawer)}
-            title={t.header.transcriptTooltip}
+            title={showLogDrawer ? t.header.transcriptClose : t.header.transcriptOpen}
+            aria-label={showLogDrawer ? t.header.transcriptClose : t.header.transcriptOpen}
+            aria-expanded={showLogDrawer}
+            aria-controls="conversation-panel"
           >
-            {showLogDrawer ? t.header.transcriptClose : t.header.transcriptOpen}
+            <span className={`chat-toggle-icon-wrap ${showLogDrawer ? 'is-open' : ''}`} aria-hidden="true">
+              <svg 
+                className="chat-toggle-svg" 
+                width="20" 
+                height="20" 
+                viewBox="0 0 24 24" 
+                fill="none" 
+                stroke="currentColor" 
+                strokeWidth="1.8" 
+                strokeLinecap="round" 
+                strokeLinejoin="round"
+              >
+                {/* Spatial dialogue bubble */}
+                <path 
+                  className="chat-svg-bubble" 
+                  d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8v.5z" 
+                />
+                {/* Animated conversation wave dots */}
+                <circle className="chat-dot chat-dot-1" cx="8.5" cy="11.5" r="1.3" fill="currentColor" stroke="none" />
+                <circle className="chat-dot chat-dot-2" cx="12" cy="11.5" r="1.3" fill="currentColor" stroke="none" />
+                <circle className="chat-dot chat-dot-3" cx="15.5" cy="11.5" r="1.3" fill="currentColor" stroke="none" />
+                {/* Morphing close glyph lines */}
+                <path className="chat-close-glyph chat-close-line1" d="M9 8.5l6 6" />
+                <path className="chat-close-glyph chat-close-line2" d="M15 8.5l-6 6" />
+              </svg>
+            </span>
           </button>
 
           <button
@@ -1735,10 +1916,11 @@ export default function App() {
             auto={circadianSetting === 'auto'}
             atmosphereTip={`${t.header.atmosphere}: ${getCircadianInfo().label}`}
             themeId={currentTheme}
-            themeTip={`${t.header.visualTheme}: ${getThemeInfo().label}`}
-            groupLabel={`${t.header.atmosphere} · ${t.header.visualTheme}`}
+            themeTip={`Aura: ${currentAura.name}`}
+            groupLabel={`Aura: ${currentAura.name}`}
             onCycleAtmosphere={handleCycleCircadian}
-            onCycleTheme={handleCycleTheme}
+            onCycleTheme={handleCycleAura}
+            onOpenAura={() => setIsAuraMenuOpen((open) => !open)}
           />
           <button
             type="button"
@@ -1749,9 +1931,29 @@ export default function App() {
             aria-controls="conversation-panel"
             title={showLogDrawer ? t.header.transcriptClose : t.header.transcriptOpen}
           >
-            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5 8.4 8.4 0 0 1-4-.98L3 21l1.98-5.5A8.4 8.4 0 0 1 4 11.5 8.5 8.5 0 1 1 21 11.5Z" />
-            </svg>
+            <span className={`chat-toggle-icon-wrap ${showLogDrawer ? 'is-open' : ''}`} aria-hidden="true">
+              <svg 
+                className="chat-toggle-svg" 
+                width="19" 
+                height="19" 
+                viewBox="0 0 24 24" 
+                fill="none" 
+                stroke="currentColor" 
+                strokeWidth="1.8" 
+                strokeLinecap="round" 
+                strokeLinejoin="round"
+              >
+                <path 
+                  className="chat-svg-bubble" 
+                  d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8v.5z" 
+                />
+                <circle className="chat-dot chat-dot-1" cx="8.5" cy="11.5" r="1.3" fill="currentColor" stroke="none" />
+                <circle className="chat-dot chat-dot-2" cx="12" cy="11.5" r="1.3" fill="currentColor" stroke="none" />
+                <circle className="chat-dot chat-dot-3" cx="15.5" cy="11.5" r="1.3" fill="currentColor" stroke="none" />
+                <path className="chat-close-glyph chat-close-line1" d="M9 8.5l6 6" />
+                <path className="chat-close-glyph chat-close-line2" d="M15 8.5l-6 6" />
+              </svg>
+            </span>
           </button>
           <button
             type="button"
@@ -2028,9 +2230,12 @@ export default function App() {
       <main
         className={`lumen-main-stage ${showLogDrawer ? 'chat-open' : 'chat-closed'}`}
         onClick={(event) => {
+          if (typeof window !== 'undefined' && window.__lumen_is_resizing_chat) {
+            return;
+          }
           if (
             showLogDrawer &&
-            !event.target.closest('#conversation-panel, .desktop-action-pill')
+            !event.target.closest('#conversation-panel, .desktop-action-pill, .chat-corner-handle')
           ) {
             setShowLogDrawer(false);
           }
@@ -2065,21 +2270,6 @@ export default function App() {
         <div className="open-web-dock">
           <OpenWebPageButton triggerOnly openRequest={openWebPageRequest} onOpen={(u) => { setPendingOpenUrl(null); setEmbeddedUrl(u); }} />
         </div>
-
-        {/* Vision & Document Scanner Drop Zone */}
-        <VisionScanner 
-          selectedFile={selectedFile}
-          processingFile={processingFile}
-          isComplete={isTaskComplete}
-          onFileSelected={(file) => setSelectedFile(file)}
-          onFileCleared={() => {
-            setSelectedFile(null);
-            setProcessingFile(null);
-          }}
-          isThinking={isThinking}
-          externalInputRef={fileInputRef}
-          activeLanguage={activeLanguage}
-        />
 
         {(
           <button
@@ -2147,7 +2337,7 @@ export default function App() {
           </button>
         )}
 
-        {ambientData.weather && !showLogDrawer && (
+        {ambientData.weather && (
           <div
             className={`weather-tile-wrap weather-desktop-widget ${isWeatherTileDragging ? 'is-dragging' : ''}`}
             style={{
@@ -2212,7 +2402,8 @@ export default function App() {
           label={t.desktopPills.codeAnalysis}
           title={t.desktopPills.codeAnalysisTooltip}
           position={{ left: '78%', top: '28%' }}
-          onSelect={() => prepareDesktopPillPrompt(t.desktopPills.codeAnalysisPrompt)}
+          isActive={activeAgentAction === 'code-analysis'}
+          onSelect={(rect) => handleOpenAgentAction('code-analysis', rect)}
         />
         <DraggableDesktopPill
           id="seo-analysis"
@@ -2220,7 +2411,8 @@ export default function App() {
           label={t.starterChips.seoInspect}
           title={t.starterChips.seoInspectTooltip}
           position={{ left: '78%', top: '43%' }}
-          onSelect={() => prepareDesktopPillPrompt(t.starterChips.seoInspectPrompt)}
+          isActive={activeAgentAction === 'seo-analysis'}
+          onSelect={(rect) => handleOpenAgentAction('seo-analysis', rect)}
         />
         <DraggableDesktopPill
           id="daily-brief"
@@ -2228,10 +2420,26 @@ export default function App() {
           label={t.desktopPills.dailyBrief}
           title={t.desktopPills.dailyBriefTooltip}
           position={{ left: '78%', top: '58%' }}
-          onSelect={() => handleSendMessage(formatString(t.desktopPills.dailyBriefPrompt, {
-            city: ambientData.weather?.city || 'your chosen city',
-            date: new Intl.DateTimeFormat(activeLanguage, { dateStyle: 'long' }).format(new Date())
-          }), null)}
+          isActive={activeAgentAction === 'daily-brief'}
+          onSelect={(rect) => handleOpenAgentAction('daily-brief', rect)}
+        />
+        <DraggableDesktopPill
+          id="budget-planner"
+          icon="💰"
+          label={t.desktopPills?.budgetPlanner || "Budget planner"}
+          title={t.desktopPills?.budgetPlannerTooltip || "Plan expenses, travel costs, or monthly budgets"}
+          position={{ left: '78%', top: '73%' }}
+          isActive={activeAgentAction === 'budget-planner'}
+          onSelect={(rect) => handleOpenAgentAction('budget-planner', rect)}
+        />
+        <DraggableDesktopPill
+          id="day-schedule"
+          icon="📅"
+          label={t.desktopPills?.daySchedule || "Day schedule"}
+          title={t.desktopPills?.dayScheduleTooltip || "Plan a daily routine and timeline with 1-click calendar export"}
+          position={{ left: '16%', top: '24%' }}
+          isActive={activeAgentAction === 'day-schedule'}
+          onSelect={(rect) => handleOpenAgentAction('day-schedule', rect)}
         />
         <DraggableDesktopPill
           id="open-web-page"
@@ -2240,7 +2448,8 @@ export default function App() {
           title={t.header.openWebPageDescription}
           position={{ left: '82%', top: '12%' }}
           size="large"
-          onSelect={() => setOpenWebPageRequest((request) => request + 1)}
+          isActive={activeAgentAction === 'open-web-page'}
+          onSelect={(rect) => handleOpenAgentAction('open-web-page', rect)}
         />
 
         {/* Real-Time Ambient Live Bar & Interactive Glanceable Pills */}
@@ -2272,102 +2481,6 @@ export default function App() {
                 <span className="glance-title">{t.glance.weatherTitle}</span>
               </button>
             )}
-          </div>
-
-          {/* Quick-action 1-tap intelligent starter chips (Option E) */}
-          <div className="ambient-starter-chips">
-            <button
-              type="button"
-              className="quick-chip research-chip"
-              onClick={() => {
-                setTextInput(t.starterChips.researchReportPrompt);
-                textInputRef.current?.focus();
-              }}
-              title={t.starterChips.researchReportPrompt}
-            >
-              {t.starterChips.researchReport}
-            </button>
-
-            <button
-              type="button"
-              className="quick-chip memory-chip"
-              onClick={() => setIsMemoryModalOpen(true)}
-              title={t.memoryManager.launcherHint}
-            >
-              <span aria-hidden="true">🧠</span>
-              {t.memoryManager.personaLauncher}
-            </button>
-
-            <button
-              type="button"
-              className="quick-chip mission-chip"
-              onClick={prepareDecisionMission}
-              title={t.starterChips.decisionMissionTooltip}
-            >
-              {t.starterChips.decisionMission}
-            </button>
-
-            <button
-              type="button"
-              className="quick-chip pdf-chip"
-              onClick={() => {
-                if (messages.length > 1) {
-                  handleSendMessage(t.starterChips.pdfSummaryRequest);
-                } else {
-                  const promptMsg = {
-                    id: `prompt-${Date.now()}`,
-                    role: 'assistant',
-                    text: t.starterChips.pdfPromptQuestion,
-                    timestamp: Date.now()
-                  };
-                  persistMessages([...messages, promptMsg]);
-                  playBrowserSpeech(t.starterChips.pdfPromptQuestion);
-                  setTextInput(t.starterChips.pdfPromptDefault);
-                  setTimeout(() => {
-                    if (textInputRef.current) {
-                      textInputRef.current.focus();
-                      const len = t.starterChips.pdfPromptDefault.length;
-                      textInputRef.current.setSelectionRange(len, len);
-                    }
-                  }, 60);
-                }
-              }}
-              title={t.starterChips.createPdfTooltip}
-            >
-              {t.starterChips.createPdf}
-            </button>
-            <button
-              type="button"
-              className="quick-chip jobs-chip"
-              onClick={() => handleSendMessage(formatString(t.starterChips.jobsQuery, { role: jobFilter.role, location: jobFilter.location }))}
-              title={formatString(t.starterChips.jobsChipTooltip || "Search active {role} jobs in {location}", { role: jobFilter.role, location: jobFilter.location })}
-            >
-              💼 {jobFilter.role.split(' ')[0]} in {jobFilter.location.split(',')[0]}
-            </button>
-            <button
-              type="button"
-              className="quick-chip ai-chip"
-              onClick={() => handleSendMessage(t.starterChips.aiBreakthroughsQuery)}
-              title={t.starterChips.aiBreakthroughsTooltip}
-            >
-              {t.starterChips.aiBreakthroughs}
-            </button>
-            <button
-              type="button"
-              className="quick-chip interview-chip"
-              onClick={() => handleSendMessage(formatString(t.starterChips.mockInterviewQuery, { role: jobFilter.role }))}
-              title={t.starterChips.mockInterviewTooltip}
-            >
-              {t.starterChips.mockInterview}
-            </button>
-            <button
-              type="button"
-              className="quick-chip spark-chip"
-              onClick={() => handleSendMessage(t.starterChips.dailySparkQuery)}
-              title={t.starterChips.dailySparkTooltip}
-            >
-              {t.starterChips.dailySpark}
-            </button>
           </div>
         </div>
 
@@ -2465,15 +2578,30 @@ export default function App() {
             onBriefBuild={handleStartBrief}
             onBriefSkip={(messageId) => handleStartBrief(messageId, null)}
             onBriefCancel={handleCancelBrief}
+            onTriggerAgentAction={(actionKey, rect) => handleOpenAgentAction(actionKey, rect)}
             activeLanguage={activeLanguage}
+            windowOffset={chatWindowOffset}
+            onWindowOffsetChange={setChatWindowOffset}
+            onWindowDraggingChange={setIsChatWindowDragging}
           />
         </div>
       </main>
 
       {/* Bottom Spatial Command Bar */}
-      <footer className="lumen-footer">
+      <footer 
+        className={`lumen-footer ${isChatWindowDragging ? 'is-chat-window-dragging' : ''}`}
+        style={{
+          '--chat-window-drag-x': `${showLogDrawer ? chatWindowOffset.x : 0}px`,
+          '--chat-window-drag-y': `${showLogDrawer ? chatWindowOffset.y : 0}px`
+        }}
+      >
         <form 
           className="bottom-input-form"
+          style={{
+            transform: (showLogDrawer && chatWindowOffset.x)
+              ? `translateX(clamp(calc(-50vw + 290px), ${chatWindowOffset.x}px, calc(50vw - 290px)))`
+              : undefined
+          }}
           onSubmit={(e) => {
             e.preventDefault();
             handleSendMessage();
@@ -2492,9 +2620,9 @@ export default function App() {
             <span className="attachment-trigger-plus" aria-hidden="true">+</span>
           </button>
 
-          <input 
+          <textarea 
             ref={textInputRef}
-            type="text"
+            rows={1}
             className="bottom-text-field"
             placeholder={
               selectedFile 
@@ -2505,6 +2633,14 @@ export default function App() {
             onChange={(event) => {
               setTextInput(event.target.value);
               if (!event.target.value.trim()) setDecisionMissionDraft(false);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                if ((textInput.trim() || selectedFile) && !isThinking) {
+                  handleSendMessage();
+                }
+              }
             }}
           />
           <button 
@@ -2652,6 +2788,27 @@ export default function App() {
         isOpen={isFeedbackOpen}
         onClose={() => setIsFeedbackOpen(false)}
         activeLanguage={activeLanguage}
+      />
+
+      {/* Dedicated Agent Action Modal Launcher with Morph Transition */}
+      <AgentActionModal
+        action={activeAgentAction}
+        originRect={agentActionOriginRect}
+        onClose={() => {
+          setActiveAgentAction(null);
+          setAgentActionOriginRect(null);
+        }}
+        onExecute={(prompt) => {
+          setShowLogDrawer(true);
+          handleSendMessage(prompt);
+        }}
+        onOpenWebPage={(u) => {
+          setPendingOpenUrl(null);
+          setEmbeddedUrl(u);
+        }}
+        activeLanguage={activeLanguage}
+        defaultCity={ambientData.weather?.city || 'Vienna'}
+        targetRole={jobFilter.role}
       />
     </div>
   );

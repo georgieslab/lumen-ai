@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" fill="none">
+  <defs>
+    <linearGradient id="glass-core" x1="0" y1="0" x2="20" y2="22" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.98" />
+      <stop offset="50%" stop-color="#F8FAFC" stop-opacity="0.94" />
+      <stop offset="100%" stop-color="#E2E8F0" stop-opacity="0.88" />
+    </linearGradient>
+    <linearGradient id="glass-rim" x1="0" y1="0" x2="18" y2="18" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="60%" stop-color="#7DD3FC" />
+      <stop offset="100%" stop-color="#38BDF8" />
+    </linearGradient>
+    <linearGradient id="inner-shine" x1="0" y1="0" x2="8" y2="16" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.9" />
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0.1" />
+    </linearGradient>
+  </defs>
+  <path d="M 0 0 L 0 21 L 5.3 16 L 9.7 26 L 14 24.1 L 9.7 14.3 L 17 14.3 Z" fill="rgba(0, 0, 0, 0.4)" transform="translate(1.5, 2)" />
+  <path d="M 0 0 L 0 21 L 5.3 16 L 9.7 26 L 14 24.1 L 9.7 14.3 L 17 14.3 Z" fill="rgba(2, 132, 199, 0.3)" transform="translate(0.5, 1)" />
+  <path d="M 0.5 0.5 L 0.5 21 L 5.5 16 L 9.8 25.8 L 13.8 24.1 L 9.6 14.5 L 16.8 14.5 Z" fill="url(#glass-core)" stroke="url(#glass-rim)" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round" />
+  <path d="M 1.8 2.5 L 1.8 17 L 5.2 13.8 L 8.8 22.2 L 10.4 21.5 L 7.2 14.2 L 13 14.2 Z" fill="url(#inner-shine)" />
+  <circle cx="1" cy="1" r="1.2" fill="#FFFFFF" />
+</svg>

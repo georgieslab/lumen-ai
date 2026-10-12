@@ -48,6 +48,11 @@ const en = {
   },
   features: [
     {
+      title: 'Agentic Smart Windows & Action Pills.',
+      detail: 'Launch specialized autonomous agents right from your desktop: Code Analysis, SEO Audit, Daily Brief, Day Schedule, and Budget Planning with interactive decision matrices and actionable checklists.',
+      action: 'Explore agentic tools'
+    },
+    {
       title: 'Say what you’re thinking.',
       detail: 'Have a spoken conversation, or type when that feels more natural. Lumen is ready to follow your train of thought.',
       action: 'Explore voice'
@@ -233,6 +238,11 @@ const de = {
     topline: 'LUMEN-FUNKTION'
   },
   features: [
+    {
+      title: 'Agentic Smart Windows & Aktions-Pills.',
+      detail: 'Starten Sie spezialisierte autonome Agenten direkt vom Desktop: Code-Analyse, SEO-Audit, Daily Brief, Tagesplan und Budgetplaner mit interaktiven Entscheidungsmatrizen und Checklisten.',
+      action: 'Agenten entdecken'
+    },
     {
       title: 'Sag, was du denkst.',
       detail: 'Führe ein Gespräch per Sprache oder tippe, wenn dir das lieber ist. Lumen folgt deinem Gedankengang.',

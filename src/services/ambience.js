@@ -1,3 +1,5 @@
+import { getAuraById } from './auras.js';
+
 // Colours shown on the paint dots of the Visual theme button, one set per theme in App.css.
 export const THEME_SWATCHES = {
   visionos: ['#38bdf8', '#8b5cf6', '#ec4899', '#67e8f9'],
@@ -12,7 +14,12 @@ export const THEME_IDS = Object.keys(THEME_SWATCHES);
 export const ATMOSPHERE_PHASES = ['morning', 'day', 'evening', 'night'];
 
 export function swatchesFor(themeId) {
-  return THEME_SWATCHES[themeId] || THEME_SWATCHES.visionos;
+  if (THEME_SWATCHES[themeId]) return THEME_SWATCHES[themeId];
+  const aura = getAuraById(themeId);
+  if (aura && Array.isArray(aura.colors) && aura.id === themeId) {
+    return [...aura.colors.slice(0, 3), aura.accent];
+  }
+  return THEME_SWATCHES.visionos;
 }
 
 // The atmosphere setting is either 'auto' (follow the clock) or a fixed phase; the icon always shows a phase.

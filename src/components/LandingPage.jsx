@@ -7,10 +7,11 @@ import './LandingPage.css';
 const SPHERE_STATES = ['idle', 'listening', 'thinking', 'speaking'];
 const MODE_IDS = ['voice', 'vision', 'research'];
 const FEATURE_META = [
-  { id: 'voice', number: '01', icon: 'voice', mode: 'voice' },
-  { id: 'vision', number: '02', icon: 'vision', mode: 'vision' },
-  { id: 'research', number: '03', icon: 'research', mode: 'research' },
-  { id: 'personalize', number: '04', icon: 'personalize', mode: null }
+  { id: 'agentic', number: '01', icon: 'agentic', mode: null },
+  { id: 'voice', number: '02', icon: 'voice', mode: 'voice' },
+  { id: 'vision', number: '03', icon: 'vision', mode: 'vision' },
+  { id: 'research', number: '04', icon: 'research', mode: 'research' },
+  { id: 'personalize', number: '05', icon: 'personalize', mode: null }
 ];
 
 const WAVE_HEIGHTS = [12, 22, 16, 34, 24, 46, 27, 39, 17, 31, 48, 24, 38, 18, 44, 26, 36, 15, 29, 43, 21, 34, 13];
@@ -25,6 +26,13 @@ function ArrowIcon({ className = '' }) {
 
 function FeatureIcon({ name, className = '' }) {
   const icons = {
+    agentic: (
+      <>
+        <rect x="3" y="4" width="18" height="16" rx="3" />
+        <path d="M3 9h18M8 6.5h.01M11 6.5h.01" />
+        <path d="m9 14 2 2 4-4" />
+      </>
+    ),
     voice: (
       <>
         <rect x="9" y="3" width="6" height="12" rx="3" />
@@ -109,6 +117,30 @@ function Reveal({ children, className = '', delay = 0 }) {
 }
 
 function FeatureArtwork({ type, coverUrl, t }) {
+  if (type === 'agentic') {
+    return (
+      <div className="lp-feature-art lp-feature-art--agentic" aria-hidden="true">
+        <div className="lp-agent-pill-row">
+          <span className="lp-agent-pill lp-agent-pill--code">&lt;/&gt; Code</span>
+          <span className="lp-agent-pill lp-agent-pill--brief">☀️ Brief</span>
+          <span className="lp-agent-pill lp-agent-pill--budget">💰 Budget</span>
+        </div>
+        <div className="lp-agent-preview-card">
+          <div className="lp-agent-preview-header">
+            <span className="lp-preview-dot lp-preview-dot--red" />
+            <span className="lp-preview-dot lp-preview-dot--amber" />
+            <span className="lp-preview-dot lp-preview-dot--green" />
+            <span className="lp-agent-preview-title">Smart Windows</span>
+          </div>
+          <div className="lp-agent-preview-body">
+            <span className="lp-agent-tag">⚡ Decision Matrix</span>
+            <span className="lp-agent-tag">✓ Checklist</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (type === 'voice') {
     return (
       <div className="lp-feature-art lp-feature-art--voice" aria-hidden="true">
