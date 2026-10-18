@@ -23,11 +23,28 @@ const MATH_FUNCTIONS = {
   pow: Math.pow
 };
 
+export const COMPUTATION_LIMITS = { maxExpressionChars: 2000, maxNumbers: 1000 };
+
+function finiteNumber(value, name, minimum = -Infinity) {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < minimum) {
+    throw new Error(`${name} must be a finite number${Number.isFinite(minimum) ? ` greater than or equal to ${minimum}` : ''}`);
+  }
+  return value;
+}
+
+function rounded(value, precision = 2) {
+  if (!Number.isFinite(value)) throw new Error('Calculation exceeds the supported numeric range');
+  const factor = 10 ** precision;
+  const result = Math.abs(value) <= Number.MAX_VALUE / factor ? Math.round(value * factor) / factor : value;
+  return Object.is(result, -0) ? 0 : result;
+}
+
 // Safe recursive descent arithmetic expression evaluator
 export function evaluateMathExpression(expr) {
   if (typeof expr !== 'string') throw new TypeError('Expression must be a string');
   const cleaned = expr.trim();
   if (!cleaned) throw new Error('Empty expression');
+  if (cleaned.length > COMPUTATION_LIMITS.maxExpressionChars) throw new Error('Expression is too long');
 
   // Tokenize
   const tokens = [];
@@ -46,7 +63,7 @@ export function evaluateMathExpression(expr) {
         i++;
       }
       const num = Number(numStr);
-      if (Number.isNaN(num)) throw new Error(`Invalid number: ${numStr}`);
+      if (!Number.isFinite(num)) throw new Error(`Invalid number: ${numStr}`);
       tokens.push({ type: 'number', value: num });
       continue;
     }
@@ -89,32 +106,28 @@ export function evaluateMathExpression(expr) {
     while (peek() && (peek().value === '*' || peek().value === '/' || peek().value === '%')) {
       const op = consume().value;
       const right = parseFactor();
-      if (op === '/' && right === 0) throw new Error('Division by zero');
+      if ((op === '/' || op === '%') && right === 0) throw new Error('Division by zero');
       left = op === '*' ? left * right : op === '/' ? left / right : left % right;
     }
     return left;
   }
 
   function parseFactor() {
-    let left = parsePower();
-    while (peek() && peek().value === '^') {
-      consume();
-      const right = parsePower();
-      left = Math.pow(left, right);
+    if (peek()?.type === 'op' && ['+', '-'].includes(peek().value)) {
+      const sign = consume().value;
+      const value = parseFactor();
+      return sign === '-' ? -value : value;
     }
-    return left;
+    const left = parsePower();
+    if (peek()?.value !== '^') return left;
+    consume();
+    // Exponentiation associates to the right and binds more tightly than unary minus.
+    return Math.pow(left, parseFactor());
   }
 
   function parsePower() {
     const token = peek();
     if (!token) throw new Error('Unexpected end of expression');
-
-    // Unary plus / minus
-    if (token.type === 'op' && (token.value === '+' || token.value === '-')) {
-      consume();
-      const val = parsePower();
-      return token.value === '-' ? -val : val;
-    }
 
     if (token.type === 'number') {
       consume();
@@ -142,6 +155,10 @@ export function evaluateMathExpression(expr) {
         consume(); // ')'
         const fn = MATH_FUNCTIONS[name];
         if (!fn) throw new Error(`Unknown function: ${name}`);
+        const expected = name === 'pow' ? 2 : ['min', 'max'].includes(name) ? null : 1;
+        if ((expected !== null && args.length !== expected) || (expected === null && args.length === 0)) {
+          throw new Error(`Function ${name} requires ${expected ?? 'at least one'} argument${expected === 1 ? '' : 's'}`);
+        }
         return fn(...args);
       }
       throw new Error(`Unknown variable or constant: ${name}`);
@@ -164,37 +181,38 @@ export function evaluateMathExpression(expr) {
   if (pos < tokens.length) {
     throw new Error(`Unexpected token remaining: ${JSON.stringify(peek().value)}`);
   }
-  return Number.isFinite(result) ? result : NaN;
+  if (!Number.isFinite(result)) throw new Error('Expression result must be a finite number');
+  return result;
 }
 
 // Financial calculations (loan payment, compound interest)
 export function calculateLoanMonthlyPayment(principal, annualRatePercent, termYears) {
-  const p = Number(principal);
-  const rAnnual = Number(annualRatePercent) / 100;
-  const nMonths = Number(termYears) * 12;
-  if (p <= 0 || nMonths <= 0) throw new Error('Principal and term must be positive numbers');
-  if (rAnnual === 0) return p / nMonths;
+  const p = finiteNumber(principal, 'Principal', 0);
+  const rAnnual = finiteNumber(annualRatePercent, 'Annual rate', 0) / 100;
+  const nMonths = finiteNumber(termYears, 'Term years', 0) * 12;
+  if (p === 0 || nMonths === 0 || !Number.isFinite(nMonths)) throw new Error('Principal and term must be positive finite numbers');
   const rMonthly = rAnnual / 12;
-  const monthly = (p * rMonthly * Math.pow(1 + rMonthly, nMonths)) / (Math.pow(1 + rMonthly, nMonths) - 1);
+  const monthly = rMonthly === 0 ? p / nMonths : (p * rMonthly) / -Math.expm1(-nMonths * Math.log1p(rMonthly));
   const totalPaid = monthly * nMonths;
   const totalInterest = totalPaid - p;
   return {
-    monthlyPayment: Math.round(monthly * 100) / 100,
-    totalPayment: Math.round(totalPaid * 100) / 100,
-    totalInterest: Math.round(totalInterest * 100) / 100,
+    monthlyPayment: rounded(monthly),
+    totalPayment: rounded(totalPaid),
+    totalInterest: rounded(totalInterest),
     termMonths: nMonths
   };
 }
 
 export function calculateCompoundInterest(principal, annualRatePercent, years, compoundTimesPerYear = 1) {
-  const p = Number(principal);
-  const r = Number(annualRatePercent) / 100;
-  const t = Number(years);
-  const n = Number(compoundTimesPerYear) || 1;
+  const p = finiteNumber(principal, 'Principal', 0);
+  const r = finiteNumber(annualRatePercent, 'Annual rate', 0) / 100;
+  const t = finiteNumber(years, 'Years', 0);
+  const n = finiteNumber(compoundTimesPerYear, 'Compounding frequency', 1);
+  if (!Number.isInteger(n)) throw new Error('Compounding frequency must be a positive integer');
   const amount = p * Math.pow(1 + r / n, n * t);
   return {
-    futureValue: Math.round(amount * 100) / 100,
-    interestEarned: Math.round((amount - p) * 100) / 100,
+    futureValue: rounded(amount),
+    interestEarned: rounded(amount - p),
     initialPrincipal: p
   };
 }
@@ -202,20 +220,20 @@ export function calculateCompoundInterest(principal, annualRatePercent, years, c
 // Statistical metrics on arrays of numbers
 export function calculateStatistics(numbers) {
   if (!Array.isArray(numbers) || numbers.length === 0) throw new Error('Array of numbers required');
-  const valid = numbers.map(Number).filter((n) => Number.isFinite(n));
-  if (valid.length === 0) throw new Error('No valid numbers found');
+  if (numbers.length > COMPUTATION_LIMITS.maxNumbers) throw new Error('Too many numbers');
+  const valid = numbers.map((value, index) => finiteNumber(value, `numbers[${index}]`));
   const sorted = [...valid].sort((a, b) => a - b);
   const sum = sorted.reduce((acc, curr) => acc + curr, 0);
   const avg = sum / sorted.length;
   const min = sorted[0];
   const max = sorted[sorted.length - 1];
   const mid = Math.floor(sorted.length / 2);
-  const median = sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+  const median = sorted.length % 2 !== 0 ? sorted[mid] : sorted[mid - 1] / 2 + sorted[mid] / 2;
   return {
     count: sorted.length,
-    sum: Math.round(sum * 100) / 100,
-    average: Math.round(avg * 100) / 100,
-    median: Math.round(median * 100) / 100,
+    sum: rounded(sum),
+    average: rounded(avg),
+    median: rounded(median),
     min,
     max
   };
@@ -223,18 +241,19 @@ export function calculateStatistics(numbers) {
 
 // Unified agent tool handler
 export function runQuickCompute(input = {}) {
-  const { operation = 'evaluate', expression, numbers, loan, compound } = input;
-
   try {
-    if (operation === 'evaluate' || expression) {
-      const expr = String(expression || '').trim();
+    if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('Computation input must be an object');
+    const { operation = 'evaluate', expression, numbers, loan, compound } = input;
+    if (operation === 'evaluate') {
+      if (typeof expression !== 'string') throw new Error('Expression must be a string');
+      const expr = expression.trim();
       if (!expr) return { error: 'No expression provided to evaluate.' };
       const val = evaluateMathExpression(expr);
       return {
         success: true,
         operation: 'evaluate',
         expression: expr,
-        result: Math.round(val * 10000) / 10000,
+        result: rounded(val, 4),
         formatted: typeof val === 'number' ? val.toLocaleString('en-US', { maximumFractionDigits: 4 }) : String(val)
       };
     }

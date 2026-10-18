@@ -4,6 +4,7 @@ import {
   activityFromTools,
   applyProgress,
   applyToolStart,
+  applyToolResult,
   createMission,
   elapsedLabel,
   finishMission,
@@ -63,6 +64,26 @@ test('the first streamed words close the running tool step', () => {
   const mission = applyToolStart(null, { name: 'live_web_search', input: {} });
   assert.deepEqual(states(markWriting(mission)), ['done']);
   assert.equal(markWriting(null), null);
+});
+
+test('tool results match their call and keep failures visible after a recovered mission completes', () => {
+  let mission = applyToolStart(null, { name: 'live_web_search', toolUseId: 'search-1' }, 10);
+  const unrelated = applyToolResult(mission, { name: 'live_web_search', toolUseId: 'search-2', status: 'success' });
+  assert.deepEqual(states(unrelated), ['active']);
+  mission = applyToolResult(mission, { name: 'live_web_search', toolUseId: 'search-1', status: 'error', summary: 'Search unavailable' });
+  assert.deepEqual(states(mission), ['failed']);
+  assert.equal(mission.steps[0].meta.summary, 'Search unavailable');
+  mission = applyToolStart(mission, { name: 'create_checklist', toolUseId: 'list-1' });
+  mission = applyToolResult(mission, { name: 'create_checklist', toolUseId: 'list-1', status: 'success', summary: 'Created 3 tasks' });
+  assert.deepEqual(states(finishMission(mission)), ['failed', 'done']);
+});
+
+test('bounded activity keeps unique step IDs across long tool sequences', () => {
+  let mission = null;
+  for (let i = 0; i < 20; i++) mission = applyToolStart(mission, { name: 'live_web_search', toolUseId: `search-${i}` });
+  assert.equal(mission.steps.length, 8);
+  assert.equal(new Set(mission.steps.map(step => step.id)).size, 8);
+  assert.equal(mission.steps.at(-1).id, 'tool-20');
 });
 
 test('finishing marks steps by how the task ended', () => {

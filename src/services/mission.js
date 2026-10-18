@@ -76,7 +76,14 @@ export function summarizeToolInput(name, input) {
     case 'get_crypto_and_market_prices':
       return { asset: clip(args.asset || args.symbol || args.coin, 40) };
     case 'create_pdf_document':
+    case 'create_checklist':
+    case 'create_schedule':
+    case 'create_budget':
+    case 'create_comparison':
+    case 'create_daily_brief':
       return { title: clip(args.title, 80) };
+    case 'compute':
+      return { expression: clip(args.expression, 80) };
     default:
       return { name: clip(name, 40) };
   }
@@ -87,24 +94,30 @@ export function applyToolStart(mission, event, now = Date.now()) {
   const base = mission || createMission({ kind: 'chat', now });
   if (base.status !== 'running') return base;
   const closed = base.steps.map((step) => (step.state === 'active' ? { ...step, state: 'done' } : step));
-  const count = closed.filter((step) => step.kind === 'tool').length + 1;
+  const count = (base.toolCount || closed.filter((step) => step.kind === 'tool').length) + 1;
   const step = {
     id: `tool-${count}`,
     kind: 'tool',
     tool: clip(event?.name, 60),
+    ...(event?.toolUseId ? { toolUseId: clip(event.toolUseId, 100) } : {}),
     params: summarizeToolInput(event?.name, event?.input),
     state: 'active',
     meta: {}
   };
-  return { ...base, steps: [...closed, step].slice(-MAX_TOOL_STEPS) };
+  return { ...base, toolCount: count, steps: [...closed, step].slice(-MAX_TOOL_STEPS) };
 }
 
 // A tool_result event from the chat stream attaches a summary to the active tool step and completes it.
 export function applyToolResult(mission, event) {
   if (!mission || mission.status !== 'running') return mission;
   const steps = mission.steps.map((step) => {
-    if (step.state === 'active' && step.kind === 'tool') {
-      return { ...step, state: 'done', meta: { ...step.meta, summary: clip(event?.summary || event?.result || '', 200) } };
+    if (step.state === 'active' && step.kind === 'tool' &&
+      (event?.toolUseId ? step.toolUseId === event.toolUseId : (!event?.name || step.tool === event.name))) {
+      return {
+        ...step,
+        state: event?.status === 'error' ? 'failed' : 'done',
+        meta: { ...step.meta, summary: clip(event?.summary || event?.error || event?.result || '', 200) }
+      };
     }
     return step;
   });
@@ -121,7 +134,7 @@ export function markWriting(mission) {
 export function finishMission(mission, { status = 'done', now = Date.now() } = {}) {
   if (!mission) return mission;
   const steps = mission.steps.map((step) => {
-    if (status === 'done') return { ...step, state: 'done' };
+    if (status === 'done') return { ...step, state: step.state === 'failed' ? 'failed' : 'done' };
     if (step.state === 'active') return { ...step, state: status === 'stopped' ? 'stopped' : 'failed' };
     if (step.state === 'pending') return { ...step, state: 'skipped' };
     return step;

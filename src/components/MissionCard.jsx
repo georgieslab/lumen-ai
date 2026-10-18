@@ -11,6 +11,8 @@ const LABELS = {
     followUpQueryLabel: 'Follow-up',
     live_web_search: 'Web search', browse_web_page: 'Read a page', call_direct_api: 'Fetched data', get_live_weather: 'Checked weather',
     get_crypto_and_market_prices: 'Checked prices', create_pdf_document: 'Created a PDF', other: 'Used a tool',
+    create_checklist: 'Created a checklist', create_schedule: 'Created a schedule', create_budget: 'Calculated a budget',
+    create_comparison: 'Compared options', create_daily_brief: 'Created a briefing', compute: 'Calculated',
     sources: 'sources', pages: 'pages read', skipped: 'not run'
   },
   es: {
@@ -22,6 +24,8 @@ const LABELS = {
     followUpQueryLabel: 'Búsqueda adicional',
     live_web_search: 'Búsqueda web', browse_web_page: 'Leyó una página', call_direct_api: 'Obtuvo datos', get_live_weather: 'Consultó el clima',
     get_crypto_and_market_prices: 'Consultó precios', create_pdf_document: 'Creó un PDF', other: 'Usó una herramienta',
+    create_checklist: 'Creó una lista de tareas', create_schedule: 'Creó un horario', create_budget: 'Calculó un presupuesto',
+    create_comparison: 'Comparó opciones', create_daily_brief: 'Creó un resumen', compute: 'Calculó',
     sources: 'fuentes', pages: 'páginas leídas', skipped: 'no ejecutado'
   },
   fr: {
@@ -33,6 +37,8 @@ const LABELS = {
     followUpQueryLabel: 'Complément',
     live_web_search: 'Recherche web', browse_web_page: 'Page lue', call_direct_api: 'Données récupérées', get_live_weather: 'Météo consultée',
     get_crypto_and_market_prices: 'Prix consultés', create_pdf_document: 'PDF créé', other: 'Outil utilisé',
+    create_checklist: 'Liste de tâches créée', create_schedule: 'Planning créé', create_budget: 'Budget calculé',
+    create_comparison: 'Options comparées', create_daily_brief: 'Briefing créé', compute: 'Calcul effectué',
     sources: 'sources', pages: 'pages lues', skipped: 'non exécuté'
   },
   de: {
@@ -44,6 +50,8 @@ const LABELS = {
     followUpQueryLabel: 'Folgesuche',
     live_web_search: 'Websuche', browse_web_page: 'Seite gelesen', call_direct_api: 'Daten abgerufen', get_live_weather: 'Wetter geprüft',
     get_crypto_and_market_prices: 'Preise geprüft', create_pdf_document: 'PDF erstellt', other: 'Werkzeug genutzt',
+    create_checklist: 'Checkliste erstellt', create_schedule: 'Zeitplan erstellt', create_budget: 'Budget berechnet',
+    create_comparison: 'Optionen verglichen', create_daily_brief: 'Briefing erstellt', compute: 'Berechnung ausgeführt',
     sources: 'Quellen', pages: 'Seiten gelesen', skipped: 'nicht ausgeführt'
   },
   ja: {
@@ -55,6 +63,8 @@ const LABELS = {
     followUpQueryLabel: '追加検索',
     live_web_search: 'ウェブ検索', browse_web_page: 'ページを読みました', call_direct_api: 'データを取得しました', get_live_weather: '天気を確認しました',
     get_crypto_and_market_prices: '価格を確認しました', create_pdf_document: 'PDFを作成しました', other: 'ツールを使用しました',
+    create_checklist: 'チェックリストを作成しました', create_schedule: '予定表を作成しました', create_budget: '予算を計算しました',
+    create_comparison: '選択肢を比較しました', create_daily_brief: '概要を作成しました', compute: '計算しました',
     sources: '件の情報源', pages: 'ページ読込済み', skipped: '未実行'
   },
   it: {
@@ -66,6 +76,8 @@ const LABELS = {
     followUpQueryLabel: 'Ricerca aggiuntiva',
     live_web_search: 'Ricerca web', browse_web_page: 'Pagina letta', call_direct_api: 'Dati recuperati', get_live_weather: 'Meteo controllato',
     get_crypto_and_market_prices: 'Prezzi controllati', create_pdf_document: 'PDF creato', other: 'Strumento usato',
+    create_checklist: 'Checklist creata', create_schedule: 'Programma creato', create_budget: 'Budget calcolato',
+    create_comparison: 'Opzioni confrontate', create_daily_brief: 'Briefing creato', compute: 'Calcolo eseguito',
     sources: 'fonti', pages: 'pagine lette', skipped: 'non eseguito'
   }
 };
@@ -99,7 +111,7 @@ function stepLabel(step, labels) {
 // The short detail beside a step: the search query, a hostname, a city. Never raw tool output.
 function stepDetail(step, labels) {
   const params = step.params || {};
-  const parts = [params.query, params.host, params.city, params.asset, params.title].filter(Boolean);
+  const parts = [params.query, params.host, params.city, params.asset, params.title, params.expression].filter(Boolean);
   const meta = step.meta || {};
   if (Number.isFinite(meta.sources)) parts.push(`${meta.sources} ${labels.sources}`);
   if (Number.isFinite(meta.pagesRead)) parts.push(`${meta.pagesRead} ${labels.pages}`);
@@ -109,6 +121,7 @@ function stepDetail(step, labels) {
     (meta.followUpStatus === 'source_unavailable' ? labels.unavailable : null);
   if (followUpStatusLabel) parts.push(followUpStatusLabel);
   if (meta.followUpQuery) parts.push(`${labels.followUpQueryLabel}: ${String(meta.followUpQuery).slice(0, 100)}`);
+  if (step.state === 'failed' && meta.summary) parts.push(String(meta.summary).slice(0, 200));
   return parts.join(' · ');
 }
 

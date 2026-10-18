@@ -16,6 +16,7 @@ export default function BudgetCard({ widget }) {
     categories = [],
     savingsTips = []
   } = widget;
+  const remainingBudget = Math.round((totalBudget - allocatedTotal) * 100) / 100;
 
   const formatMoney = (amount) => {
     return Number(amount || 0).toLocaleString(undefined, {
@@ -35,6 +36,8 @@ export default function BudgetCard({ widget }) {
         ''
       ];
       if (summary) lines.push(summary, '');
+      lines.push(`Allocated: ${currency}${formatMoney(allocatedTotal)}`);
+      lines.push(`${remainingBudget < 0 ? 'Over budget' : 'Unallocated'}: ${currency}${formatMoney(Math.abs(remainingBudget))}`, '');
 
       lines.push('--- CATEGORY BREAKDOWN ---');
       categories.forEach((cat) => {
@@ -84,11 +87,15 @@ export default function BudgetCard({ widget }) {
         </div>
       </div>
 
+      <p className="agent-budget-summary" role="status">
+        Allocated: {currency} {formatMoney(allocatedTotal)} · {remainingBudget < 0 ? 'Over budget' : 'Unallocated'}: {currency} {formatMoney(Math.abs(remainingBudget))}
+      </p>
+
       {/* Stacked Horizontal Allocation Bar */}
       <div className="agent-budget-stacked-bar-wrap">
         <div className="agent-budget-stacked-bar">
           {categories.map((cat, idx) => {
-            const pct = Math.max(2, cat.percentage || 0);
+            const pct = totalBudget > 0 ? Math.max(0, Math.min(100, cat.allocated / totalBudget * 100)) : 0;
             return (
               <div
                 key={cat.id || idx}

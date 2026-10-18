@@ -10,6 +10,20 @@ import dotenv from 'dotenv';
 import { getWebGroundingContext, searchDuckDuckGo, fetchUrlContent, searchWikipedia, webBrowser, WebBrowserTool, isSafeUrl } from './services/webSearch.js';
 import { buildPageContextBlock } from './services/pageContext.js';
 import { watchClient } from './services/runControl.js';
+import { runToolLoop, readConverseStream, throwIfAborted } from './services/agentRunner.js';
+import { getTool, getToolDefinitions, modelSupportsTools } from './services/toolRegistry.js';
+import { toOpenAIMessages, fromOpenAIResponse } from './services/providerMessages.js';
+import { createMissionStore } from './services/missionStore.js';
+import { createMissionManager } from './services/missionManager.js';
+import { createMissionRouter } from './services/missionRoutes.js';
+import { createProjectStore } from './services/projectStore.js';
+import { createProjectRouter } from './services/projectRoutes.js';
+import { deskActionInstructions, projectReferenceBlock, validateDeskToolResult } from './services/deskActions.js';
+import { createWatchStore } from './services/watchStore.js';
+import { createWatchManager } from './services/watchManager.js';
+import { createWatchRouter } from './services/watchRoutes.js';
+import { createWatchObserver } from './services/watchObservation.js';
+import { requestsPdfCreation, requiredWebLookup } from './services/missionContext.js';
 import { safeFetchText } from './services/urlGuard.js';
 import { checkToolCall, markUntrusted } from './services/toolPolicy.js';
 import { createRateLimiter, rateLimitMiddleware } from './services/rateLimit.js';
@@ -100,6 +114,12 @@ AVAILABLE CAPABILITIES
 - Check current weather with get_live_weather and supported cryptocurrency/market data with get_crypto_and_market_prices.
 - Make public HTTP GET requests with call_direct_api. This tool is read-only; do not use it to send or change data.
 - Create a downloadable PDF with create_pdf_document, grounded in the user's request, conversation, or verified sources.
+- Use create_checklist, create_comparison, create_schedule, create_budget, and create_daily_brief to produce interactive cards when the user requests those outputs. Call the tools; describing an artifact in prose does not create it.
+- Use compute for arithmetic, statistics, loan calculations, and compound interest. Budget totals are computed by the budget tool. Clearly label estimates and never invent prices or current evidence.
+- Use create_evidence_report for requested fact checks. Research actual sources first and distinguish supported, contradicted, and unresolved claims. Source links must come from tools used in this run; a listed source alone is not proof that a claim is true.
+- A multi-part planning request may need several artifact tools. Complete the requested outputs within the tool budget, then give a concise final answer. On a validation error, correct the tool arguments instead of claiming success.
+- The interface displays tool-created cards. Summarize their useful contents in plain language; do not copy serialized artifact state or raw tool JSON into the reply unless the user requests it.
+- For schedules, ask for missing dates/time zone when calendar export is requested. Use explicit start/end times and dates; never invent dates. For daily briefings, research real article URLs and dates first; do not fabricate news or verification labels.
 - Analyze images and PDFs supplied by the user. Use browser page or screenshot context only when the user explicitly shares it.
 - Help with career questions, job research, resume feedback, interview practice, and career planning using conversation and available research tools. Do not imply that you can apply for jobs or contact employers.
 - The interface supports voice customization, transcript/session sharing, and isolated previews of generated self-contained HTML pages. Describe these as interface features, not actions you have performed yourself.
@@ -154,6 +174,21 @@ const browseLimit = rateLimitMiddleware(
   createRateLimiter({ windowMs: 3600000, max: Number(process.env.LUMEN_BROWSE_PER_HOUR) || 60 }),
   visitorKey,
   'Too many page and search requests.'
+);
+const chatLimit = rateLimitMiddleware(
+  createRateLimiter({ windowMs: 3600000, max: Number(process.env.LUMEN_CHAT_PER_HOUR) || 60 }),
+  visitorKey,
+  'You have reached the conversation limit for this hour.'
+);
+const voiceLimit = rateLimitMiddleware(
+  createRateLimiter({ windowMs: 3600000, max: Number(process.env.LUMEN_VOICE_PREVIEWS_PER_HOUR) || 30 }),
+  visitorKey,
+  'You have reached the voice preview limit for this hour.'
+);
+const watchLimit = rateLimitMiddleware(
+  createRateLimiter({ windowMs: 3600000, max: Number(process.env.LUMEN_WATCH_ACTIONS_PER_HOUR) || 60 }),
+  visitorKey,
+  'Too many watch requests this hour. Existing scheduled checks continue.'
 );
 
 app.use(express.json({ limit: '50mb' }));
@@ -483,136 +518,27 @@ export function getPollyVoiceForLanguage(lang = 'en-US', requestedVoice = null) 
 // --------------------------------------------------------------------------
 // Amazon Bedrock Native Tool Calling Definitions (Converse API toolConfig)
 // --------------------------------------------------------------------------
-const BEDROCK_TOOLS = [
-  {
-    toolSpec: {
-      name: 'get_live_weather',
-      description: 'Get current real-time weather and forecast for any city or location worldwide (temperature, conditions, humidity, wind, 3-day forecast).',
-      inputSchema: {
-        json: {
-          type: 'object',
-          properties: {
-            city: { type: 'string', description: 'The city or location name, e.g. London, Tokyo, New York, Paris, Berlin' }
-          },
-          required: ['city']
-        }
-      }
-    }
-  },
-  {
-    toolSpec: {
-      name: 'get_crypto_and_market_prices',
-      description: 'Get live real-time prices, 24h price changes, high/low ranges, and market stats for cryptocurrencies (Bitcoin, Ethereum, Solana, etc.) and fiat currencies.',
-      inputSchema: {
-        json: {
-          type: 'object',
-          properties: {
-            asset: { type: 'string', description: 'The crypto asset name or symbol, e.g. bitcoin, btc, ethereum, eth, solana, sol, cardano, xrp, doge' },
-            currency: { type: 'string', description: 'Comparison fiat currency, default usd' }
-          },
-          required: ['asset']
-        }
-      }
-    }
-  },
-  {
-    toolSpec: {
-      name: 'live_web_search',
-      description: 'Search the live web and knowledge bases for current events, news, facts, people, or real-time information.',
-      inputSchema: {
-        json: {
-          type: 'object',
-          properties: {
-            query: { type: 'string', description: 'The search query to look up on the web' }
-          },
-          required: ['query']
-        }
-      }
-    }
-  },
-  {
-    toolSpec: {
-      name: 'browse_web_page',
-      description: 'Navigate to any public web URL, verify security, and extract readable text, title, headings, and key paragraphs with SSRF protection.',
-      inputSchema: {
-        json: {
-          type: 'object',
-          properties: {
-            url: { type: 'string', description: 'The full public HTTP/HTTPS URL (e.g. https://example.com/article) to browse and extract' }
-          },
-          required: ['url']
-        }
-      }
-    }
-  },
-  {
-    toolSpec: {
-      name: 'call_direct_api',
-      description: 'Make a direct read-only HTTP GET request to a public REST API endpoint to retrieve live real-time JSON data (e.g., weather APIs, stock/crypto prices, currency rates, public JSON endpoints). Only GET is allowed.',
-      inputSchema: {
-        json: {
-          type: 'object',
-          properties: {
-            url: { type: 'string', description: 'The full HTTP/HTTPS REST API endpoint URL to call' },
-            method: { type: 'string', enum: ['GET'], description: 'HTTP method (GET only)' },
-            purpose: { type: 'string', description: 'Brief description of what data is being fetched' }
-          },
-          required: ['url']
-        }
-      }
-    }
-  },
-  {
-    toolSpec: {
-      name: 'create_pdf_document',
-      description: 'Generate and compile a downloadable professional PDF document, report, study guide, briefing, proposal, or meeting summary based on the conversation or user prompt.',
-      inputSchema: {
-        json: {
-          type: 'object',
-          properties: {
-            title: { type: 'string', description: 'Main title of the PDF document' },
-            subtitle: { type: 'string', description: 'Optional subtitle or context statement' },
-            summary: { type: 'string', description: 'Executive summary or overview statement' },
-            category: { type: 'string', description: 'Document category or label (e.g. Report, Briefing, Analysis, Proposal)' },
-            sections: {
-              type: 'array',
-              description: 'Content sections for the document',
-              items: {
-                type: 'object',
-                properties: {
-                  heading: { type: 'string', description: 'Section title' },
-                  content: { type: 'string', description: 'Detailed paragraphs for this section' },
-                  bulletPoints: {
-                    type: 'array',
-                    items: { type: 'string' },
-                    description: 'Optional bullet points'
-                  }
-                },
-                required: ['heading', 'content']
-              }
-            }
-          },
-          required: ['title', 'sections']
-        }
-      }
-    }
-  }
-];
+const BEDROCK_TOOLS = getToolDefinitions();
 
 // Every tool call passes the policy first, and results that carry web text are marked as untrusted data.
-async function executeBedrockTool(toolUse) {
+async function executeBedrockTool(toolUse, { signal, completedTools } = {}) {
+  throwIfAborted(signal);
   const { name, input } = toolUse || {};
   const policy = checkToolCall(name, input);
   if (!policy.allowed) {
     console.warn(`[Tool policy] Refused ${name}: ${policy.reason}`);
     return { error: policy.reason };
   }
-  return markUntrusted(name, await runBedrockTool(toolUse));
+  const result = await runBedrockTool(toolUse, { signal, completedTools });
+  throwIfAborted(signal);
+  return markUntrusted(name, result);
 }
 
-async function runBedrockTool(toolUse) {
+async function runBedrockTool(toolUse, { signal, completedTools } = {}) {
   try {
     const { name, input = {} } = toolUse || {};
+    const registered = getTool(name);
+    if (registered?.execute) return registered.execute(input, { completedTools });
     if (name === 'create_pdf_document') {
       const pdf = await generatePdfDocument({
         title: input?.title || 'Lumen AI Generated Report',
@@ -628,7 +554,7 @@ async function runBedrockTool(toolUse) {
     if (name === 'get_live_weather') {
       const city = String(input?.city || input?.location || '').trim();
       if (!city) return { error: 'No city or location provided.' };
-      const weatherData = await fetchLiveWeather(city);
+      const weatherData = await fetchLiveWeather(city, { signal });
       return weatherData;
     }
 
@@ -636,14 +562,14 @@ async function runBedrockTool(toolUse) {
       const asset = String(input?.asset || input?.symbol || input?.coin || '').trim();
       const currency = String(input?.currency || 'usd').trim();
       if (!asset) return { error: 'No cryptocurrency asset or symbol provided.' };
-      const marketData = await fetchCryptoPrices(asset, currency);
+      const marketData = await fetchCryptoPrices(asset, currency, { signal });
       return marketData;
     }
 
     if (name === 'live_web_search') {
       const query = String(input?.query || '').trim();
       if (!query) return { error: 'No search query provided.' };
-      const results = await webBrowser.search(query, 4);
+      const results = await webBrowser.search(query, 4, { signal });
       return {
         query,
         count: Array.isArray(results) ? results.length : 0,
@@ -654,7 +580,7 @@ async function runBedrockTool(toolUse) {
     if (name === 'browse_web_page') {
       const url = String(input?.url || '').trim();
       if (!url) return { error: 'No URL provided.' };
-      const pageData = await webBrowser.navigateAndExtract(url);
+      const pageData = await webBrowser.navigateAndExtract(url, { signal });
       if (!pageData.success) {
         return {
           error: pageData.error || 'Could not browse or extract content from target URL.',
@@ -682,7 +608,7 @@ async function runBedrockTool(toolUse) {
             'Accept': 'application/json, text/plain, */*',
             'User-Agent': 'LumenAI-Agent/1.0'
           },
-          signal: controller.signal,
+          signal: signal ? AbortSignal.any([signal, controller.signal]) : controller.signal,
           maxBytes: 500_000
         });
         clearTimeout(timeout);
@@ -708,10 +634,197 @@ async function runBedrockTool(toolUse) {
 
     return { error: `Tool ${name} is not recognized.` };
   } catch (toolErr) {
+    throwIfAborted(signal);
     console.warn(`executeBedrockTool error for ${toolUse?.name}:`, toolErr.message);
     return { error: toolErr.message || 'Tool execution encountered an error' };
   }
 }
+
+async function runBedrockConversation({ model, messages, systemPrompt, promptText, incomingHistory, webMode, run, stream = false, onEvent, checkpoint, onCheckpoint, forceWebLookup = false, executeTool = executeBedrockTool, webLookupText }) {
+  return runToolLoop({
+    messages,
+    tools: modelSupportsTools(model) ? getToolDefinitions({ webMode }) : [],
+    executeTool,
+    signal: run.signal,
+    onEvent,
+    checkpoint,
+    onCheckpoint,
+    async callModel({ messages: turnMessages, tools, finalTurn, signal, onToken }) {
+      const grounding = requiredWebLookup({ messages: turnMessages, tools, promptText: webLookupText || promptText, enabled: forceWebLookup });
+      if (grounding) return grounding;
+      const payload = {
+        modelId: model,
+        messages: turnMessages,
+        system: [{ text: systemPrompt + (finalTurn ? '\nTool budget exhausted. Give a final answer using only completed results. State any unfinished work. No further tool calls are available.' : '') }],
+        inferenceConfig: { maxTokens: replyTokenBudget(promptText, incomingHistory, tools.length ? 4096 : 1350, model), temperature: 0.7 },
+        ...(tools.length ? { toolConfig: { tools } } : {})
+      };
+      if (stream) {
+        const response = await bedrock.send(new ConverseStreamCommand(payload), { abortSignal: signal });
+        return readConverseStream(response.stream, { signal, onToken });
+      }
+      const response = await bedrock.send(new ConverseCommand(payload), { abortSignal: signal });
+      return { message: response.output?.message, stopReason: response.stopReason };
+    }
+  });
+}
+
+async function runOpenAIConversation({ messages, systemPrompt, promptText, webMode, run, onEvent, checkpoint, onCheckpoint, forceWebLookup = false, executeTool = executeBedrockTool, webLookupText }) {
+  if (!(process.env.OPENAI_API_KEY || process.env.VITE_OPENAI_API_KEY)) return null;
+  return runToolLoop({
+    messages, tools: getToolDefinitions({ webMode }), executeTool,
+    signal: run.signal, onEvent, checkpoint, onCheckpoint,
+    async callModel({ messages: turnMessages, tools, finalTurn, signal }) {
+      const grounding = requiredWebLookup({ messages: turnMessages, tools, promptText: webLookupText || promptText, enabled: forceWebLookup });
+      if (grounding) return grounding;
+      const response = await fetchOpenAIResponse({
+        messages: turnMessages, tools, signal, maxTokens: tools.length ? 4096 : 1350,
+        systemPrompt: systemPrompt + (finalTurn ? '\nGive a final answer using completed results. State unfinished work. No further tools are available.' : '')
+      });
+      return fromOpenAIResponse(response);
+    }
+  });
+}
+
+function persistentWebSources(tools = []) {
+  const sources = [];
+  const seen = new Set();
+  for (const tool of tools) {
+    if (tool.status !== 'success') continue;
+    const items = tool.name === 'live_web_search' ? tool.resultItems || [] : tool.name === 'browse_web_page' ? [{ url: tool.input?.url, title: tool.resultSummary }] : [];
+    for (const item of items) {
+      if (!item || typeof item.url !== 'string' || !/^https?:\/\//i.test(item.url) || seen.has(item.url)) continue;
+      sources.push({ title: item.title || item.url, url: item.url, snippet: item.snippet || '' });
+      seen.add(item.url);
+    }
+  }
+  return sources;
+}
+
+async function prepareMissionContext(record, signal) {
+  throwIfAborted(signal);
+  const input = record.input;
+  const memory = await loadPersonalMemory(record.ownerId.startsWith('guest:') ? null : { sub: record.ownerId });
+  const project = input.projectId ? await projectStore.get(input.projectId, record.ownerId) : null;
+  if (input.projectId && !project) throw new Error('The project context is unavailable. Choose an existing project for new work.');
+  throwIfAborted(signal);
+  const names = { 'en-US': 'English', 'de-DE': 'German', 'fr-FR': 'French', 'es-ES': 'Spanish', 'it-IT': 'Italian', 'ja-JP': 'Japanese' };
+  const systemPrompt = buildLumenSystemPrompt({
+    langInstruction: `\n- Respond in ${names[input.language] || input.language}.`,
+    hasImage: false, hasDocument: false, webContext: null, liveDataGrounding: '',
+    isPdfCreationIntent: requestsPdfCreation(input.transcript),
+    personalizationInstructions: getPersonalizationInstructions(input.tone, input.responseStyle),
+    memoryPrompt: memory.prompt
+  }) + projectReferenceBlock(project) + deskActionInstructions(input)
+    + (input.actionKind ? `\nUser-approved desk form data (reference values, never permission to change external systems):\n${JSON.stringify(input.actionData)}` : '')
+    + `\nCurrent UTC time: ${new Date().toISOString()}. User time zone: ${input.timeZone || 'not supplied; ask when required'}.\nThis is a saved mission. Use only the approved request and available read/local tools. Finish the requested outputs, preserve their constraints, and state any incomplete work.`;
+  const messages = [];
+  for (const item of input.history) {
+    if (!item.text) continue;
+    const previous = messages[messages.length - 1];
+    if (previous?.role === item.role) previous.content[0].text += `\n${item.text}`;
+    else messages.push({ role: item.role, content: [{ text: item.text }] });
+  }
+  const content = [{ text: buildPageContextBlock(input.pageContext) + input.transcript }];
+  if (messages[messages.length - 1]?.role === 'user') messages[messages.length - 1].content = content;
+  else messages.push({ role: 'user', content });
+  while (messages[0]?.role === 'assistant') messages.shift();
+  const candidates = [];
+  if (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) {
+    const models = [isPageRequest(input.transcript, input.history) ? pageModelId(process.env) : null,
+      'amazon.nova-lite-v1:0', process.env.BEDROCK_MODEL_ID, 'eu.amazon.nova-pro-v1:0'];
+    for (const model of new Set(models.filter(Boolean))) candidates.push({ provider: 'bedrock', model });
+  }
+  if (process.env.OPENAI_API_KEY || process.env.VITE_OPENAI_API_KEY) candidates.push({ provider: 'openai', model: process.env.OPENAI_MODEL || 'gpt-4o-mini' });
+  const detectedVoice = detectVoiceChangeIntent(input.transcript);
+  return { messages, systemPrompt, promptText: input.transcript, incomingHistory: input.history, webMode: input.webMode,
+    webLookupText: input.actionKind === 'verify' ? input.actionData.content : input.actionKind === 'decision' ? `${input.actionData.question} ${input.actionData.options.join(' vs ')}` : input.transcript,
+    candidates, candidateIndex: 0, targetVoice: getPollyVoiceForLanguage(input.language, detectedVoice || input.voiceId), voiceChanged: detectedVoice || null, webSources: [],
+    memoryData: memory.data, memoryLoadFailed: !!memory.error };
+}
+
+async function executePersistentMission(record, { signal, onEvent, onCheckpoint, onContext }) {
+  let context = record.context;
+  if (!context?.candidates?.length) {
+    context = await prepareMissionContext(record, signal);
+    await onContext(context);
+  }
+  if (!context.candidates.length) throw new Error('No AI provider is configured. Configure a provider, then resume this mission.');
+  const run = { signal, throwIfCancelled: () => throwIfAborted(signal), get cancelled() { return signal.aborted; } };
+  let checkpoint = record.checkpoint;
+  let result;
+  let provider;
+  let lastError;
+  for (let index = context.candidateIndex || 0; index < context.candidates.length; index++) {
+    throwIfAborted(signal);
+    const candidate = context.candidates[index];
+    context = { ...context, candidateIndex: index };
+    await onContext(context);
+    try {
+      const options = { ...context, run, checkpoint, onEvent, forceWebLookup: context.webMode === 'always' || ['decision', 'verify'].includes(record.input.actionKind),
+        async executeTool(tool, toolContext) { const output = await executeBedrockTool(tool, toolContext); validateDeskToolResult(record.input, tool.name, output); return output; },
+        async onCheckpoint(state) { await onCheckpoint(state); checkpoint = state; } };
+      result = candidate.provider === 'bedrock'
+        ? await runBedrockConversation({ ...options, model: candidate.model, stream: true })
+        : await runOpenAIConversation(options);
+      if (!result) throw new Error('The configured provider is unavailable.');
+      provider = candidate.provider;
+      break;
+    } catch (error) {
+      throwIfAborted(signal);
+      if (error.hasProgress || checkpoint?.calls?.length || checkpoint?.phase === 'tools') throw error;
+      lastError = error;
+    }
+  }
+  if (!result) throw lastError || new Error('No AI provider could complete this mission.');
+  const webSources = persistentWebSources(result.tools);
+  context = { ...context, webSources };
+  await onContext(context);
+  onEvent({ type: 'sources', sources: webSources });
+  let memoryStatus = context.memoryStatus || null;
+  if (!record.ownerId.startsWith('guest:')) {
+    if (context.memoryLoadFailed) memoryStatus = { error: 'Cloud memory could not be loaded for this response.' };
+    else if (!context.memoryAttempted && !signal.aborted) {
+      // Save the intent before the optional cloud write. A recovered mission must not repeat it.
+      context = { ...context, memoryAttempted: true };
+      await onContext(context);
+      try {
+        memoryStatus = await extractAndSaveMemories({ sub: record.ownerId }, context.memoryData, record.input.transcript, { signal });
+      } catch (error) {
+        console.warn('Mission memory update unavailable:', error.message);
+        memoryStatus = { error: 'Automatic memory could not be updated.' };
+      }
+      context = { ...context, memoryStatus };
+      await onContext(context);
+    }
+  }
+  let audioBase64 = null;
+  if (!signal.aborted && process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) {
+    try {
+      const response = await polly.send(new SynthesizeSpeechCommand({ Engine: 'neural', OutputFormat: 'mp3',
+        Text: (prepareTextForSpeech(result.reply) || 'Your mission is complete.').slice(0, 1500), VoiceId: context.targetVoice }), { abortSignal: signal });
+      audioBase64 = Buffer.from(await response.AudioStream.transformToByteArray()).toString('base64');
+    } catch (error) { console.warn('Mission voice output unavailable:', error.message); }
+  }
+  return { ...result, webSources, audioBase64, activeVoice: context.targetVoice, voiceChanged: context.voiceChanged,
+    memoryStatus, provider: `${provider}-${audioBase64 ? 'polly' : 'webspeech'}` };
+}
+
+const projectStore = createProjectStore({ directory: process.env.LUMEN_WORKSPACE_STORE_DIR || join(__dirname, '.lumen-data', 'projects') });
+projectStore.ready.catch((error) => console.error('Project store unavailable:', error.message));
+const watchManager = createWatchManager({
+  store: createWatchStore({ directory: process.env.LUMEN_WATCH_STORE_DIR || join(__dirname, '.lumen-data', 'watches') }),
+  observe: createWatchObserver()
+});
+watchManager.ready.catch((error) => console.error('Watch store unavailable:', error.message));
+const missionManager = createMissionManager({
+  store: createMissionStore({ directory: process.env.LUMEN_MISSION_STORE_DIR || join(__dirname, '.lumen-data', 'missions'), maxRecordBytes: 8 * 1024 * 1024 }),
+  execute: executePersistentMission
+});
+missionManager.ready.catch((error) => console.error('Mission store unavailable:', error.message));
+app.use('/api/missions', createProjectRouter({ store: projectStore, missions: missionManager }));
+app.use('/api/missions', createWatchRouter({ manager: watchManager, watchLimit }));
+app.use('/api/missions', createMissionRouter({ manager: missionManager, projects: projectStore, chatLimit }));
 
 // Serve static files with cache headers whenever dist directory is built
 const distPath = join(__dirname, 'dist');
@@ -719,12 +832,16 @@ if (existsSync(distPath)) {
   app.use(express.static(distPath, {
     maxAge: '1d',
     etag: true,
-    lastModified: true
+    lastModified: true,
+    setHeaders(res, filename) {
+      // Revalidate the app shell so it points at the latest hashed frontend bundle.
+      if (filename.endsWith('.html')) res.setHeader('Cache-Control', 'no-cache');
+    }
   }));
 }
 
 // Helper for OpenAI direct REST API fallback
-async function fetchOpenAIChatCompletion({ messages, systemPrompt, maxTokens = 400, signal = null }) {
+async function fetchOpenAIResponse({ messages, systemPrompt, maxTokens = 400, signal = null, tools = [] }) {
   const apiKey = process.env.OPENAI_API_KEY || process.env.VITE_OPENAI_API_KEY;
   if (!apiKey) return null;
 
@@ -733,9 +850,7 @@ async function fetchOpenAIChatCompletion({ messages, systemPrompt, maxTokens = 4
     payloadMessages.push({ role: 'system', content: systemPrompt });
   }
 
-  for (const m of messages) {
-    payloadMessages.push(m);
-  }
+  payloadMessages.push(...toOpenAIMessages(messages));
 
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
@@ -748,7 +863,8 @@ async function fetchOpenAIChatCompletion({ messages, systemPrompt, maxTokens = 4
       model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
       messages: payloadMessages,
       max_tokens: maxTokens,
-      temperature: 0.7
+      temperature: 0.7,
+      ...(tools.length ? { tools: tools.map(({ toolSpec }) => ({ type: 'function', function: { name: toolSpec.name, description: toolSpec.description, parameters: toolSpec.inputSchema.json } })) } : {})
     })
   });
 
@@ -757,7 +873,12 @@ async function fetchOpenAIChatCompletion({ messages, systemPrompt, maxTokens = 4
     throw new Error(`OpenAI API error ${response.status}: ${errText}`);
   }
 
-  const data = await response.json();
+  return response.json();
+}
+
+async function fetchOpenAIChatCompletion(options) {
+  const data = await fetchOpenAIResponse(options);
+  if (!data) return null;
   return data.choices?.[0]?.message?.content || "";
 }
 
@@ -780,11 +901,13 @@ async function loadPersonalMemory(user) {
   }
 }
 
-async function extractAndSaveMemories(user, memoryData, userText) {
+async function extractAndSaveMemories(user, memoryData, userText, { signal } = {}) {
+  throwIfAborted(signal);
   if (!user || !memoryData?.autoMemoryEnabled || !userText?.trim() || memoryData.memories.length >= 100) {
     return { saved: 0 };
   }
   const latestMemoryData = await getUserMemory(user.sub);
+  throwIfAborted(signal);
   if (!latestMemoryData.autoMemoryEnabled || latestMemoryData.memories.length >= 100) return { saved: 0 };
 
   const sourceText = userText.trim().slice(0, 2500);
@@ -802,9 +925,10 @@ async function extractAndSaveMemories(user, memoryData, userText) {
         messages: [{ role: 'user', content: [{ text: sourceText }] }],
         system: [{ text: systemPrompt }],
         inferenceConfig: { maxTokens: 350, temperature: 0 }
-      }));
+      }), { abortSignal: signal });
       resultText = result.output?.message?.content?.map(block => block.text || '').join('') || '';
     } catch (error) {
+      throwIfAborted(signal);
       console.warn('[Cloud Memory] Bedrock extraction failed:', error.message);
     }
   }
@@ -812,7 +936,8 @@ async function extractAndSaveMemories(user, memoryData, userText) {
     resultText = await fetchOpenAIChatCompletion({
       messages: [{ role: 'user', content: sourceText }],
       systemPrompt,
-      maxTokens: 350
+      maxTokens: 350,
+      signal
     }) || '';
   }
 
@@ -824,6 +949,7 @@ async function extractAndSaveMemories(user, memoryData, userText) {
   let saved = 0;
 
   for (const candidate of candidates) {
+    throwIfAborted(signal);
     if (typeof candidate !== 'string') continue;
     const text = candidate.trim().replace(/\s+/g, ' ').slice(0, 280);
     if (latestMemoryData.memories.length + saved >= 100) break;
@@ -1108,7 +1234,7 @@ app.post('/api/research/stream', researchLimit, async (req, res) => {
       memoryStatus = { error: 'Cloud memory could not be loaded for this response.' };
     } else if (signedInUser) {
       try {
-        memoryStatus = await extractAndSaveMemories(signedInUser, memoryState.data, topic);
+        memoryStatus = await extractAndSaveMemories(signedInUser, memoryState.data, topic, { signal: run.signal });
       } catch (memoryError) {
         console.warn('[Cloud Memory] Automatic memory update failed:', memoryError.message);
         memoryStatus = { error: 'Automatic memory could not be updated.' };
@@ -1142,7 +1268,8 @@ app.post('/api/research/stream', researchLimit, async (req, res) => {
   }
 });
 
-app.post('/api/converse', async (req, res) => {
+app.post('/api/converse', chatLimit, async (req, res) => {
+  const run = watchClient(res, { timeoutMs: 120_000 });
   try {
     const signedInUser = getSession(req);
     const memoryState = await loadPersonalMemory(signedInUser);
@@ -1172,7 +1299,7 @@ app.post('/api/converse', async (req, res) => {
     const webMode = req.body.webMode || 'auto'; // 'auto' | 'always' | 'off'
     let webContext = null;
     try {
-      webContext = await getWebGroundingContext(rawPrompt, { mode: webMode });
+      webContext = await getWebGroundingContext(rawPrompt, { mode: webMode, signal: run.signal });
     } catch (webErr) {
       console.warn('Web grounding error:', webErr.message);
     }
@@ -1211,7 +1338,7 @@ app.post('/api/converse', async (req, res) => {
 
       if (cityDetected) {
         try {
-          const w = await fetchLiveWeather(cityDetected);
+          const w = await fetchLiveWeather(cityDetected, { signal: run.signal });
           if (w && w.success) {
             liveDataWidget = w;
             liveDataGrounding = `\n- Real-Time Live Weather Data for ${w.city}:\n${w.summary}`;
@@ -1219,7 +1346,7 @@ app.post('/api/converse', async (req, res) => {
         } catch (_) {}
       } else if (cryptoMatch && cryptoMatch[1]) {
         try {
-          const c = await fetchCryptoPrices(cryptoMatch[1].trim());
+          const c = await fetchCryptoPrices(cryptoMatch[1].trim(), 'usd', { signal: run.signal });
           if (c && c.success) {
             liveDataWidget = c;
             liveDataGrounding = `\n- Real-Time Live Market Data:\n${c.summary}`;
@@ -1247,7 +1374,7 @@ app.post('/api/converse', async (req, res) => {
       ? `\n- Multilingual Voice & Intelligence: The user's active language is ${selectedLangName}. You MUST formulate your entire response in natural, fluent, articulate ${selectedLangName}.`
       : '';
 
-    const isPdfCreationIntent = /(?:create|generate|make|export|write|download|build)\s+(?:a\s+)?(?:pdf|document|report|file)\b/i.test(rawPrompt) || /\bpdf\s+(?:report|document|summary|export|file)\b/i.test(rawPrompt);
+    const isPdfCreationIntent = requestsPdfCreation(rawPrompt);
 
     const personalizationInstructions = getPersonalizationInstructions(req.body.tone, req.body.responseStyle);
     const systemPrompt = buildLumenSystemPrompt({
@@ -1342,6 +1469,7 @@ app.post('/api/converse', async (req, res) => {
     }
 
     let replyText = "";
+    let modelProvider = 'bedrock';
     const executedTools = [];
     const executedWidgets = [];
 
@@ -1388,81 +1516,9 @@ app.post('/api/converse', async (req, res) => {
 
       const candidateModels = Array.from(new Set(rawCandidates.filter(Boolean)));
 
-      const runConverse = async (targetModel) => {
-        const supportsTools = targetModel.toLowerCase().includes('nova');
-        const turnMessages = [...finalMessages];
-        const currentModelTools = [];
-        const currentModelWidgets = [];
-        let conversationReply = "";
-        const maxTurns = 3;
-
-        for (let turn = 0; turn < maxTurns; turn++) {
-          const commandPayload = {
-            modelId: targetModel,
-            messages: turnMessages,
-            system: [{ text: systemPrompt }],
-            inferenceConfig: {
-              maxTokens: replyTokenBudget(promptText, incomingHistory, 1200, targetModel),
-              temperature: 0.7
-            }
-          };
-
-          // Attach native tools if model supports toolConfig and web access is not disabled
-          if (supportsTools && webMode !== 'off') {
-            commandPayload.toolConfig = { tools: BEDROCK_TOOLS };
-          }
-
-          const response = await bedrock.send(new ConverseCommand(commandPayload));
-
-          // Handle autonomous tool execution if requested by Bedrock
-          if (response.stopReason === 'tool_use' && supportsTools) {
-            const toolUseBlock = response.output?.message?.content?.find(c => c.toolUse);
-            if (toolUseBlock && toolUseBlock.toolUse) {
-              const { toolUse } = toolUseBlock;
-              console.log(`[Bedrock Tool Invoked] Model ${targetModel} called ${toolUse.name}:`, toolUse.input);
-              const toolResult = await executeBedrockTool(toolUse);
-              if (toolResult && toolResult.widgetType) {
-                currentModelWidgets.push(toolResult);
-              }
-              currentModelTools.push({
-                name: toolUse.name,
-                input: toolUse.input,
-                resultItems: Array.isArray(toolResult.results) ? toolResult.results : null,
-                resultSummary: toolUse.name === 'live_web_search'
-                  ? `${Array.isArray(toolResult.results) ? toolResult.results.length : 0} items retrieved`
-                  : (toolResult.widgetType === 'weather' ? `${toolResult.city} (${toolResult.temp}°C)`
-                  : (toolResult.widgetType === 'crypto' ? `${toolResult.symbol} ($${toolResult.price})`
-                  : (toolResult.widgetType === 'pdf_document' ? `${toolResult.title} (${toolResult.pageCount} page(s))`
-                  : (toolResult.title || 'Completed'))))
-              });
-
-              turnMessages.push(response.output.message);
-              turnMessages.push({
-                role: 'user',
-                content: [{
-                  toolResult: {
-                    toolUseId: toolUse.toolUseId,
-                    content: [{ json: toolResult }]
-                  }
-                }]
-              });
-              continue; // Re-prompt Bedrock with toolResult in the next turn
-            }
-          }
-
-          // Final model answer generated
-          const textBlock = response.output?.message?.content?.find(c => c.text);
-          conversationReply = textBlock ? textBlock.text : (response.output?.message?.content?.[0]?.text || "");
-          break;
-        }
-
-        // Clean internal chain-of-thought XML tags (e.g. <thinking>...</thinking>)
-        return {
-          reply: String(conversationReply || '').replace(/<thinking>[\s\S]*?<\/thinking>/g, '').trim(),
-          tools: currentModelTools,
-          widgets: currentModelWidgets
-        };
-      };
+      const runConverse = (model) => runBedrockConversation({
+        model, messages: finalMessages, systemPrompt, promptText, incomingHistory, webMode, run
+      });
 
       for (const model of candidateModels) {
         try {
@@ -1479,37 +1535,30 @@ app.post('/api/converse', async (req, res) => {
             break;
           }
         } catch (err) {
-          console.warn(`Model ${model} failed: ${err.message}. Trying next candidate...`);
+          if (run.cancelled || err.hasProgress) throw err;
+          console.warn(`Model ${model} failed before output: ${err.message}. Trying next candidate...`);
         }
       }
 
-      // Merge proactive live data widget if triggered
-      if (liveDataWidget && !executedWidgets.some(w => w.widgetType === liveDataWidget.widgetType)) {
-        executedWidgets.unshift(liveDataWidget);
+    }
+
+    // Fallback uses the same validated tools and bounded loop.
+    if (!replyText) {
+      const result = await runOpenAIConversation({ messages: finalMessages, systemPrompt, webMode, run });
+      if (result) {
+        replyText = result.reply;
+        modelProvider = 'openai';
+        executedTools.push(...result.tools);
+        executedWidgets.push(...result.widgets);
       }
     }
+    run.throwIfCancelled();
+    if (!replyText) throw new Error('No AI provider could complete this request. Check server provider configuration.');
 
-    // 2. Direct OpenAI API fallback
-    if (!replyText) {
-      try {
-        const openAIReply = await fetchOpenAIChatCompletion({
-          messages: finalMessages,
-          systemPrompt,
-          maxTokens: 350
-        });
-        if (openAIReply) {
-          replyText = openAIReply;
-          console.log("Lumen responded via OpenAI Direct API");
-        }
-      } catch (oaiErr) {
-        console.warn("OpenAI API failed:", oaiErr.message);
-      }
+    run.throwIfCancelled();
+    if (liveDataWidget && !executedWidgets.some(widget => widget.widgetType === liveDataWidget.widgetType)) {
+      executedWidgets.unshift(liveDataWidget);
     }
-
-    if (!replyText) {
-      replyText = "I am present and listening. How can I assist you right now?";
-    }
-
     // Proactive PDF generation fallback: if user requested a PDF document and no PDF widget was emitted yet
     if (isPdfCreationIntent && !executedWidgets.some(w => w.widgetType === 'pdf_document')) {
       try {
@@ -1535,6 +1584,7 @@ app.post('/api/converse', async (req, res) => {
       }
     }
 
+    run.throwIfCancelled();
     // 3. Synthesize speech with Amazon Polly Neural Engine (using speech-optimized text)
     let audioBase64 = null;
     if (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) {
@@ -1547,7 +1597,7 @@ app.post('/api/converse', async (req, res) => {
           VoiceId: targetVoice
         });
 
-        const pollyResponse = await polly.send(pollyCommand);
+        const pollyResponse = await polly.send(pollyCommand, { abortSignal: run.signal });
         const audioBuffer = await pollyResponse.AudioStream.transformToByteArray();
         audioBase64 = Buffer.from(audioBuffer).toString('base64');
       } catch (pollyErr) {
@@ -1590,7 +1640,8 @@ app.post('/api/converse', async (req, res) => {
       memoryStatus = { error: 'Cloud memory could not be loaded for this response.' };
     } else if (signedInUser && !filePayload) {
       try {
-        memoryStatus = await extractAndSaveMemories(signedInUser, memoryState.data, rawPrompt);
+        run.throwIfCancelled();
+        memoryStatus = await extractAndSaveMemories(signedInUser, memoryState.data, rawPrompt, { signal: run.signal });
       } catch (memoryError) {
         console.warn('[Cloud Memory] Automatic memory update failed:', memoryError.message);
         memoryStatus = { error: 'Automatic memory could not be updated.' };
@@ -1600,7 +1651,7 @@ app.post('/api/converse', async (req, res) => {
     res.json({
       replyText,
       audioBase64,
-      provider: audioBase64 ? 'bedrock-polly' : 'bedrock-webspeech',
+      provider: `${modelProvider}-${audioBase64 ? 'polly' : 'webspeech'}`,
       activeVoice: targetVoice,
       voiceChanged,
       webSources: allSources,
@@ -1612,24 +1663,15 @@ app.post('/api/converse', async (req, res) => {
   } catch (error) {
     console.error('Lumen converse error:', error);
     console.error('Lumen converse stack trace:', error?.stack);
-    // Graceful recovery response so the UI and voice loop never freeze with a 500 error
-    res.status(200).json({
-      replyText: "I am present and listening. How can I assist you right now?",
-      audioBase64: null,
-      provider: 'bedrock-webspeech',
-      webSources: [],
-      webType: null,
-      toolsUsed: [],
-      widgets: [],
-      recoveredFromError: true
-    });
+    if (run.cancelled) return res.end();
+    res.status(503).json({ error: error.message || 'Lumen could not complete this request.', ...(error.partialResult ? { partialResult: error.partialResult } : {}) });
   }
 });
 
 // --------------------------------------------------------------------------
 // Real-Time Token Streaming SSE Endpoint (ConverseStreamCommand)
 // --------------------------------------------------------------------------
-app.post('/api/converse/stream', async (req, res) => {
+app.post('/api/converse/stream', chatLimit, async (req, res) => {
   // Set SSE Headers
   res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
   res.setHeader('Cache-Control', 'no-cache, no-transform');
@@ -1638,67 +1680,8 @@ app.post('/api/converse/stream', async (req, res) => {
   if (typeof res.flushHeaders === 'function') {
     res.flushHeaders();
   }
-  const run = watchClient(res);
+  const run = watchClient(res, { timeoutMs: 120_000 });
 
-  // Helper for filtering internal Nova <thinking>...</thinking> tokens from the live stream
-  function createThinkingFilter(onToken) {
-    let inThinking = false;
-    let buffer = '';
-    return {
-      push(chunk) {
-        buffer += chunk;
-        while (buffer.length > 0) {
-          if (!inThinking) {
-            const startIdx = buffer.indexOf('<thinking>');
-            if (startIdx !== -1) {
-              const clean = buffer.slice(0, startIdx);
-              if (clean) onToken(clean);
-              buffer = buffer.slice(startIdx + 10);
-              inThinking = true;
-            } else {
-              let partial = false;
-              for (let i = 1; i < 10; i++) {
-                if (buffer.endsWith('<thinking>'.slice(0, i))) {
-                  const clean = buffer.slice(0, buffer.length - i);
-                  if (clean) onToken(clean);
-                  buffer = buffer.slice(buffer.length - i);
-                  partial = true;
-                  break;
-                }
-              }
-              if (!partial) {
-                onToken(buffer);
-                buffer = '';
-              }
-              break;
-            }
-          } else {
-            const endIdx = buffer.indexOf('</thinking>');
-            if (endIdx !== -1) {
-              buffer = buffer.slice(endIdx + 11).replace(/^[\r\n]+/, '');
-              inThinking = false;
-            } else {
-              let keepLen = 0;
-              for (let i = 10; i >= 1; i--) {
-                if (buffer.endsWith('</thinking>'.slice(0, i))) {
-                  keepLen = i;
-                  break;
-                }
-              }
-              buffer = keepLen > 0 ? buffer.slice(buffer.length - keepLen) : '';
-              break;
-            }
-          }
-        }
-      },
-      flush() {
-        if (!inThinking && buffer.length > 0) {
-          onToken(buffer);
-          buffer = '';
-        }
-      }
-    };
-  }
 
   try {
     const signedInUser = getSession(req);
@@ -1729,7 +1712,7 @@ app.post('/api/converse/stream', async (req, res) => {
     const webMode = req.body.webMode || 'auto';
     let webContext = null;
     try {
-      webContext = await getWebGroundingContext(rawPrompt, { mode: webMode });
+      webContext = await getWebGroundingContext(rawPrompt, { mode: webMode, signal: run.signal });
     } catch (webErr) {
       console.warn('Web grounding error:', webErr.message);
     }
@@ -1767,7 +1750,7 @@ app.post('/api/converse/stream', async (req, res) => {
 
       if (cityDetected) {
         try {
-          const w = await fetchLiveWeather(cityDetected);
+          const w = await fetchLiveWeather(cityDetected, { signal: run.signal });
           if (w && w.success) {
             liveDataWidget = w;
             liveDataGrounding = `\n- Real-Time Live Weather Data for ${w.city}:\n${w.summary}`;
@@ -1776,7 +1759,7 @@ app.post('/api/converse/stream', async (req, res) => {
         } catch (_) {}
       } else if (cryptoMatch && cryptoMatch[1]) {
         try {
-          const c = await fetchCryptoPrices(cryptoMatch[1].trim());
+          const c = await fetchCryptoPrices(cryptoMatch[1].trim(), 'usd', { signal: run.signal });
           if (c && c.success) {
             liveDataWidget = c;
             liveDataGrounding = `\n- Real-Time Live Market Data:\n${c.summary}`;
@@ -1808,7 +1791,7 @@ app.post('/api/converse/stream', async (req, res) => {
       ? `\n- Multilingual Voice & Intelligence: The user's active language is ${selectedLangName}. You MUST formulate your entire response in natural, fluent, articulate ${selectedLangName}.`
       : '';
 
-    const isPdfCreationIntent = /(?:create|generate|make|export|write|download|build)\s+(?:a\s+)?(?:pdf|document|report|file)\b/i.test(rawPrompt) || /\bpdf\s+(?:report|document|summary|export|file)\b/i.test(rawPrompt);
+    const isPdfCreationIntent = requestsPdfCreation(rawPrompt);
 
     const personalizationInstructions = getPersonalizationInstructions(req.body.tone, req.body.responseStyle);
     const systemPrompt = buildLumenSystemPrompt({
@@ -1900,6 +1883,7 @@ app.post('/api/converse/stream', async (req, res) => {
     }
 
     let replyText = "";
+    let modelProvider = 'bedrock';
     const executedTools = [];
     const executedWidgets = [];
     if (liveDataWidget) {
@@ -1937,144 +1921,20 @@ app.post('/api/converse/stream', async (req, res) => {
       const candidateModels = Array.from(new Set(rawCandidates.filter(Boolean)));
 
       for (const model of candidateModels) {
-        if (run.cancelled) break;
+        run.throwIfCancelled();
         try {
-          const supportsTools = model.toLowerCase().includes('nova');
-          const turnMessages = [...finalMessages];
-          const currentModelTools = [];
-          const currentModelWidgets = [];
-          let streamedReply = "";
-          const maxTurns = 3;
-
-          for (let turn = 0; turn < maxTurns; turn++) {
-            if (run.cancelled) break;
-            const commandPayload = {
-              modelId: model,
-              messages: turnMessages,
-              system: [{ text: systemPrompt }],
-              inferenceConfig: {
-                maxTokens: replyTokenBudget(promptText, incomingHistory, 1350, model),
-                temperature: 0.7
-              }
-            };
-
-            if (supportsTools && webMode !== 'off') {
-              commandPayload.toolConfig = { tools: BEDROCK_TOOLS };
-            }
-
-            const response = await bedrock.send(new ConverseStreamCommand(commandPayload), { abortSignal: run.signal });
-            let stopReason = null;
-            let activeToolUse = null;
-
-            const thinkingFilter = createThinkingFilter((cleanToken) => {
-              streamedReply += cleanToken;
-              res.write(`data: ${JSON.stringify({ type: 'token', token: cleanToken })}\n\n`);
-            });
-
-            for await (const chunk of response.stream) {
-              if (run.cancelled) break;
-              if (chunk.contentBlockStart?.start?.toolUse) {
-                activeToolUse = {
-                  toolUseId: chunk.contentBlockStart.start.toolUse.toolUseId,
-                  name: chunk.contentBlockStart.start.toolUse.name,
-                  inputStr: ''
-                };
-              }
-
-              if (chunk.contentBlockDelta?.delta?.toolUse) {
-                if (activeToolUse) {
-                  activeToolUse.inputStr += (chunk.contentBlockDelta.delta.toolUse.input || '');
-                }
-              }
-
-              if (chunk.contentBlockDelta?.delta?.text) {
-                thinkingFilter.push(chunk.contentBlockDelta.delta.text);
-              }
-
-              if (chunk.messageStop?.stopReason) {
-                stopReason = chunk.messageStop.stopReason;
-              }
-            }
-
-            thinkingFilter.flush();
-
-            // Cut off by the length limit inside a code block: close it and say so, rather than leave a raw block.
-            if (stopReason === 'max_tokens') {
-              const tail = truncationTail(streamedReply);
-              if (tail) {
-                streamedReply += tail;
-                res.write(`data: ${JSON.stringify({ type: 'token', token: tail })}
-
-`);
-              }
-            }
-
-            if (stopReason === 'tool_use' && activeToolUse && supportsTools) {
-              let parsedInput = {};
-              try {
-                parsedInput = activeToolUse.inputStr ? JSON.parse(activeToolUse.inputStr) : {};
-              } catch (_) {
-                parsedInput = {};
-              }
-
-              res.write(`data: ${JSON.stringify({ type: 'tool_start', name: activeToolUse.name, input: parsedInput })}\n\n`);
-
-              if (run.cancelled) break;
-              const toolResult = await executeBedrockTool({ name: activeToolUse.name, input: parsedInput });
-              if (toolResult && toolResult.widgetType) {
-                currentModelWidgets.push(toolResult);
-                res.write(`data: ${JSON.stringify({ type: 'widget', widget: toolResult })}\n\n`);
-              }
-
-              currentModelTools.push({
-                name: activeToolUse.name,
-                input: parsedInput,
-                resultItems: Array.isArray(toolResult.results) ? toolResult.results : null,
-                resultSummary: activeToolUse.name === 'live_web_search'
-                  ? `${Array.isArray(toolResult.results) ? toolResult.results.length : 0} items retrieved`
-                  : (toolResult.widgetType === 'weather' ? `${toolResult.city} (${toolResult.temp}°C)`
-                  : (toolResult.widgetType === 'crypto' ? `${toolResult.symbol} ($${toolResult.price})`
-                  : (toolResult.widgetType === 'pdf_document' ? `${toolResult.title} (${toolResult.pageCount} page(s))`
-                  : (toolResult.title || 'Completed'))))
-              });
-
-              turnMessages.push({
-                role: 'assistant',
-                content: [{
-                  toolUse: {
-                    toolUseId: activeToolUse.toolUseId,
-                    name: activeToolUse.name,
-                    input: parsedInput
-                  }
-                }]
-              });
-
-              turnMessages.push({
-                role: 'user',
-                content: [{
-                  toolResult: {
-                    toolUseId: activeToolUse.toolUseId,
-                    content: [{ json: toolResult }]
-                  }
-                }]
-              });
-
-              continue; // Next turn to stream model's explanation with tool results
-            }
-
-            break; // Stop turns loop once model finished
-          }
-
-          if (streamedReply && streamedReply.trim().length > 0) {
-            replyText = streamedReply.trim();
-            executedTools.push(...currentModelTools);
-            executedWidgets.push(...currentModelWidgets);
-            console.log(`[Bedrock Stream] Completed via ${model} (${executedTools.length} tool(s), ${executedWidgets.length} widget(s))`);
-            break;
-          }
-        } catch (modelErr) {
-          if (run.cancelled) break;
-          console.warn(`Bedrock stream attempt failed with model ${model}:`, modelErr.message);
+          const result = await runBedrockConversation({
+            model, messages: finalMessages, systemPrompt, promptText, incomingHistory, webMode, run,
+            stream: true,
+            onEvent: (event) => { if (!run.cancelled) res.write(`data: ${JSON.stringify(event)}\n\n`); }
+          });
+          replyText = result.reply;
+          executedTools.push(...result.tools);
+          executedWidgets.push(...result.widgets);
+          break;
+        } catch (error) {
+          if (run.cancelled || error.hasProgress) throw error;
+          console.warn(`Bedrock model ${model} failed before output:`, error.message);
         }
       }
     }
@@ -2082,33 +1942,23 @@ app.post('/api/converse/stream', async (req, res) => {
     // The user stopped this answer: no fallback provider, speech or memory update.
     if (run.cancelled) return res.end();
 
-    // 2. Direct OpenAI fallback if replyText is still empty
+    // Fallback is allowed only before an earlier model produced output or tool calls.
     if (!replyText) {
-      try {
-        const oai = await fetchOpenAIChatCompletion({
-          messages: finalMessages,
-          systemPrompt,
-          maxTokens: 350
-        });
-        if (oai) {
-          replyText = oai;
-          // Emit in words to simulate stream
-          const words = oai.split(' ');
-          for (let i = 0; i < words.length; i++) {
-            const token = (i === 0 ? '' : ' ') + words[i];
-            res.write(`data: ${JSON.stringify({ type: 'token', token })}\n\n`);
-          }
-        }
-      } catch (oaiErr) {
-        console.warn("OpenAI fallback stream failed:", oaiErr.message);
+      const result = await runOpenAIConversation({
+        messages: finalMessages, systemPrompt, webMode, run,
+        onEvent: (event) => { if (!run.cancelled) res.write(`data: ${JSON.stringify(event)}\n\n`); }
+      });
+      if (result) {
+        replyText = result.reply;
+        modelProvider = 'openai';
+        executedTools.push(...result.tools);
+        executedWidgets.push(...result.widgets);
       }
     }
+    run.throwIfCancelled();
+    if (!replyText) throw new Error('No AI provider could complete this request. Check server provider configuration.');
 
-    if (!replyText) {
-      replyText = "I am present and listening. How can I assist you right now?";
-      res.write(`data: ${JSON.stringify({ type: 'token', token: replyText })}\n\n`);
-    }
-
+    run.throwIfCancelled();
     // Proactive PDF generation fallback if requested and not generated yet
     if (isPdfCreationIntent && !executedWidgets.some(w => w.widgetType === 'pdf_document')) {
       try {
@@ -2134,6 +1984,7 @@ app.post('/api/converse/stream', async (req, res) => {
       }
     }
 
+    run.throwIfCancelled();
     // 3. Synthesize speech via Amazon Polly Neural Engine
     let audioBase64 = null;
     if (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) {
@@ -2146,7 +1997,7 @@ app.post('/api/converse/stream', async (req, res) => {
           VoiceId: targetVoice
         });
 
-        const pollyResponse = await polly.send(pollyCommand);
+        const pollyResponse = await polly.send(pollyCommand, { abortSignal: run.signal });
         const audioBuffer = await pollyResponse.AudioStream.transformToByteArray();
         audioBase64 = Buffer.from(audioBuffer).toString('base64');
         res.write(`data: ${JSON.stringify({ type: 'audio', audioBase64 })}\n\n`);
@@ -2187,7 +2038,8 @@ app.post('/api/converse/stream', async (req, res) => {
       memoryStatus = { error: 'Cloud memory could not be loaded for this response.' };
     } else if (signedInUser && !filePayload) {
       try {
-        memoryStatus = await extractAndSaveMemories(signedInUser, memoryState.data, rawPrompt);
+        run.throwIfCancelled();
+        memoryStatus = await extractAndSaveMemories(signedInUser, memoryState.data, rawPrompt, { signal: run.signal });
       } catch (memoryError) {
         console.warn('[Cloud Memory] Automatic memory update failed:', memoryError.message);
         memoryStatus = { error: 'Automatic memory could not be updated.' };
@@ -2200,7 +2052,7 @@ app.post('/api/converse/stream', async (req, res) => {
       type: 'done',
       replyText,
       audioBase64,
-      provider: audioBase64 ? 'bedrock-polly' : 'bedrock-webspeech',
+      provider: `${modelProvider}-${audioBase64 ? 'polly' : 'webspeech'}`,
       activeVoice: targetVoice,
       voiceChanged,
       webSources: allSources,
@@ -2210,19 +2062,10 @@ app.post('/api/converse/stream', async (req, res) => {
     })}\n\n`);
     res.end();
   } catch (error) {
-    console.error('Lumen converse stream error:', error);
+    if (run.cancelled) return res.end();
+    console.error('Lumen converse stream error:', error.message);
     try {
-      res.write(`data: ${JSON.stringify({
-        type: 'token',
-        token: "I am present and listening. How can I assist you right now?"
-      })}\n\n`);
-      res.write(`data: ${JSON.stringify({
-        type: 'done',
-        replyText: "I am present and listening. How can I assist you right now?",
-        widgets: [],
-        toolsUsed: [],
-        webSources: []
-      })}\n\n`);
+      res.write(`data: ${JSON.stringify({ type: 'error', error: error.message || 'Lumen could not complete this request.' })}\n\n`);
       res.end();
     } catch (_) {}
   }
@@ -2644,7 +2487,8 @@ app.get('/api/voice/list', (req, res) => {
   });
 });
 
-app.post('/api/voice/preview', async (req, res) => {
+app.post('/api/voice/preview', voiceLimit, async (req, res) => {
+  const run = watchClient(res, { timeoutMs: 20_000 });
   try {
     const { voiceId, text } = req.body || {};
     const targetVoice = getPollyVoiceForLanguage('en-US', voiceId);
@@ -2657,7 +2501,7 @@ app.post('/api/voice/preview', async (req, res) => {
       VoiceId: targetVoice
     });
 
-    const pollyResponse = await polly.send(pollyCommand);
+    const pollyResponse = await polly.send(pollyCommand, { abortSignal: run.signal });
     const audioBuffer = await pollyResponse.AudioStream.transformToByteArray();
     const audioBase64 = Buffer.from(audioBuffer).toString('base64');
 
@@ -2700,6 +2544,20 @@ app.get('*', (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
+const httpServer = app.listen(PORT, () => {
   console.log(`Lumen AI server running on port ${PORT}`);
 });
+
+let shuttingDown = false;
+async function shutdown() {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  httpServer.close();
+  const deadline = setTimeout(() => process.exit(1), 10000);
+  deadline.unref();
+  try { await Promise.all([missionManager.close(), watchManager.close()]); }
+  catch (error) { console.error('Could not save missions during shutdown:', error.message); }
+  finally { clearTimeout(deadline); process.exit(0); }
+}
+process.once('SIGINT', shutdown);
+process.once('SIGTERM', shutdown);

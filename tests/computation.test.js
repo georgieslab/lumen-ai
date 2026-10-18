@@ -13,6 +13,9 @@ test('evaluateMathExpression parses standard arithmetic and operator precedence'
   assert.equal(evaluateMathExpression('(2 + 3) * 4'), 20);
   assert.equal(evaluateMathExpression('10 / 2 + 3'), 8);
   assert.equal(evaluateMathExpression('2 ^ 3'), 8);
+  assert.equal(evaluateMathExpression('2 ^ 3 ^ 2'), 512);
+  assert.equal(evaluateMathExpression('-2 ^ 2'), -4);
+  assert.equal(evaluateMathExpression('2 ^ -2'), 0.25);
   assert.equal(evaluateMathExpression('10 % 3'), 1);
 });
 
@@ -39,6 +42,26 @@ test('calculateLoanMonthlyPayment computes valid amortization figures', () => {
   const result = calculateLoanMonthlyPayment(300000, 6.5, 30);
   assert.ok(result.monthlyPayment > 1800 && result.monthlyPayment < 2000);
   assert.equal(result.termMonths, 360);
+});
+
+test('zero-rate loans retain the same financial result shape', () => {
+  assert.deepEqual(calculateLoanMonthlyPayment(1200, 0, 1), { monthlyPayment: 100, totalPayment: 1200, totalInterest: 0, termMonths: 12 });
+  assert.deepEqual(runQuickCompute({ operation: 'loan', loan: { principal: 1200, annualRatePercent: 0, termYears: 1 } }), { success: true, operation: 'loan', monthlyPayment: 100, totalPayment: 1200, totalInterest: 0, termMonths: 12 });
+});
+
+test('computation rejects invalid numeric inputs and nonfinite results', () => {
+  for (const invalid of [NaN, Infinity, -Infinity, null, '', '5', false]) {
+    assert.throws(() => calculateLoanMonthlyPayment(invalid, 5, 1), /finite number/);
+    assert.throws(() => calculateCompoundInterest(100, invalid, 1), /finite number/);
+    assert.throws(() => calculateStatistics([1, invalid, 3]), /finite number/);
+  }
+  assert.throws(() => calculateCompoundInterest(100, 5, 10, 0), /Compounding frequency/);
+  assert.throws(() => calculateCompoundInterest(100, 1000, 10000), /numeric range/);
+  for (const expression of ['sqrt(-1)', 'exp(10000)', '1 % 0', 'min()', 'sqrt(4, 9)']) {
+    assert.ok(runQuickCompute({ expression }).error);
+  }
+  assert.ok(runQuickCompute(null).error);
+  assert.ok(runQuickCompute({ operation: 'unsupported', expression: '2+2' }).error);
 });
 
 test('calculateCompoundInterest calculates expected growth', () => {

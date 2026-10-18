@@ -1,8 +1,10 @@
-import { isAbortError } from './mission';
+import { isAbortError } from './mission.js';
+import { buildConversationHistory } from './conversationHistory.js';
+import { consumeJsonEventStream } from './eventStream.js';
 import { defaultPlan, sanitizePlan, topicFromRequest } from '../../services/missionPlan.js';
 import { defaultBrief, sanitizeBrief } from '../../services/pageBrief.js';
 
-const API_URL = import.meta.env.VITE_API_URL || '';
+const API_URL = import.meta.env?.VITE_API_URL || '';
 
 /**
  * Fast client-side canvas downscaler to convert camera/file photos into compact ~25KB JPEG payloads
@@ -165,10 +167,7 @@ export async function converseWithLumen({ transcript, message, text, history = [
   const targetFile = file || image;
   const payload = {
     transcript: transcript || message || text || '',
-    history: history.slice(-8).map(h => ({
-      role: h.role,
-      text: h.text || ''
-    })),
+    history: buildConversationHistory(history),
     webMode,
     language,
     voiceId,
@@ -200,7 +199,11 @@ export async function converseWithLumen({ transcript, message, text, history = [
 
   if (!response.ok) {
     const errData = await response.json().catch(() => ({}));
-    throw new Error(errData.error || `Server responded with ${response.status}`);
+    const error = new Error(errData.error || `Server responded with ${response.status}`);
+    if (errData.partialResult && typeof errData.partialResult === 'object' && !Array.isArray(errData.partialResult)) {
+      error.partialResult = errData.partialResult;
+    }
+    throw error;
   }
 
   return await response.json();
@@ -226,6 +229,7 @@ export async function converseWithLumenStream({
   onMemoryStatus,
   onToken,
   onToolStart,
+  onToolResult,
   onWidget,
   onAudio,
   onVoiceChange,
@@ -236,10 +240,7 @@ export async function converseWithLumenStream({
   const targetFile = file || image;
   const payload = {
     transcript: transcript || message || text || '',
-    history: history.slice(-8).map(h => ({
-      role: h.role,
-      text: h.text || ''
-    })),
+    history: buildConversationHistory(history),
     webMode,
     language,
     voiceId,
@@ -259,6 +260,9 @@ export async function converseWithLumenStream({
     } : null
   };
 
+  let receivedOutput = false;
+  let completed = false;
+  let allowFallback = true;
   try {
     const response = await fetch(`${API_URL}/api/converse/stream`, {
       method: 'POST',
@@ -271,77 +275,52 @@ export async function converseWithLumenStream({
     });
 
     if (!response.ok || !response.body) {
-      throw new Error(`Stream HTTP ${response.status}`);
+      // Validation, authentication and quotas apply to both routes; retrying them cannot help.
+      allowFallback = response.status >= 500 || [404, 405].includes(response.status);
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.error || `Stream HTTP ${response.status}`);
     }
 
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder('utf-8');
-    let buffer = '';
-    let hasEmittedDone = false;
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
-
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed || !trimmed.startsWith('data:')) continue;
-        const jsonStr = trimmed.slice(5).trim();
-        if (!jsonStr) continue;
-
-        try {
-          const event = JSON.parse(jsonStr);
-          if (event.type === 'token' && onToken) {
-            onToken(event.token || event.text || '');
-          } else if (event.type === 'tool_start' && onToolStart) {
-            onToolStart(event);
-          } else if (event.type === 'widget' && onWidget) {
-            onWidget(event.widget);
-          } else if (event.type === 'audio' && onAudio) {
-            onAudio(event.audioBase64);
-          } else if (event.type === 'voice_change' && onVoiceChange) {
-            onVoiceChange(event.voiceId);
-          } else if (event.type === 'memory_status' && onMemoryStatus) {
-            onMemoryStatus(event);
-          } else if (event.type === 'done' && onDone) {
-            hasEmittedDone = true;
-            onDone(event);
-          }
-        } catch (parseErr) {
-          console.warn("SSE chunk parse warning:", parseErr);
-        }
+    // Once the server accepts a stream, an empty or broken response may still have performed work.
+    allowFallback = false;
+    await consumeJsonEventStream(response.body, event => {
+      if (completed) return;
+      if (event.type === 'error') {
+        allowFallback = false;
+        const error = new Error(event.error || event.message || 'Lumen could not complete that request.');
+        error.stage = typeof event.stage === 'string' ? event.stage : null;
+        error.webSources = Array.isArray(event.webSources) ? event.webSources : [];
+        throw error;
       }
-
-    }
-
-    if (buffer.trim().startsWith('data:')) {
-      try {
-        const event = JSON.parse(buffer.trim().slice(5).trim());
-        if (event.type === 'memory_status' && onMemoryStatus) {
-          onMemoryStatus(event);
-        }
-        if (event.type === 'done' && onDone) {
-          hasEmittedDone = true;
-          onDone(event);
-        }
-      } catch (_) {}
-    }
-
-    if (!hasEmittedDone && onDone) {
-      onDone({ replyText: '', widgets: [], toolsUsed: [], webSources: [] });
-    }
+      if (['token', 'tool_start', 'tool_result', 'widget', 'audio', 'voice_change', 'done'].includes(event.type)) {
+        receivedOutput = true;
+      }
+      if (event.type === 'token') onToken?.(event.token || event.text || '');
+      else if (event.type === 'tool_start') onToolStart?.(event);
+      else if (event.type === 'tool_result') onToolResult?.(event);
+      else if (event.type === 'widget') onWidget?.(event.widget);
+      else if (event.type === 'audio') onAudio?.(event.audioBase64);
+      else if (event.type === 'voice_change') onVoiceChange?.(event.voiceId);
+      else if (event.type === 'memory_status') onMemoryStatus?.(event);
+      else if (event.type === 'done') {
+        onDone?.(event);
+        completed = true;
+        return false;
+      }
+    });
+    if (!completed) throw new Error('The connection ended before Lumen finished. Your request was not completed.');
   } catch (err) {
+    if (completed) return;
     // Stop was pressed: end quietly. Retrying through the non-streaming route would run the whole request again.
     if (isAbortError(err) || signal?.aborted) {
       if (onAbort) onAbort();
       return;
     }
-    console.warn("Stream failed, attempting standard converse fallback:", err.message);
-    if (onError) onError(err);
+    if (receivedOutput || !allowFallback) {
+      onError?.(err);
+      throw err;
+    }
+    console.warn("Stream unavailable, attempting standard converse fallback:", err.message);
     try {
       const fallbackData = await converseWithLumen({
         transcript,
@@ -355,6 +334,7 @@ export async function converseWithLumenStream({
         voiceId,
         tone,
         responseStyle,
+        pageContext,
         signal
       });
       if (fallbackData.memoryStatus && onMemoryStatus) {
@@ -373,11 +353,33 @@ export async function converseWithLumenStream({
         onDone(fallbackData);
       }
     } catch (fallbackErr) {
-      if (isAbortError(fallbackErr)) {
+      if (isAbortError(fallbackErr) || signal?.aborted) {
         if (onAbort) onAbort();
         return;
       }
-      if (onError) onError(fallbackErr);
+      const partial = fallbackErr.partialResult;
+      // No SSE output preceded this fallback. Replay completed work once, then surface the failure.
+      if (partial && !receivedOutput) {
+        receivedOutput = true;
+        const seenToolIds = new Set();
+        for (const tool of Array.isArray(partial.tools) ? partial.tools : []) {
+          if (!tool?.name || (tool.toolUseId && seenToolIds.has(tool.toolUseId))) continue;
+          if (tool.toolUseId) seenToolIds.add(tool.toolUseId);
+          onToolStart?.({ type: 'tool_start', name: tool.name, input: tool.input, toolUseId: tool.toolUseId });
+          onToolResult?.({
+            type: 'tool_result', name: tool.name, toolUseId: tool.toolUseId,
+            status: tool.status || 'error',
+            summary: tool.resultSummary || tool.summary || 'Tool execution was interrupted.'
+          });
+        }
+        for (const widget of Array.isArray(partial.widgets) ? partial.widgets : []) {
+          if (widget) onWidget?.(widget);
+        }
+        const reply = typeof partial.reply === 'string' ? partial.reply : partial.replyText;
+        if (typeof reply === 'string' && reply) onToken?.(reply);
+      }
+      onError?.(fallbackErr);
+      throw fallbackErr;
     }
   }
 
@@ -402,10 +404,7 @@ export async function researchWithLumenStream({
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       transcript,
-      history: history.slice(-8).map(message => ({
-        role: message.role,
-        text: message.text || ''
-      })),
+      history: buildConversationHistory(history),
       language,
       tone,
       responseStyle,
@@ -418,44 +417,25 @@ export async function researchWithLumenStream({
     throw new Error(error.error || `Research request failed (${response.status})`);
   }
 
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder('utf-8');
-  let buffer = '';
   let completed = false;
 
-  const handleEvent = (line) => {
-    const trimmed = line.trim();
-    if (!trimmed.startsWith('data:')) return;
-    const event = JSON.parse(trimmed.slice(5).trim());
-
+  await consumeJsonEventStream(response.body, event => {
+    if (completed) return;
     if (event.type === 'progress' && onProgress) {
       onProgress(event);
     } else if (event.type === 'memory_status' && onMemoryStatus) {
       onMemoryStatus(event);
-    } else if (event.type === 'done' && onDone) {
+    } else if (event.type === 'done') {
+      onDone?.(event);
       completed = true;
-      onDone(event);
+      return false;
     } else if (event.type === 'error') {
       const error = new Error(event.error || 'Research could not be completed.');
       error.stage = typeof event.stage === 'string' ? event.stage : null;
       error.webSources = Array.isArray(event.webSources) ? event.webSources : [];
       throw error;
     }
-  };
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split('\n');
-    buffer = lines.pop() || '';
-    for (const line of lines) {
-      if (line.trim()) handleEvent(line);
-    }
-  }
-
-  if (buffer.trim()) handleEvent(buffer);
+  });
   if (!completed) {
     throw new Error('The research service ended before returning a report.');
   }

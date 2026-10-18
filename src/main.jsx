@@ -3,6 +3,8 @@ import ReactDOM from 'react-dom/client';
 import App from './App.jsx';
 import LandingPage from './components/LandingPage.jsx';
 import './App.css';
+import './components/ConversationWorkspace.css';
+import './components/MobileToolsSheet.css';
 
 const APP_ROUTE_KEY = 'lumen_app_route';
 

@@ -6,18 +6,13 @@ const PRIORITY_STYLES = {
   low: { label: 'Low', color: '#10b981', bg: 'rgba(16, 185, 129, 0.12)' }
 };
 
-export default function ChecklistCard({ widget }) {
-  if (!widget || widget.widgetType !== 'checklist') return null;
-
-  const [items, setItems] = useState(
-    Array.isArray(widget.items)
-      ? widget.items.map(it => ({ ...it, completed: Boolean(it.completed) }))
-      : []
-  );
+export default function ChecklistCard({ widget, onUpdate }) {
   const [copied, setCopied] = useState(false);
+  if (!widget || widget.widgetType !== 'checklist') return null;
+  const items = Array.isArray(widget.items) ? widget.items : [];
 
   const toggleItem = (id) => {
-    setItems(prev => prev.map(item => item.id === id ? { ...item, completed: !item.completed } : item));
+    onUpdate?.({ ...widget, items: items.map(item => item.id === id ? { ...item, completed: !item.completed } : item) });
   };
 
   const completedCount = items.filter(i => i.completed).length;
@@ -34,7 +29,7 @@ export default function ChecklistCard({ widget }) {
 
   const handleToggleAll = () => {
     const allCompleted = items.every(i => i.completed);
-    setItems(prev => prev.map(item => ({ ...item, completed: !allCompleted })));
+    onUpdate?.({ ...widget, items: items.map(item => ({ ...item, completed: !allCompleted })) });
   };
 
   return (

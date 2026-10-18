@@ -34,7 +34,7 @@ const WMO_CODES = {
 /**
  * Fetch live real-time weather and forecast for any city or coordinate
  */
-export async function fetchLiveWeather(cityQuery) {
+export async function fetchLiveWeather(cityQuery, { signal } = {}) {
   let cleanCity = String(cityQuery || '').trim();
   if (!cleanCity) {
     return { error: 'No city name provided.' };
@@ -68,11 +68,12 @@ export async function fetchLiveWeather(cityQuery) {
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 6000);
+  const requestSignal = signal ? AbortSignal.any([signal, controller.signal]) : controller.signal;
 
   try {
     // 1. Geocode city name to lat/lon with count=5 to sort by population
     const geoUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(lookupName)}&count=5&language=en&format=json`;
-    const geoRes = await fetch(geoUrl, { signal: controller.signal });
+    const geoRes = await fetch(geoUrl, { signal: requestSignal });
     if (!geoRes.ok) throw new Error(`Geocoding HTTP error ${geoRes.status}`);
     const geoData = await geoRes.json();
 
@@ -88,7 +89,7 @@ export async function fetchLiveWeather(cityQuery) {
 
     // 2. Fetch live weather & daily forecast
     const forecastUrl = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto`;
-    const wRes = await fetch(forecastUrl, { signal: controller.signal });
+    const wRes = await fetch(forecastUrl, { signal: requestSignal });
     clearTimeout(timeout);
 
     if (!wRes.ok) throw new Error(`Weather forecast HTTP error ${wRes.status}`);
@@ -136,6 +137,7 @@ export async function fetchLiveWeather(cityQuery) {
     };
   } catch (err) {
     clearTimeout(timeout);
+    if (signal?.aborted) throw err;
     console.warn(`Weather fetch failed for ${cityQuery}:`, err.message);
     return { error: `Failed to fetch weather: ${err.message}` };
   }
@@ -144,7 +146,7 @@ export async function fetchLiveWeather(cityQuery) {
 /**
  * Fetch live cryptocurrency and market prices
  */
-export async function fetchCryptoPrices(assetQuery, currency = 'usd') {
+export async function fetchCryptoPrices(assetQuery, currency = 'usd', { signal } = {}) {
   const raw = String(assetQuery || '').trim().toLowerCase();
   if (!raw) return { error: 'No cryptocurrency asset provided.' };
 
@@ -172,12 +174,13 @@ export async function fetchCryptoPrices(assetQuery, currency = 'usd') {
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 6000);
+  const requestSignal = signal ? AbortSignal.any([signal, controller.signal]) : controller.signal;
 
   // 1. Try CoinGecko Public Markets API
   try {
     const cgUrl = `https://api.coingecko.com/api/v3/coins/markets?vs_currency=${targetCurrency}&ids=${encodeURIComponent(coinId)}&order=market_cap_desc&per_page=1&page=1&sparkline=false&price_change_percentage=24h`;
     const res = await fetch(cgUrl, {
-      signal: controller.signal,
+      signal: requestSignal,
       headers: {
         'Accept': 'application/json',
         'User-Agent': 'LumenAI-Agent/1.0'
@@ -208,6 +211,7 @@ export async function fetchCryptoPrices(assetQuery, currency = 'usd') {
       }
     }
   } catch (cgErr) {
+    if (signal?.aborted) { clearTimeout(timeout); throw cgErr; }
     console.warn('CoinGecko fetch failed, trying Binance fallback:', cgErr.message);
   }
 
@@ -215,7 +219,7 @@ export async function fetchCryptoPrices(assetQuery, currency = 'usd') {
   try {
     const binanceSymbol = `${raw.replace(/bitcoin/i, 'btc').replace(/ethereum/i, 'eth').replace(/solana/i, 'sol').toUpperCase()}USDT`;
     const bUrl = `https://api.binance.com/api/v3/ticker/24hr?symbol=${binanceSymbol}`;
-    const bRes = await fetch(bUrl, { signal: controller.signal });
+    const bRes = await fetch(bUrl, { signal: requestSignal });
     clearTimeout(timeout);
 
     if (bRes.ok) {
@@ -242,6 +246,7 @@ export async function fetchCryptoPrices(assetQuery, currency = 'usd') {
     }
   } catch (bErr) {
     clearTimeout(timeout);
+    if (signal?.aborted) throw bErr;
     console.warn('Binance fallback failed:', bErr.message);
   }
 

@@ -37,14 +37,30 @@ test('sanitizeBriefStory clips long text, extracts categories and sanitizes URLs
   assert.ok(story.whyItMatters.includes('Demonstrates real-world utility'));
 });
 
-test('buildDailyBriefWidget supplies fallback stories when empty', () => {
+test('buildDailyBriefWidget leaves empty briefs empty instead of fabricating news', () => {
   const widget = buildDailyBriefWidget();
 
   assert.equal(widget.widgetType, 'daily_brief');
   assert.ok(widget.title.includes('Worldwide'));
   assert.equal(widget.scope, 'Worldwide');
-  assert.equal(widget.stories.length, 3);
+  assert.equal(widget.stories.length, 0);
   assert.ok(widget.briefId.startsWith('brief-'));
+});
+
+test('brief stories require actual source links and never claim verification by default', () => {
+  const story = { headline: 'Research update', summary: 'The authors published their findings.' };
+  for (const url of [undefined, 'example.com/article', 'javascript:alert(1)', 'https://', 'https://user:secret@example.com/article']) {
+    assert.equal(sanitizeBriefStory({ ...story, url }), null);
+  }
+  const sourced = sanitizeBriefStory({ ...story, url: 'https://example.com/article' });
+  assert.equal(sourced.publisher, 'example.com');
+  assert.equal(sourced.publishedAt, undefined);
+  assert.equal(sanitizeBriefStory({ url: 'https://example.com/article' }), null);
+});
+
+test('markdown extraction preserves unsourced text instead of replacing it with empty cards', () => {
+  const markdown = 'Daily brief\n### 1. First headline with no link\nSummary: Story one without a source.\n### 2. Second headline with no link\nSummary: Story two without a source.';
+  assert.deepEqual(extractDailyBriefFromMarkdown(markdown), { cleanText: markdown, briefWidget: null });
 });
 
 test('buildDailyBriefWidget respects custom title, scope, and weather snapshot', () => {

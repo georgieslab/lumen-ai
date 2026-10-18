@@ -2,16 +2,11 @@
 // a consequence outside Lumen (sending, publishing, deleting, buying, running code, posting data) must carry
 // the user's explicit approval, and no approval flow exists yet, so those calls are refused.
 
+import { TOOL_REGISTRY } from './toolRegistry.js';
+
 export const EFFECTS = { read: 'read', local: 'local', external: 'external' };
 
-export const TOOL_POLICY = {
-  get_live_weather: { effect: EFFECTS.read, web: false },
-  get_crypto_and_market_prices: { effect: EFFECTS.read, web: false },
-  live_web_search: { effect: EFFECTS.read, web: true },
-  browse_web_page: { effect: EFFECTS.read, web: true },
-  call_direct_api: { effect: EFFECTS.read, web: true },
-  create_pdf_document: { effect: EFFECTS.local, web: false }
-};
+export const TOOL_POLICY = Object.fromEntries(TOOL_REGISTRY.map(({ name, effect, web }) => [name, { effect, web }]));
 
 // An API call that is not a plain GET can change something on someone else's server.
 function effectOf(name, input) {

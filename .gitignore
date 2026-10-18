@@ -30,3 +30,6 @@ dist-ssr
 # Scratch & temporary test files
 scratch/
 
+# Private persistent mission requests, checkpoints, and generated artifacts
+.lumen-data/
+

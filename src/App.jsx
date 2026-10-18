@@ -11,11 +11,18 @@ import WorkspaceShareModal from './components/WorkspaceShareModal';
 import SharedTabChip from './components/SharedTabChip';
 import OpenLinkApproval from './components/OpenLinkApproval';
 import EmbeddedTabPanel from './components/EmbeddedTabPanel';
-import AmbientControls from './components/AmbientControls';
 import HtmlWindowPanel from './components/HtmlWindowPanel';
 import OpenWebPageButton from './components/OpenWebPageButton';
 import DraggableDesktopPill from './components/DraggableDesktopPill';
 import AgentActionModal from './components/AgentActionModal';
+import { MissionHistoryDrawer } from './components/MissionRunControls';
+import DeskWorkspace, { DeskIcon } from './components/DeskWorkspace';
+import DesktopCustomizeDialog from './components/DesktopCustomizeDialog';
+import MobileToolsSheet from './components/MobileToolsSheet';
+import { DESKTOP_ITEMS, loadDesktopVisibility, saveDesktopVisibility, normalizeDesktopVisibility, clearDesktopPositions, desktopPillPosition } from './services/desktopLayout.js';
+import { DESK_ACTIONS, listProjects, listNotifications, pinProjectArtifact } from './services/deskWorkspace.js';
+import { conversationForProject } from './services/conversationHistory.js';
+import { applyMissionSnapshot, controlMissionRun, createMissionRun, getMissionRun, isMissionActive, listMissionRuns, watchMissionRun } from './services/missionRuns.js';
 import { stoppedMessage } from './components/MissionCard';
 import { planLabels } from './components/PlanCard';
 import { briefLabels } from './components/BriefCard';
@@ -43,6 +50,7 @@ import { useAudioVisualizer } from './hooks/useAudioVisualizer';
 import { converseWithLumenStream, researchWithLumenStream, planResearchWithLumen, planPageWithLumen, processFile, fetchAmbientData, exportConversationPdfDirect, getAuthSession, getUserMemory } from './services/api';
 import { getTranslations, formatString, DEFAULT_VOICES_BY_LANG } from './utils/translations';
 import { PRESET_AURAS, getAuraById, getNextAuraId } from './services/auras';
+import { buildConversationHistory, getAutomaticStageWidget, getConversationStorageKey, isFloatingStageWidget, mergeArtifactUpdates, restoreConversationMessages, updateMessageArtifact } from './services/conversationHistory.js';
 
 
 function getCircadianPhase() {
@@ -70,12 +78,6 @@ function loadPreference(key, options, fallback) {
   } catch (_) {
     return fallback;
   }
-}
-
-function getConversationStorageKey(user) {
-  if (!user) return 'lumen_standalone_history';
-  if (user.provider === 'google' && user.email) return `lumen_history_${user.email}`;
-  return `lumen_history_${user.provider || 'account'}_${user.id}`;
 }
 
 function loadPersonaCardOffset() {
@@ -129,6 +131,10 @@ export default function App() {
     loadPreference('lumen_response_style', RESPONSE_STYLES, 'concise')
   );
   const [showLogDrawer, setShowLogDrawer] = useState(false);
+  const [showMissions, setShowMissions] = useState(false);
+  const [savedMissions, setSavedMissions] = useState([]);
+  const [missionsLoading, setMissionsLoading] = useState(false);
+  const [missionsError, setMissionsError] = useState('');
   const [chatWindowOffset, setChatWindowOffset] = useState(() => {
     if (typeof window === 'undefined') return { x: 0, y: 0 };
     try {
@@ -252,6 +258,20 @@ export default function App() {
     }
   };
   const [currentUser, setCurrentUser] = useState(null);
+  const [deskAction, setDeskAction] = useState(null);
+  const [desktopVisibility, setDesktopVisibility] = useState(loadDesktopVisibility);
+  const [showDesktopCustomize, setShowDesktopCustomize] = useState(false);
+  const [isMobileToolsOpen, setIsMobileToolsOpen] = useState(false);
+  useEffect(() => {
+    const query = window.matchMedia('(max-width: 1024px)');
+    const onChange = () => { if (!query.matches) setIsMobileToolsOpen(false); };
+    query.addEventListener('change', onChange);
+    return () => query.removeEventListener('change', onChange);
+  }, []);
+  const [desktopLayoutVersion, setDesktopLayoutVersion] = useState(0);
+  const [currentProjectId, setCurrentProjectId] = useState(null);
+  const [projectSummaries, setProjectSummaries] = useState([]);
+  const [deskNotificationCount, setDeskNotificationCount] = useState(0);
   const [personaCard, setPersonaCard] = useState(null);
   const [personaCardOffset, setPersonaCardOffset] = useState(loadPersonaCardOffset);
   const [isPersonaDragging, setIsPersonaDragging] = useState(false);
@@ -262,9 +282,51 @@ export default function App() {
   const weatherTileDragRef = useRef(null);
   const suppressWeatherTileClickRef = useRef(false);
   const [showWelcomeGreeting, setShowWelcomeGreeting] = useState(false);
+  const workspaceHeaderRef = useRef(null);
+  const personaElementRef = useRef(null);
+  const weatherElementRef = useRef(null);
 
   const t = getTranslations(activeLanguage);
   const feedbackCopy = getFeedbackCopy(activeLanguage);
+
+  // Saved drag positions must remain usable after a resize or a taller header.
+  useEffect(() => {
+    let frame;
+    const clampFloatingCards = () => {
+      const header = workspaceHeaderRef.current;
+      const stage = header?.closest('.lumen-app-stage');
+      if (!header || !stage) return;
+      const headerRect = header.getBoundingClientRect();
+      const zoomStyle = getComputedStyle(document.documentElement).zoom;
+      const zoomValue = parseFloat(zoomStyle);
+      const scale = zoomStyle.endsWith('%') ? zoomValue / 100 : zoomValue || 1;
+      stage.style.setProperty('--workspace-header-bottom', `${(headerRect.bottom - stage.getBoundingClientRect().top) / scale}px`);
+      const clamp = (element, setter, storageKey, dragging) => {
+        if (!element || dragging) return;
+        const rect = element.getBoundingClientRect();
+        if (!rect.width || !rect.height) return;
+        const minTop = headerRect.bottom + 12;
+        const targetTop = Math.max(minTop, Math.min(Math.max(minTop, window.innerHeight - rect.height - 12), rect.top));
+        const targetLeft = Math.max(12, Math.min(Math.max(12, window.innerWidth - rect.width - 12), rect.left));
+        const dx = (targetLeft - rect.left) / scale;
+        const dy = (targetTop - rect.top) / scale;
+        if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
+        setter(previous => {
+          const next = { x: previous.x + dx, y: previous.y + dy };
+          try { localStorage.setItem(storageKey, JSON.stringify(next)); } catch (_) {}
+          return next;
+        });
+      };
+      clamp(personaElementRef.current, setPersonaCardOffset, 'lumen_persona_card_position', isPersonaDragging);
+      clamp(weatherElementRef.current, setWeatherTileOffset, 'lumen_weather_tile_position', isWeatherTileDragging);
+    };
+    const scheduleClamp = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(clampFloatingCards); };
+    const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(scheduleClamp) : null;
+    [workspaceHeaderRef.current, personaElementRef.current, weatherElementRef.current].filter(Boolean).forEach(element => observer?.observe(element));
+    window.addEventListener('resize', scheduleClamp);
+    scheduleClamp();
+    return () => { cancelAnimationFrame(frame); observer?.disconnect(); window.removeEventListener('resize', scheduleClamp); };
+  }, [personaCard, ambientData.weather, showLogDrawer, isQuickStartVisible, isPersonaDragging, isWeatherTileDragging]);
 
   useEffect(() => {
     try {
@@ -334,7 +396,7 @@ export default function App() {
     const margin = 12;
     const minX = drag.stageRect.left + margin - drag.cardRect.left;
     const maxX = drag.stageRect.right - margin - drag.cardRect.right;
-    const minY = drag.stageRect.top + margin - drag.cardRect.top;
+    const minY = Math.max(drag.stageRect.top, workspaceHeaderRef.current?.getBoundingClientRect().bottom || 0) + margin - drag.cardRect.top;
     const maxY = drag.stageRect.bottom - margin - drag.cardRect.bottom;
     const deltaX = Math.max(minX, Math.min(maxX, rawX));
     const deltaY = Math.max(minY, Math.min(maxY, rawY));
@@ -395,7 +457,7 @@ export default function App() {
     const margin = 12;
     const minX = drag.stageRect.left + margin - drag.tileRect.left;
     const maxX = drag.stageRect.right - margin - drag.tileRect.right;
-    const minY = drag.stageRect.top + margin - drag.tileRect.top;
+    const minY = Math.max(drag.stageRect.top, workspaceHeaderRef.current?.getBoundingClientRect().bottom || 0) + margin - drag.tileRect.top;
     const maxY = drag.stageRect.bottom - margin - drag.tileRect.bottom;
     const deltaX = Math.max(minX, Math.min(maxX, rawX));
     const deltaY = Math.max(minY, Math.min(maxY, rawY));
@@ -480,7 +542,7 @@ export default function App() {
     } catch (_) {}
 
     // Dynamically update initial welcome bubble if no conversation has taken place yet
-    setMessages((prev) => {
+    updateMessages((prev) => {
       if (prev.length === 1 && prev[0].id === 'lumen-welcome') {
         return [{
           ...prev[0],
@@ -521,7 +583,7 @@ export default function App() {
 
   const handleImportSession = (importedMessages) => {
     if (Array.isArray(importedMessages) && importedMessages.length > 0) {
-      persistMessages(importedMessages);
+      persistMessages(restoreConversationMessages(importedMessages, stoppedMessage(activeLanguage)));
       setShowLogDrawer(true);
     }
   };
@@ -622,6 +684,21 @@ export default function App() {
       timestamp: Date.now()
     }
   ]);
+  const runInProgress = isThinking || messages.some(message => message.isStreaming);
+  const scopedMessages = conversationForProject(messages, currentProjectId);
+  const messagesRef = useRef(messages);
+  const missionViewsRef = useRef(new Map());
+  const missionAutoConnectedRef = useRef(new Set());
+  const missionEpochRef = useRef(0);
+  const activeDurableRef = useRef(null);
+  const pendingMissionControlRef = useRef(new Map());
+  // Stream callbacks and artifact edits may arrive between renders. Keep their shared state current.
+  const updateMessages = (next) => {
+    const updated = typeof next === 'function' ? next(messagesRef.current) : next;
+    messagesRef.current = updated;
+    setMessages(updated);
+    return updated;
+  };
 
   const handleCycleWebMode = () => {
     setWebMode(prev => {
@@ -790,24 +867,30 @@ export default function App() {
 
   // Load history from localStorage (scoped to current user account if signed in)
   useEffect(() => {
+    disconnectMissionViews();
+    setSavedMissions([]);
+    setShowMissions(false);
+    setMissionsLoading(false);
+    runAbortRef.current?.abort();
+    runAbortRef.current = null;
+    setIsThinking(false);
     try {
       const storageKey = getConversationStorageKey(currentUser);
       const saved = localStorage.getItem(storageKey);
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          setMessages(parsed);
+          updateMessages(restoreConversationMessages(parsed, stoppedMessage(activeLanguage)));
           return;
         }
       }
-      if (currentUser?.givenName || currentUser?.name) {
-        setMessages([{
-          id: 'lumen-welcome',
-          role: 'assistant',
-          text: `Welcome back, ${currentUser.givenName || currentUser.name}. Your personal neural workspace is connected. How can I assist you today?`,
-          timestamp: Date.now()
-        }]);
-      }
+      updateMessages([{
+        id: 'lumen-welcome', role: 'assistant',
+        text: currentUser?.givenName || currentUser?.name
+          ? `Welcome back, ${currentUser.givenName || currentUser.name}. Your personal neural workspace is connected. How can I assist you today?`
+          : getTranslations(activeLanguage).welcome,
+        timestamp: Date.now()
+      }]);
     } catch (err) {
       console.warn("Could not load saved conversation:", err);
     }
@@ -815,9 +898,9 @@ export default function App() {
 
   // Save history to localStorage
   const persistMessages = (newMsgs) => {
-    setMessages(newMsgs);
+    const updated = updateMessages(newMsgs);
     try {
-      const sanitised = newMsgs.slice(-15).map(m => ({
+      const sanitised = updated.slice(-15).map(m => ({
         ...m,
         image: m.image && m.image.length > 10000 ? null : m.image
       }));
@@ -828,16 +911,271 @@ export default function App() {
     }
   };
 
+  const handleArtifactUpdate = (messageId, widgetIndex, widget) => {
+    persistMessages(current => updateMessageArtifact(current, messageId, widgetIndex, widget));
+  };
+
+  useEffect(() => {
+    let active = true;
+    const controller = new AbortController();
+    const key = `${getConversationStorageKey(currentUser)}_project`;
+    let savedProject = null;
+    try { savedProject = localStorage.getItem(key) || null; } catch (_) {}
+    setCurrentProjectId(savedProject); setDeskAction(null); setProjectSummaries([]); setDeskNotificationCount(0);
+    const refresh = async () => {
+      const results = await Promise.allSettled([listProjects(false, { signal: controller.signal }), listNotifications({ signal: controller.signal })]);
+      if (!active) return;
+      if (results[0].status === 'fulfilled') {
+        const projects = results[0].value.projects || [];
+        setProjectSummaries(projects);
+        setCurrentProjectId(previous => previous && !projects.some(project => project.id === previous) ? null : previous);
+      }
+      if (results[1].status === 'fulfilled') setDeskNotificationCount((results[1].value.notifications || []).filter(item => !item.readAt).length);
+    };
+    void refresh();
+    const timer = setInterval(refresh, 30000);
+    return () => { active = false; controller.abort(); clearInterval(timer); };
+  }, [currentUser?.provider, currentUser?.id]);
+
+  const selectDeskProject = id => {
+    const epoch = missionEpochRef.current;
+    setCurrentProjectId(id || null);
+    try { localStorage.setItem(`${getConversationStorageKey(currentUser)}_project`, id || ''); } catch (_) {}
+    void listProjects().then(result => { if (epoch === missionEpochRef.current) setProjectSummaries(result.projects || []); }).catch(() => {});
+  };
+  const openDeskAction = action => {
+    setDeskAction(action); setShowMissions(false); closeControlMenu(); setIsAuraMenuOpen(false); setIsMobileToolsOpen(false);
+  };
+  const toggleDesktopItem = (id, visible) => setDesktopVisibility(previous => saveDesktopVisibility({ ...previous, [id]: visible }));
+  const openDesktopCustomize = () => { closeControlMenu(); setIsAuraMenuOpen(false); setDeskAction(null); setShowDesktopCustomize(true); };
+  const resetDesktop = () => {
+    clearDesktopPositions(); setPersonaCardOffset({ x: 0, y: 0 }); setWeatherTileOffset({ x: 0, y: 0 });
+    setDesktopLayoutVersion(version => version + 1);
+    setDesktopVisibility(saveDesktopVisibility(normalizeDesktopVisibility(null)));
+  };
+  const runDeskMission = async (prompt, options) => {
+    if (runAbortRef.current) throw new Error('Pause the current request before starting another mission.');
+    setDeskAction(null); setShowLogDrawer(true);
+    await handleSendMessage(prompt, null, options);
+  };
+  const pinDeskOutput = async (messageId, index) => {
+    const message = messagesRef.current.find(item => item.id === messageId);
+    if (!currentProjectId || !message?.serverMissionId) return;
+    const widget = index === 'mission' ? null : message.widgets?.[index];
+    const widgetId = index === 'mission' ? 'mission' : widget?.artifactId || widget?.id || widget?.checklistId || widget?.scheduleId || widget?.budgetId || widget?.comparisonId || widget?.briefId || widget?.reportId || widget?.fileName || `${widget?.widgetType}:${index}`;
+    try {
+      await pinProjectArtifact(currentProjectId, { missionId: message.serverMissionId, widgetId });
+      persistMessages(current => current.map(item => item.id === messageId ? { ...item, projectPinNotice: 'Pinned to this project.' } : item));
+    } catch (error) {
+      persistMessages(current => current.map(item => item.id === messageId ? { ...item, projectPinNotice: error.message } : item));
+    }
+  };
+
+  // A stream is only a view of a durable run. Closing it never pauses or cancels the run.
+  const disconnectMissionViews = () => {
+    missionEpochRef.current += 1;
+    missionViewsRef.current.forEach(controller => controller.abort());
+    missionViewsRef.current.clear();
+    missionAutoConnectedRef.current.clear();
+    pendingMissionControlRef.current.clear();
+    activeDurableRef.current = null;
+  };
+
+  const receiveMissionSnapshot = (messageId, snapshot, announce = false) => {
+    const previous = messagesRef.current.find(message => message.id === messageId);
+    if (!previous) return;
+    const updated = applyMissionSnapshot(previous, snapshot);
+    if (updated === previous) return;
+    persistMessages(current => current.map(message => message.id === messageId ? updated : message));
+    if (snapshot.replyText || !isMissionActive(snapshot)) setIsThinking(false);
+    if (snapshot.status !== 'completed' || previous.serverMission?.status === 'completed') return;
+    const stageWidget = getAutomaticStageWidget(updated.widgets);
+    if (stageWidget) {
+      setActiveStageWidget(stageWidget);
+      if (stageWidget.widgetType === 'weather') handleCityChange(stageWidget);
+    }
+    const writtenPage = splitHtmlBlocks(updated.text).find(segment => segment.type === 'html');
+    if (writtenPage) setHtmlWindow(writtenPage.content);
+    if (announce) {
+      if (snapshot.voiceChanged) {
+        const voiceId = typeof snapshot.voiceChanged === 'string' ? snapshot.voiceChanged : snapshot.activeVoice;
+        if (voiceId) {
+          setActiveVoice(voiceId);
+          try { localStorage.setItem('lumen_voice_setting', voiceId); } catch (_) {}
+        }
+      }
+      if (snapshot.memoryStatus) {
+        const status = snapshot.memoryStatus;
+        setMemoryNotice(status.error ? t.memoryManager.autoSaveError
+          : status.saved ? formatString(t.memoryManager.autoSaved, { count: status.saved }) : '');
+      }
+      setIsTaskComplete(true);
+      setTimeout(() => setIsTaskComplete(false), 2800);
+      if (snapshot.audioBase64) playAudioBuffer(snapshot.audioBase64);
+      else if (snapshot.replyText) playBrowserSpeech(snapshot.briefSummary || snapshot.replyText);
+    }
+  };
+
+  const connectMissionView = async (messageId, snapshot, { announce = false, controller = new AbortController() } = {}) => {
+    const epoch = missionEpochRef.current;
+    const old = missionViewsRef.current.get(messageId);
+    if (old && old !== controller) old.abort();
+    missionViewsRef.current.set(messageId, controller);
+    if (!runAbortRef.current || runAbortRef.current === old || runAbortRef.current === controller) {
+      runAbortRef.current = controller;
+      activeDurableRef.current = { messageId, id: snapshot.id };
+    }
+    const receive = next => {
+      if (epoch === missionEpochRef.current && !controller.signal.aborted) receiveMissionSnapshot(messageId, next, announce);
+    };
+    receive(snapshot);
+    try {
+      if (isMissionActive(snapshot)) await watchMissionRun(snapshot.id, receive, { signal: controller.signal });
+    } catch (error) {
+      if (controller.signal.aborted || epoch !== missionEpochRef.current) return;
+      persistMessages(current => current.map(message => message.id === messageId ? {
+        ...message, isStreaming: false, missionConnectionError: error.message
+      } : message));
+    } finally {
+      if (missionViewsRef.current.get(messageId) === controller) missionViewsRef.current.delete(messageId);
+      if (runAbortRef.current === controller) {
+        runAbortRef.current = null;
+        activeDurableRef.current = null;
+        setIsThinking(false);
+      }
+    }
+  };
+
+  const startDurableMission = async (messageId, payload, announce = true) => {
+    const controller = new AbortController();
+    const epoch = missionEpochRef.current;
+    runAbortRef.current = controller;
+    activeDurableRef.current = { messageId, id: null };
+    try {
+      let snapshot = await createMissionRun(payload, { signal: controller.signal });
+      if (controller.signal.aborted || epoch !== missionEpochRef.current) return;
+      const pendingAction = pendingMissionControlRef.current.get(messageId);
+      if (pendingAction) {
+        pendingMissionControlRef.current.delete(messageId);
+        snapshot = await controlMissionRun(snapshot.id, pendingAction, { signal: controller.signal });
+      }
+      missionAutoConnectedRef.current.add(messageId);
+      await connectMissionView(messageId, snapshot, { controller, announce });
+    } catch (error) {
+      if (epoch !== missionEpochRef.current) return;
+      persistMessages(current => current.map(message => message.id === messageId ? {
+        ...message, isStreaming: false,
+        missionConnectionError: `Could not confirm the saved mission: ${error.message}. Recover uses the same request ID to avoid repeating your work.`
+      } : message));
+    } finally {
+      if (runAbortRef.current === controller) {
+        runAbortRef.current = null;
+        activeDurableRef.current = null;
+        setIsThinking(false);
+      }
+    }
+  };
+
+  const handleMissionAction = async (messageId, action) => {
+    const message = messagesRef.current.find(entry => entry.id === messageId);
+    if (!message || message.missionActionPending) return;
+    if (action === 'resume' && runAbortRef.current && activeDurableRef.current?.messageId !== messageId) {
+      persistMessages(current => current.map(entry => entry.id === messageId ? { ...entry, missionActionError: 'Pause the current request before resuming this mission.' } : entry));
+      return;
+    }
+    const epoch = missionEpochRef.current;
+    persistMessages(current => current.map(entry => entry.id === messageId ? { ...entry, missionActionPending: true, missionActionError: null } : entry));
+    try {
+      if (!message.serverMissionId && message.missionRequest) {
+        if (action === 'pause' || action === 'cancel') {
+          pendingMissionControlRef.current.set(messageId, action);
+          if (!runAbortRef.current) void startDurableMission(messageId, message.missionRequest, false);
+        } else if (!runAbortRef.current) {
+          void startDurableMission(messageId, message.missionRequest, false);
+        }
+        return;
+      }
+      const snapshot = action === 'reconnect'
+        ? await getMissionRun(message.serverMissionId)
+        : await controlMissionRun(message.serverMissionId, action);
+      if (epoch !== missionEpochRef.current) return;
+      receiveMissionSnapshot(messageId, snapshot);
+      if (!isMissionActive(snapshot)) {
+        missionViewsRef.current.get(messageId)?.abort();
+      } else if (!missionViewsRef.current.has(messageId) || action === 'resume') {
+        // Do not hold the action button pending for the lifetime of the stream.
+        void connectMissionView(messageId, snapshot);
+      }
+    } catch (error) {
+      if (epoch !== missionEpochRef.current) return;
+      persistMessages(current => current.map(entry => entry.id === messageId ? { ...entry, missionActionError: error.message } : entry));
+    } finally {
+      if (epoch === missionEpochRef.current) persistMessages(current => current.map(entry => entry.id === messageId ? { ...entry, missionActionPending: false } : entry));
+    }
+  };
+
+  useEffect(() => {
+    messages.forEach(message => {
+      if (!message.serverMissionId || missionAutoConnectedRef.current.has(message.id)) return;
+      missionAutoConnectedRef.current.add(message.id);
+      void handleMissionAction(message.id, 'reconnect');
+    });
+  }, [messages]);
+
+  useEffect(() => () => {
+    missionEpochRef.current += 1;
+    missionViewsRef.current.forEach(controller => controller.abort());
+  }, []);
+
+  const refreshSavedMissions = async () => {
+    const epoch = missionEpochRef.current;
+    setMissionsLoading(true);
+    setMissionsError('');
+    try {
+      const missions = await listMissionRuns();
+      if (epoch === missionEpochRef.current) setSavedMissions(missions);
+    } catch (error) {
+      if (epoch === missionEpochRef.current) setMissionsError(error.message);
+    } finally {
+      if (epoch === missionEpochRef.current) setMissionsLoading(false);
+    }
+  };
+
+  const openSavedMission = snapshot => {
+    if (Object.hasOwn(snapshot, 'projectId')) selectDeskProject(snapshot.projectId || null);
+    const existing = messagesRef.current.find(message => message.serverMissionId === snapshot.id);
+    const messageId = existing?.id || `saved-mission-${snapshot.id}`;
+    if (!existing) {
+      const prompt = snapshot.transcript || snapshot.title;
+      const reopened = applyMissionSnapshot({ id: messageId, role: 'assistant', timestamp: snapshot.createdAt || Date.now(), projectId: snapshot.projectId || null }, snapshot);
+      persistMessages(current => [...current,
+        ...(prompt ? [{ id: `saved-prompt-${snapshot.id}`, role: 'user', text: prompt, projectId: snapshot.projectId || null, timestamp: snapshot.createdAt || Date.now() }] : []),
+        reopened
+      ]);
+    } else {
+      persistMessages(current => [...current.filter(message => message.id !== messageId), existing]);
+    }
+    setShowMissions(false);
+    setShowLogDrawer(true);
+    missionAutoConnectedRef.current.add(messageId);
+    void handleMissionAction(messageId, 'reconnect');
+  };
+
   const handleUserLogout = () => {
+    disconnectMissionViews();
+    runAbortRef.current?.abort();
+    runAbortRef.current = null;
+    setIsThinking(false);
+    setProcessingFile(null);
     setCurrentUser(null);
     setMemoryNotice('');
     try {
       localStorage.removeItem('lumen_google_user');
       const saved = localStorage.getItem('lumen_standalone_history');
       if (saved) {
-        setMessages(JSON.parse(saved));
+        updateMessages(restoreConversationMessages(JSON.parse(saved), stoppedMessage(activeLanguage)));
       } else {
-        setMessages([{
+        updateMessages([{
           id: 'lumen-welcome',
           role: 'assistant',
           text: getTranslations(activeLanguage).welcome,
@@ -854,12 +1192,19 @@ export default function App() {
 
   // Stop whatever Lumen is currently working on (the Stop button and Escape both land here).
   const handleStopRun = () => {
+    if (activeDurableRef.current) {
+      void handleMissionAction(activeDurableRef.current.messageId, 'pause');
+      return;
+    }
     runAbortRef.current?.abort();
   };
 
   useEffect(() => {
     const onKeyDown = (event) => {
-      if (event.key === 'Escape' && runAbortRef.current) runAbortRef.current.abort();
+      if (event.key === 'Escape' && runAbortRef.current) {
+        if (activeDurableRef.current) void handleMissionAction(activeDurableRef.current.messageId, 'pause');
+        else runAbortRef.current.abort();
+      }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
@@ -928,10 +1273,12 @@ export default function App() {
 
   // Dispatch message to backend with Real-Time SSE Token Streaming
   const handleSendMessage = async (textToSend, filePayload = selectedFile, options = {}) => {
+    if (runAbortRef.current) return;
     // Set when the user approved a research plan or a page brief: the question is already in the conversation.
     const approvedPlan = options.plan || null;
     const approvedBrief = options.brief || null;
     const resumed = Boolean(options.baseMessages);
+    const selectedProjectId = options.projectId === undefined ? currentProjectId : options.projectId;
     const requestedDecisionMission = Boolean(options.decisionMission || (!resumed && !textToSend && decisionMissionDraft));
     unlockAudio();
     const userPrompt = (textToSend || liveTranscript || textInput).trim();
@@ -945,6 +1292,8 @@ export default function App() {
     const userMessage = {
       id: `usr-${Date.now()}`,
       role: 'user',
+      projectId: selectedProjectId || null,
+      displayTitle: options.actionKind === 'day' ? `Plan my day · ${options.actionData.date}` : options.actionKind === 'decision' ? options.actionData.question : options.actionKind === 'verify' ? options.actionData.content : null,
       text: userPrompt,
       image: filePayload && !filePayload.isPdf ? filePayload.dataUrl : null,
       fileName: filePayload?.name,
@@ -954,6 +1303,7 @@ export default function App() {
 
     if (!resumed) setPendingOpenUrl(extractOpenLinkRequest(userPrompt));
     const nextMessages = resumed ? options.baseMessages : [...messages, userMessage];
+    const scopedHistory = conversationForProject(nextMessages, selectedProjectId);
     persistMessages(nextMessages);
 
     if (!resumed) {
@@ -969,48 +1319,76 @@ export default function App() {
     setIsTaskComplete(false);
 
     // A research request first becomes a plan the user reviews; nothing is searched until they approve it.
-    if (!resumed && (requestedDecisionMission || isResearchReportRequest(userPrompt)) && !filePayload) {
+    if (!options.actionKind && !resumed && (requestedDecisionMission || isResearchReportRequest(userPrompt)) && !filePayload) {
       const planController = new AbortController();
       runAbortRef.current = planController;
       try {
         const plan = await planResearchWithLumen({ transcript: userPrompt, language: activeLanguage, signal: planController.signal });
-        persistMessages([...nextMessages, {
+        if (runAbortRef.current !== planController || planController.signal.aborted) return;
+        persistMessages(current => [...current, {
           id: `plan-${Date.now()}`,
           role: 'assistant',
           text: '',
           planCard: { prompt: userPrompt, plan },
+          projectId: selectedProjectId || null,
           timestamp: Date.now()
         }]);
       } catch (err) {
         if (!isAbortError(err)) console.warn('Could not prepare a research plan:', err);
       } finally {
-        if (runAbortRef.current === planController) runAbortRef.current = null;
-        setIsThinking(false);
+        if (runAbortRef.current === planController) {
+          runAbortRef.current = null;
+          setIsThinking(false);
+        }
       }
       return;
     }
 
     // A request to build a page first becomes a design brief the user reviews, unless they are changing a page
     // Lumen just wrote. Nothing is written until they approve it.
-    const editingPage = messages.slice(-3).some((message) => message.role === 'assistant' && /```html/i.test(message.text || ''));
-    if (!resumed && !filePayload && !editingPage && isPageRequest(userPrompt)) {
+    const editingPage = scopedHistory.slice(-3).some((message) => message.role === 'assistant' && /```html/i.test(message.text || ''));
+    if (!options.actionKind && !resumed && !filePayload && !editingPage && isPageRequest(userPrompt)) {
       const briefController = new AbortController();
       runAbortRef.current = briefController;
       try {
         const brief = await planPageWithLumen({ transcript: userPrompt, language: activeLanguage, signal: briefController.signal });
-        persistMessages([...nextMessages, {
+        if (runAbortRef.current !== briefController || briefController.signal.aborted) return;
+        persistMessages(current => [...current, {
           id: `brief-${Date.now()}`,
           role: 'assistant',
           text: '',
           briefCard: { prompt: userPrompt, brief },
+          projectId: selectedProjectId || null,
           timestamp: Date.now()
         }]);
       } catch (err) {
         if (!isAbortError(err)) console.warn('Could not prepare a design brief:', err);
       } finally {
-        if (runAbortRef.current === briefController) runAbortRef.current = null;
-        setIsThinking(false);
+        if (runAbortRef.current === briefController) {
+          runAbortRef.current = null;
+          setIsThinking(false);
+        }
       }
+      return;
+    }
+
+    // Text-only requests run on the server and survive browser disconnects.
+    if (!filePayload && !approvedPlan) {
+      const messageId = `ast-${crypto.randomUUID()}`;
+      const payload = {
+        requestId: crypto.randomUUID(),
+        transcript: approvedBrief ? buildPagePrompt(userPrompt, approvedBrief) : userPrompt,
+        history: buildConversationHistory(scopedHistory), webMode: ['decision', 'verify'].includes(options.actionKind) ? 'always' : webMode, language: activeLanguage, voiceId: activeVoice,
+        projectId: selectedProjectId || null, actionKind: options.actionKind || null, actionData: options.actionData || null,
+        tone: interactionTone, responseStyle, pageContext: sharedTab,
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      };
+      // Persist the exact request before sending. Recovery reuses this ID and input.
+      persistMessages(current => [...current, {
+        id: messageId, role: 'assistant', text: '', widgets: [], isStreaming: true, projectId: selectedProjectId || null,
+        missionRequest: payload, timestamp: Date.now()
+      }]);
+      await startDurableMission(messageId, payload);
       return;
     }
 
@@ -1040,44 +1418,50 @@ export default function App() {
       widgets: [],
       isStreaming: true,
       mission,
+      projectId: selectedProjectId || null,
       timestamp: Date.now()
     };
 
-    setMessages([...nextMessages, assistantPlaceholder]);
+    updateMessages([...nextMessages, assistantPlaceholder]);
+
+    const persistRunMessage = (message) => {
+      persistMessages(current => current.map(entry => entry.id === assistantMsgId ? { ...message, projectId: selectedProjectId || null } : entry));
+    };
+    const currentRunWidgets = () => messagesRef.current.find(entry => entry.id === assistantMsgId)?.widgets || [];
 
     const updateMission = (next) => {
       if (next === mission) return;
       mission = next;
-      setMessages(prev => prev.map(m => m.id === assistantMsgId ? { ...m, mission: next } : m));
+      updateMessages(prev => prev.map(m => m.id === assistantMsgId ? { ...m, mission: next } : m));
     };
 
     // The user pressed Stop (or Escape): keep what has streamed so far and record that the run was stopped.
     const finishStopped = () => {
-      if (runFinished) return;
+      if (runFinished || runAbortRef.current !== controller) return;
       runFinished = true;
       if (window.speechSynthesis) window.speechSynthesis.cancel();
       if (currentAudioRef.current) currentAudioRef.current.pause();
       setIsSpeaking(false);
       const stopped = finishMission(mission || createMission({ kind: 'chat', now: startedAt }), { status: 'stopped' });
-      persistMessages([...nextMessages, {
+      persistRunMessage({
         id: assistantMsgId,
         role: 'assistant',
         text: accumulatedText || stoppedMessage(activeLanguage),
         webSources: [],
         webType: accumulatedWidgets.length ? 'live_widget' : null,
-        widgets: accumulatedWidgets,
+        widgets: mergeArtifactUpdates(accumulatedWidgets, currentRunWidgets()),
         isStreaming: false,
         isStopped: true,
         activity: missionActivity(stopped),
         timestamp: Date.now()
-      }]);
+      });
       setIsThinking(false);
       setIsTaskComplete(false);
       setProcessingFile(null);
     };
 
     const completeResponse = (data) => {
-      if (runFinished) return;
+      if (runFinished || runAbortRef.current !== controller) return;
       runFinished = true;
       setIsThinking(false);
       if (data.voiceChanged) {
@@ -1087,7 +1471,10 @@ export default function App() {
         } catch (_) {}
       }
       const finalText = data.replyText || accumulatedText || "I am present and listening.";
-      const finalWidgets = (Array.isArray(data.widgets) && data.widgets.length > 0) ? data.widgets : accumulatedWidgets;
+      const finalWidgets = mergeArtifactUpdates(
+        (Array.isArray(data.widgets) && data.widgets.length > 0) ? data.widgets : accumulatedWidgets,
+        currentRunWidgets()
+      );
       const finalSources = data.webSources || [];
 
       const completedMessage = {
@@ -1104,14 +1491,15 @@ export default function App() {
         timestamp: Date.now()
       };
 
-      persistMessages([...nextMessages, completedMessage]);
+      persistRunMessage(completedMessage);
       const writtenPage = splitHtmlBlocks(finalText).find((seg) => seg.type === 'html');
       if (writtenPage) setHtmlWindow(writtenPage.content);
 
-      if (finalWidgets.length > 0 && data.webType !== 'research_report') {
-        setActiveStageWidget(finalWidgets[0]);
-        if (finalWidgets[0].widgetType === 'weather') {
-          handleCityChange(finalWidgets[0]);
+      const stageWidget = getAutomaticStageWidget(finalWidgets);
+      if (stageWidget && data.webType !== 'research_report') {
+        setActiveStageWidget(stageWidget);
+        if (stageWidget.widgetType === 'weather') {
+          handleCityChange(stageWidget);
         }
       }
 
@@ -1132,7 +1520,7 @@ export default function App() {
           signal: controller.signal,
           plan: approvedPlan,
           transcript: userPrompt,
-          history: nextMessages,
+          history: scopedHistory,
           language: activeLanguage,
           tone: interactionTone,
           responseStyle,
@@ -1144,7 +1532,7 @@ export default function App() {
           onProgress: (progress) => {
             setIsThinking(true);
             mission = applyProgress(mission, progress);
-            setMessages(prev => prev.map(message => message.id === assistantMsgId
+            updateMessages(prev => prev.map(message => message.id === assistantMsgId
               ? { ...message, taskProgress: progress, mission }
               : message));
           },
@@ -1154,7 +1542,7 @@ export default function App() {
         await converseWithLumenStream({
           signal: controller.signal,
           transcript: approvedBrief ? buildPagePrompt(userPrompt, approvedBrief) : userPrompt,
-          history: nextMessages,
+          history: scopedHistory,
           file: filePayload,
           webMode,
           language: activeLanguage,
@@ -1174,13 +1562,14 @@ export default function App() {
             accumulatedText += token;
             updateMission(markWriting(mission));
             setIsThinking(false);
-            setMessages(prev => prev.map(m => m.id === assistantMsgId ? { ...m, text: accumulatedText } : m));
+            updateMessages(prev => prev.map(m => m.id === assistantMsgId ? { ...m, text: accumulatedText } : m));
           },
           onWidget: (widget) => {
             if (widget && !accumulatedWidgets.some(w => w.widgetType === widget.widgetType && w.city === widget.city && w.symbol === widget.symbol && w.title === widget.title)) {
               accumulatedWidgets.push(widget);
-              setActiveStageWidget(widget);
-              setMessages(prev => prev.map(m => m.id === assistantMsgId ? { ...m, widgets: [...accumulatedWidgets] } : m));
+              if (getAutomaticStageWidget([widget])) setActiveStageWidget(widget);
+              updateMessages(prev => prev.map(m => m.id === assistantMsgId
+                ? { ...m, widgets: mergeArtifactUpdates([...accumulatedWidgets], m.widgets) } : m));
             }
           },
           onAudio: (base64Audio) => {
@@ -1208,62 +1597,67 @@ export default function App() {
         finishStopped();
         return;
       }
+      if (runAbortRef.current !== controller) return;
       console.error("Converse error:", err);
       runFinished = true;
       const failedMission = mission
         ? finishMission(mission, { status: 'failed' })
         : null;
       const errorMessage = {
-        id: `err-${Date.now()}`,
+        id: assistantMsgId,
         role: 'assistant',
         isError: true,
         webSources: Array.isArray(err.webSources) ? err.webSources : [],
         activity: failedMission ? missionActivity(failedMission) : null,
-        text: isResearchReportRequest(userPrompt)
+        widgets: mergeArtifactUpdates(accumulatedWidgets, currentRunWidgets()),
+        isStreaming: false,
+        text: (accumulatedText ? `${accumulatedText}\n\n` : '') + (isResearchRun
           ? `I couldn’t complete that research task${err.stage ? ` during ${err.stage}` : ''}: ${err.message}. Any sources collected so far are listed below. Your request is still in the conversation; please try again.`
-          : "I am having trouble connecting to my neural network. Please check connection and try again.",
+          : `I couldn’t complete that request: ${err.message}. You can try again. Any partial output above has been kept.`),
         timestamp: Date.now()
       };
-      persistMessages([...nextMessages, errorMessage]);
+      persistRunMessage(errorMessage);
       setIsTaskComplete(false);
       setProcessingFile(null);
     } finally {
-      if (runAbortRef.current === controller) runAbortRef.current = null;
-      setIsThinking(false);
+      if (runAbortRef.current === controller) {
+        runAbortRef.current = null;
+        setIsThinking(false);
+      }
     }
   };
 
   // The user approved (possibly edited) the plan: drop the plan card and run the research.
   const handleStartPlan = (messageId, plan) => {
-    if (isThinking) return;
+    if (runAbortRef.current) return;
     const index = messages.findIndex((message) => message.id === messageId);
     const card = index >= 0 ? messages[index].planCard : null;
     if (!card) return;
     const baseMessages = messages.slice(0, index);
     persistMessages(baseMessages);
-    handleSendMessage(card.prompt, null, { plan, baseMessages });
+    handleSendMessage(card.prompt, null, { plan, baseMessages, projectId: messages[index].projectId || null });
   };
 
   // The user approved (or skipped) the design brief: drop the brief card and build the page.
   const handleStartBrief = (messageId, brief) => {
-    if (isThinking) return;
+    if (runAbortRef.current) return;
     const index = messages.findIndex((message) => message.id === messageId);
     const card = index >= 0 ? messages[index].briefCard : null;
     if (!card) return;
     const baseMessages = messages.slice(0, index);
     persistMessages(baseMessages);
-    handleSendMessage(card.prompt, null, { brief: brief || null, baseMessages });
+    handleSendMessage(card.prompt, null, { brief: brief || null, baseMessages, projectId: messages[index].projectId || null });
   };
 
   const handleCancelBrief = (messageId) => {
     persistMessages(messages.map((message) => (message.id === messageId
-      ? { id: message.id, role: 'assistant', text: briefLabels(activeLanguage).cancelledText, isNotice: true, timestamp: Date.now() }
+      ? { id: message.id, projectId: message.projectId || null, role: 'assistant', text: briefLabels(activeLanguage).cancelledText, isNotice: true, timestamp: Date.now() }
       : message)));
   };
 
   const handleCancelPlan = (messageId) => {
     persistMessages(messages.map((message) => (message.id === messageId
-      ? { id: message.id, role: 'assistant', text: planLabels(activeLanguage).cancelledText, isNotice: true, timestamp: Date.now() }
+      ? { id: message.id, projectId: message.projectId || null, role: 'assistant', text: planLabels(activeLanguage).cancelledText, isNotice: true, timestamp: Date.now() }
       : message)));
   };
 
@@ -1385,22 +1779,29 @@ export default function App() {
   }, [handleToggleListen]);
 
   const handleClearHistory = () => {
-    if (confirm("Clear all conversation history?")) {
-      const reset = [{
+    if (confirm("Clear this conversation? Saved missions remain available in Missions and continue running.")) {
+      disconnectMissionViews();
+      runAbortRef.current?.abort();
+      runAbortRef.current = null;
+      setIsThinking(false);
+      setProcessingFile(null);
+      const otherProjects = messagesRef.current.filter(message => !conversationForProject([message], currentProjectId).length);
+      const reset = [...otherProjects, {
         id: 'lumen-welcome',
         role: 'assistant',
+        projectId: currentProjectId || null,
         text: getTranslations(activeLanguage).welcome,
         timestamp: Date.now()
       }];
-      setMessages(reset);
-      localStorage.removeItem('lumen_standalone_history');
+      persistMessages(reset);
     }
   };
 
   const controlMenuActions = [
+    { icon: '◫', label: 'Customize desktop', description: 'Show, hide, and arrange your action pills', onSelect: openDesktopCustomize },
     {
       icon: getLanguageInfo().flag,
-      label: getLanguageInfo().code,
+      label: `Language · ${getLanguageInfo().code}`,
       description: t.header.languageTooltip,
       onSelect: handleCycleLanguage,
       keepOpen: true
@@ -1440,6 +1841,19 @@ export default function App() {
       onSelect: () => setIsShareModalOpen(true)
     },
     {
+      icon: currentAura.icon,
+      label: `Aura · ${currentAura.name}`,
+      description: 'Choose your workspace lighting and color palette',
+      onSelect: () => setIsAuraMenuOpen(true)
+    },
+    {
+      icon: getCircadianInfo().icon,
+      label: t.header.atmosphere,
+      description: getCircadianInfo().label,
+      onSelect: handleCycleCircadian,
+      keepOpen: true
+    },
+    {
       icon: '⚡',
       label: t.header.techStack || 'Architecture',
       description: t.header.techStackTooltip || 'System Architecture & Tech Stack',
@@ -1476,7 +1890,24 @@ export default function App() {
     textInputRef.current?.focus();
   };
 
+  const legacyDesktopActions = [
+    { id: 'code-analysis', icon: '</>', label: t.desktopPills.codeAnalysis, description: t.desktopPills.codeAnalysisTooltip },
+    { id: 'seo-analysis', icon: '⌕', label: t.starterChips.seoInspect, description: t.starterChips.seoInspectTooltip },
+    { id: 'daily-brief', icon: '☀', label: t.desktopPills.dailyBrief, description: t.desktopPills.dailyBriefTooltip },
+    { id: 'budget-planner', icon: '€', label: t.desktopPills?.budgetPlanner || 'Budget planner', description: t.desktopPills?.budgetPlannerTooltip || 'Plan expenses and budgets' },
+    { id: 'day-schedule', icon: '▦', label: t.desktopPills?.daySchedule || 'Day schedule', description: t.desktopPills?.dayScheduleTooltip || 'Create a timeline with calendar export' },
+    { id: 'open-web-page', icon: '↗', label: t.header.openWebPageLabel, description: t.header.openWebPageDescription }
+  ].map(action => ({ ...action, onSelect: rect => handleOpenAgentAction(action.id, rect?.width !== undefined ? rect : { x: window.innerWidth / 2, y: window.innerHeight / 2, width: 0, height: 0 }) }));
+  const desktopActions = [...DESK_ACTIONS.map(action => ({ ...action, label: action.title, icon: <DeskIcon name={action.icon} />, onSelect: () => openDeskAction(action.id) })), ...legacyDesktopActions]
+    .map((action, index) => ({ ...action, position: desktopPillPosition(index, index < 5 ? 5 : 11) }));
+  const visibleDesktopActions = desktopActions.filter(action => desktopVisibility[action.id]);
+  const mobileUtilityActions = [
+    { id: 'weather', icon: '☀', label: 'Live weather', description: 'Weather for any city', onSelect: () => setActiveStageWidget(ambientData.weather || { widgetType: 'weather', city: 'Choose a city', initialSearching: true }) },
+    { id: 'persona', icon: '✦', label: 'Persona & memory', description: 'Your saved context', onSelect: () => setIsMemoryModalOpen(true) }
+  ];
   const exploreActions = [
+    ...DESK_ACTIONS.map(action => ({ id: `desk-${action.id}`, icon: '✦', label: action.title, description: action.description, onSelect: () => openDeskAction(action.id) })),
+    ...legacyDesktopActions,
     {
       id: 'voice',
       icon: '🎙️',
@@ -1666,20 +2097,55 @@ export default function App() {
       <div className="ambient-mesh-glow m4"></div>
       <div className="ambient-mesh-glow m5"></div>
 
-      {/* Top Header Navigation */}
-      <header className="lumen-header">
+      {/* Workspace navigation: primary work views stay visible at every width. */}
+      <header className="lumen-header workspace-header" ref={workspaceHeaderRef}>
         <div className="header-brand">
-          <LumenLogo size={35} />
-          <h1 className="brand-title">LUMEN</h1>
+          <LumenLogo size={34} />
+          <div className="header-brand-copy"><h1 className="brand-title">LUMEN</h1><span className="header-brand-caption">{projectSummaries.find(project => project.id === currentProjectId)?.name || 'Your AI workspace'}</span></div>
         </div>
 
-        <div className="header-actions">
+        <nav className="header-primary-nav" aria-label="Workspace views">
+          <button type="button" className={`header-nav-button ${showLogDrawer ? 'is-active' : ''}`}
+            onClick={() => { setShowMissions(false); setShowLogDrawer(open => !open); }}
+            aria-expanded={showLogDrawer} aria-controls="conversation-panel"
+            title={showLogDrawer ? t.header.transcriptClose : t.header.transcriptOpen}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20 11.5a7.5 7.5 0 0 1-7.5 7.5H6l-3 2v-6A7.5 7.5 0 1 1 20 11.5Z"/><path d="M8 10h8M8 13.5h5"/></svg>
+            <span>{t.header.transcriptOpen.replace(/^💬\s*/, '')}</span>
+            {(isThinking || messages.some(message => message.isStreaming)) && <span className="header-work-indicator" aria-label="Work in progress" />}
+          </button>
+          <button type="button" className={`header-nav-button mission-history-toggle ${showMissions ? 'is-active' : ''}`}
+            onClick={() => { setShowMissions(open => !open); if (!showMissions) void refreshSavedMissions(); }}
+            aria-expanded={showMissions} aria-controls="saved-missions-panel" title="Reopen saved work and resume missions">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 2.6-6.4L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/></svg>
+            <span>Missions</span>
+          </button>
+        </nav>
+
+        <div className="header-utilities">
+          <div className="header-quick-preferences" aria-label="Quick preferences">
+            <button type="button" className="header-preference-button" onClick={handleCycleLanguage}
+              title={t.header.languageTooltip} aria-label={t.header.languageTooltip}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 5h12M9 3v2M6 5c0 5 3 8 7 10M12 5c0 5-3 8-8 11M14 21l4-11 4 11M15.5 17h5"/></svg>
+              <span>{getLanguageInfo().code}</span>
+            </button>
+            <button type="button" className="header-preference-button header-voice-preference" onClick={() => setIsVoiceModalOpen(true)}
+              title={formatString(t.header.voiceTooltip, { voice: activeVoice })} aria-label={`Voice: ${activeVoice}`}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11v1a7 7 0 0 0 14 0v-1M12 19v3M8 22h8"/></svg>
+              <span>{activeVoice}</span>
+            </button>
+            <button type="button" className={`header-preference-button header-web-preference mode-${webMode}`} onClick={handleCycleWebMode}
+              title={formatString(t.header.webTooltip, { mode: t.header.webModes[webMode] || webMode })}
+              aria-label={formatString(t.header.webTooltip, { mode: t.header.webModes[webMode] || webMode })}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c5 5 5 13 0 18-5-5-5-13 0-18Z"/></svg>
+              <span>{t.header.webModes[webMode] || webMode}</span>
+            </button>
+          </div>
           {/* Ambient Aura Selector System */}
           <div className="aura-btn-container" ref={auraMenuRef}>
             <button 
               type="button" 
-              className={`aura-toggle-btn aura-${currentAura.id}`}
-              onClick={() => setIsAuraMenuOpen((open) => !open)}
+              className={`aura-toggle-btn header-icon-button aura-${currentAura.id}`}
+              onClick={() => { closeControlMenu(); setIsAuraMenuOpen((open) => !open); }}
               title={`Aura: ${currentAura.name} — Switch ambient lighting mood`}
               aria-label={`Aura: ${currentAura.name}`}
               aria-expanded={isAuraMenuOpen}
@@ -1782,211 +2248,25 @@ export default function App() {
             )}
           </div>
 
-          {/* Multilingual Voice & Intelligence Selector */}
-          <button 
-            type="button" 
-            className="language-toggle-btn"
-            onClick={handleCycleLanguage}
-            title={t.header.languageTooltip}
-            aria-label={t.header.languageTooltip}
-          >
-            <span className="lang-flag">{getLanguageInfo().flag}</span>
-            <span className="lang-label">{getLanguageInfo().code}</span>
-          </button>
 
-          {/* Neural Voice Persona Selector */}
-          <button 
-            type="button" 
-            className="voice-toggle-btn"
-            onClick={() => setIsVoiceModalOpen(true)}
-            title={formatString(t.header.voiceTooltip, { voice: activeVoice })}
-            aria-label={`Voice: ${activeVoice}`}
-          >
-            <span className="voice-icon">🎙️</span>
-            <span className="voice-label">{activeVoice}</span>
+          <button type="button" className={`header-icon-button header-explore-button ${isMobileControlsOpen && isExplorePanelOpen ? 'is-active' : ''}`}
+            onClick={() => { setIsAuraMenuOpen(false); if (isMobileControlsOpen && isExplorePanelOpen) closeControlMenu(); else openExplorePanel(); }}
+            title={t.explorePanel.title} aria-label={t.explorePanel.title} aria-haspopup="dialog" aria-expanded={isMobileControlsOpen && isExplorePanelOpen}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m12 3 2.3 6.7L21 12l-6.7 2.3L12 21l-2.3-6.7L3 12l6.7-2.3L12 3Z"/></svg>
+            <span className="header-explore-label">{t.explorePanel.title}</span>
           </button>
-
-          {/* Web Access Toggle */}
-          <button 
-            type="button" 
-            className={`web-toggle-btn mode-${webMode}`}
-            onClick={handleCycleWebMode}
-            title={formatString(t.header.webTooltip, { mode: t.header.webModes[webMode] || webMode.toUpperCase() })}
-            aria-label={formatString(t.header.webTooltip, { mode: t.header.webModes[webMode] || webMode.toUpperCase() })}
-          >
-            <span className="web-icon">🌐</span>
-            <span className="web-label">{t.header.webPrefix}{t.header.webModes[webMode] || webMode}</span>
+          <button type="button" className={`header-icon-button header-mobile-tools-button ${isMobileToolsOpen ? 'is-active' : ''}`}
+            onClick={() => { closeControlMenu(); setIsAuraMenuOpen(false); setIsMobileToolsOpen(open => !open); }}
+            title="Open tools" aria-label="Open tools" aria-haspopup="dialog" aria-expanded={isMobileToolsOpen}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="2" /><rect x="14" y="3" width="7" height="7" rx="2" /><rect x="3" y="14" width="7" height="7" rx="2" /><rect x="14" y="14" width="7" height="7" rx="2" /></svg><span className="header-mobile-tools-label">Tools</span>
           </button>
-
-          {/* Collaboration & Share */}
-          <button 
-            type="button" 
-            className="share-toggle-btn"
-            onClick={() => setIsShareModalOpen(true)}
-            title={t.header.shareTooltip}
-          >
-            <span className="share-icon">🔗</span>
-            <span className="share-label">{t.header.share}</span>
-          </button>
-
-          {/* System Architecture & Tech Stack Blueprint */}
-          <button 
-            type="button" 
-            className="tech-stack-toggle-btn"
-            onClick={() => setIsTechStackModalOpen(true)}
-            title={t.header.techStackTooltip || "System Architecture & Tech Stack (AWS Bedrock, Polly, Web Audio, Open-Meteo)"}
-            aria-label="System Architecture & Tech Stack"
-          >
-            <span className="tech-stack-icon">⚡</span>
-            <span className="tech-stack-label">{t.header.techStack || "Architecture"}</span>
-          </button>
-
-          {/* Conversation Chat Drawer Toggle */}
-          <button 
-            type="button" 
-            className={`log-toggle-btn ${showLogDrawer ? 'active' : ''}`}
-            onClick={() => setShowLogDrawer(!showLogDrawer)}
-            title={showLogDrawer ? t.header.transcriptClose : t.header.transcriptOpen}
-            aria-label={showLogDrawer ? t.header.transcriptClose : t.header.transcriptOpen}
-            aria-expanded={showLogDrawer}
-            aria-controls="conversation-panel"
-          >
-            <span className={`chat-toggle-icon-wrap ${showLogDrawer ? 'is-open' : ''}`} aria-hidden="true">
-              <svg 
-                className="chat-toggle-svg" 
-                width="20" 
-                height="20" 
-                viewBox="0 0 24 24" 
-                fill="none" 
-                stroke="currentColor" 
-                strokeWidth="1.8" 
-                strokeLinecap="round" 
-                strokeLinejoin="round"
-              >
-                {/* Spatial dialogue bubble */}
-                <path 
-                  className="chat-svg-bubble" 
-                  d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8v.5z" 
-                />
-                {/* Animated conversation wave dots */}
-                <circle className="chat-dot chat-dot-1" cx="8.5" cy="11.5" r="1.3" fill="currentColor" stroke="none" />
-                <circle className="chat-dot chat-dot-2" cx="12" cy="11.5" r="1.3" fill="currentColor" stroke="none" />
-                <circle className="chat-dot chat-dot-3" cx="15.5" cy="11.5" r="1.3" fill="currentColor" stroke="none" />
-                {/* Morphing close glyph lines */}
-                <path className="chat-close-glyph chat-close-line1" d="M9 8.5l6 6" />
-                <path className="chat-close-glyph chat-close-line2" d="M15 8.5l-6 6" />
-              </svg>
-            </span>
-          </button>
-
-          <button
-            type="button"
-            className={`fullscreen-btn ${isFullscreen ? 'active' : ''}`}
-            onClick={handleToggleFullscreen}
-            title={isFullscreen ? t.header.fullscreenExit : t.header.fullscreenEnter}
-            aria-label={isFullscreen ? t.header.fullscreenExit : t.header.fullscreenEnter}
-          >
-            {isFullscreen ? (
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/>
-              </svg>
-            ) : (
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
-              </svg>
-            )}
-          </button>
-
-          <a 
-            href="https://github.com/georgieslab" 
-            target="_blank" 
-            rel="noopener noreferrer" 
-            className="github-btn"
-            title={t.header.githubTooltip}
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
-            </svg>
-          </a>
+          <div className="header-account-zone">
+            <AccountAuthButton currentUser={currentUser} memoryLabel={t.memoryManager.launcher}
+              onLogout={handleUserLogout} onOpenMemory={() => setIsMemoryModalOpen(true)}
+              onOpenSettings={() => { setIsAuraMenuOpen(false); setIsExplorePanelOpen(false); setIsMobileControlsOpen(open => !(open && !isExplorePanelOpen)); }}
+              conversationCount={Math.max(0, messages.length - 1)} />
+          </div>
         </div>
-        <div className="mobile-header-actions">
-          {/* Atmosphere + Visual theme: small icon-only, animated controls */}
-          <AmbientControls
-            phase={activeCircadian}
-            auto={circadianSetting === 'auto'}
-            atmosphereTip={`${t.header.atmosphere}: ${getCircadianInfo().label}`}
-            themeId={currentTheme}
-            themeTip={`Aura: ${currentAura.name}`}
-            groupLabel={`Aura: ${currentAura.name}`}
-            onCycleAtmosphere={handleCycleCircadian}
-            onCycleTheme={handleCycleAura}
-            onOpenAura={() => setIsAuraMenuOpen((open) => !open)}
-          />
-          <button
-            type="button"
-            className="chat-panel-trigger"
-            onClick={() => setShowLogDrawer((open) => !open)}
-            aria-label={showLogDrawer ? t.header.transcriptClose : t.header.transcriptOpen}
-            aria-expanded={showLogDrawer}
-            aria-controls="conversation-panel"
-            title={showLogDrawer ? t.header.transcriptClose : t.header.transcriptOpen}
-          >
-            <span className={`chat-toggle-icon-wrap ${showLogDrawer ? 'is-open' : ''}`} aria-hidden="true">
-              <svg 
-                className="chat-toggle-svg" 
-                width="19" 
-                height="19" 
-                viewBox="0 0 24 24" 
-                fill="none" 
-                stroke="currentColor" 
-                strokeWidth="1.8" 
-                strokeLinecap="round" 
-                strokeLinejoin="round"
-              >
-                <path 
-                  className="chat-svg-bubble" 
-                  d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8v.5z" 
-                />
-                <circle className="chat-dot chat-dot-1" cx="8.5" cy="11.5" r="1.3" fill="currentColor" stroke="none" />
-                <circle className="chat-dot chat-dot-2" cx="12" cy="11.5" r="1.3" fill="currentColor" stroke="none" />
-                <circle className="chat-dot chat-dot-3" cx="15.5" cy="11.5" r="1.3" fill="currentColor" stroke="none" />
-                <path className="chat-close-glyph chat-close-line1" d="M9 8.5l6 6" />
-                <path className="chat-close-glyph chat-close-line2" d="M15 8.5l-6 6" />
-              </svg>
-            </span>
-          </button>
-          <button
-            type="button"
-            className="mobile-explore-trigger"
-            onClick={() => {
-              if (isMobileControlsOpen && isExplorePanelOpen) {
-                closeControlMenu();
-              } else {
-                openExplorePanel();
-              }
-            }}
-            aria-label={t.explorePanel.title}
-            aria-haspopup="dialog"
-            aria-expanded={isMobileControlsOpen}
-            title={t.explorePanel.title}
-          >
-            <span className="mobile-explore-icon" aria-hidden="true">✦</span>
-            <span className="mobile-explore-label">{t.explorePanel.title}</span>
-            <span className="mobile-explore-notice" aria-hidden="true"></span>
-          </button>
-        </div>
-
-        <AccountAuthButton
-          currentUser={currentUser}
-          memoryLabel={t.memoryManager.launcher}
-          onLogout={handleUserLogout}
-          onOpenMemory={() => setIsMemoryModalOpen(true)}
-          onOpenSettings={() => {
-            setIsExplorePanelOpen(false);
-            setIsMobileControlsOpen(true);
-          }}
-          conversationCount={Math.max(0, messages.length - 1)}
-        />
       </header>
 
       {isQuickStartVisible && (
@@ -2235,7 +2515,7 @@ export default function App() {
           }
           if (
             showLogDrawer &&
-            !event.target.closest('#conversation-panel, .desktop-action-pill, .chat-corner-handle')
+            !event.target.closest('#conversation-panel, .mission-history-drawer, .desktop-pill-wrapper, .desktop-customize-trigger, .chat-corner-handle, .desk-workspace-backdrop')
           ) {
             setShowLogDrawer(false);
           }
@@ -2271,9 +2551,10 @@ export default function App() {
           <OpenWebPageButton triggerOnly openRequest={openWebPageRequest} onOpen={(u) => { setPendingOpenUrl(null); setEmbeddedUrl(u); }} />
         </div>
 
-        {(
+        {desktopVisibility.persona && (
           <button
             type="button"
+            ref={personaElementRef}
             className={`persona-profile-card ${isPersonaDragging ? 'is-dragging' : ''}`}
             style={{
               '--persona-drag-x': `${personaCardOffset.x}px`,
@@ -2337,8 +2618,9 @@ export default function App() {
           </button>
         )}
 
-        {ambientData.weather && (
+        {desktopVisibility.weather && ambientData.weather && (
           <div
+            ref={weatherElementRef}
             className={`weather-tile-wrap weather-desktop-widget ${isWeatherTileDragging ? 'is-dragging' : ''}`}
             style={{
               '--weather-drag-x': `${weatherTileOffset.x}px`,
@@ -2396,66 +2678,18 @@ export default function App() {
           </div>
         )}
 
-        <DraggableDesktopPill
-          id="code-analysis"
-          icon="</>"
-          label={t.desktopPills.codeAnalysis}
-          title={t.desktopPills.codeAnalysisTooltip}
-          position={{ left: '78%', top: '28%' }}
-          isActive={activeAgentAction === 'code-analysis'}
-          onSelect={(rect) => handleOpenAgentAction('code-analysis', rect)}
-        />
-        <DraggableDesktopPill
-          id="seo-analysis"
-          icon="⌕"
-          label={t.starterChips.seoInspect}
-          title={t.starterChips.seoInspectTooltip}
-          position={{ left: '78%', top: '43%' }}
-          isActive={activeAgentAction === 'seo-analysis'}
-          onSelect={(rect) => handleOpenAgentAction('seo-analysis', rect)}
-        />
-        <DraggableDesktopPill
-          id="daily-brief"
-          icon="☀"
-          label={t.desktopPills.dailyBrief}
-          title={t.desktopPills.dailyBriefTooltip}
-          position={{ left: '78%', top: '58%' }}
-          isActive={activeAgentAction === 'daily-brief'}
-          onSelect={(rect) => handleOpenAgentAction('daily-brief', rect)}
-        />
-        <DraggableDesktopPill
-          id="budget-planner"
-          icon="💰"
-          label={t.desktopPills?.budgetPlanner || "Budget planner"}
-          title={t.desktopPills?.budgetPlannerTooltip || "Plan expenses, travel costs, or monthly budgets"}
-          position={{ left: '78%', top: '73%' }}
-          isActive={activeAgentAction === 'budget-planner'}
-          onSelect={(rect) => handleOpenAgentAction('budget-planner', rect)}
-        />
-        <DraggableDesktopPill
-          id="day-schedule"
-          icon="📅"
-          label={t.desktopPills?.daySchedule || "Day schedule"}
-          title={t.desktopPills?.dayScheduleTooltip || "Plan a daily routine and timeline with 1-click calendar export"}
-          position={{ left: '16%', top: '24%' }}
-          isActive={activeAgentAction === 'day-schedule'}
-          onSelect={(rect) => handleOpenAgentAction('day-schedule', rect)}
-        />
-        <DraggableDesktopPill
-          id="open-web-page"
-          icon="🌐"
-          label={t.header.openWebPageLabel}
-          title={t.header.openWebPageDescription}
-          position={{ left: '82%', top: '12%' }}
-          size="large"
-          isActive={activeAgentAction === 'open-web-page'}
-          onSelect={(rect) => handleOpenAgentAction('open-web-page', rect)}
-        />
+        {visibleDesktopActions.map(action => <DraggableDesktopPill key={`${action.id}-${desktopLayoutVersion}`} id={action.id}
+          label={action.label} title={action.description} icon={action.icon} position={action.position}
+          isActive={deskAction === action.id || activeAgentAction === action.id} badge={action.id === 'watches' ? deskNotificationCount : 0}
+          onSelect={action.onSelect} onHide={id => toggleDesktopItem(id, false)} />)}
+        <button type="button" className="desktop-customize-trigger" onClick={openDesktopCustomize} aria-label="Customize desktop" title="Customize desktop">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="2" /><rect x="14" y="3" width="7" height="7" rx="2" /><rect x="3" y="14" width="7" height="7" rx="2" /><path d="M17.5 14v7M14 17.5h7" /></svg>
+        </button>
 
         {/* Real-Time Ambient Live Bar & Interactive Glanceable Pills */}
         <div className="ambient-live-bar">
           <div className="ambient-glance-row">
-            {!ambientData.weather && (
+            {desktopVisibility.weather && !ambientData.weather && (
               <button
                 type="button"
                 className="ambient-glance-pill placeholder"
@@ -2485,7 +2719,7 @@ export default function App() {
         </div>
 
         {/* Active Floating VisionOS Stage Widget */}
-        {activeStageWidget && (
+        {isFloatingStageWidget(activeStageWidget) && (
           <div className="stage-active-widget animate-fade-in">
             <div className="stage-widget-header">
               <div className="stage-widget-title-wrap">
@@ -2566,18 +2800,23 @@ export default function App() {
         <div id="conversation-panel" className={`conversation-panel ${showLogDrawer ? 'open' : ''}`}>
           <ConversationFeed 
             onClose={() => setShowLogDrawer(false)}
-            messages={messages}
+            messages={scopedMessages}
+            projectName={projectSummaries.find(project => project.id === currentProjectId)?.name}
             liveTranscript={liveTranscript}
             isThinking={isThinking}
             onClearHistory={handleClearHistory}
             onExportPdf={handleExportConversationPdf}
             onSendMessage={handleSendMessage}
             onStop={handleStopRun}
+            onMissionAction={handleMissionAction}
             onPlanStart={handleStartPlan}
             onPlanCancel={handleCancelPlan}
             onBriefBuild={handleStartBrief}
             onBriefSkip={(messageId) => handleStartBrief(messageId, null)}
             onBriefCancel={handleCancelBrief}
+            onArtifactUpdate={handleArtifactUpdate}
+            onPinArtifact={pinDeskOutput}
+            currentProjectId={currentProjectId}
             onTriggerAgentAction={(actionKey, rect) => handleOpenAgentAction(actionKey, rect)}
             activeLanguage={activeLanguage}
             windowOffset={chatWindowOffset}
@@ -2585,7 +2824,19 @@ export default function App() {
             onWindowDraggingChange={setIsChatWindowDragging}
           />
         </div>
+        {showMissions && <div id="saved-missions-panel"><MissionHistoryDrawer missions={savedMissions} loading={missionsLoading} error={missionsError}
+          onClose={() => setShowMissions(false)} onRefresh={refreshSavedMissions} onOpen={openSavedMission} /></div>}
       </main>
+
+      {deskAction && <DeskWorkspace open action={deskAction} onClose={() => setDeskAction(null)} onRun={runDeskMission}
+        onOpenMission={snapshot => { setDeskAction(null); openSavedMission(snapshot); }}
+        currentProjectId={currentProjectId} onProjectChange={selectDeskProject} messages={scopedMessages} activeLanguage={activeLanguage} />}
+      {showDesktopCustomize && <DesktopCustomizeDialog visibility={desktopVisibility} onToggle={toggleDesktopItem}
+        onSetAll={visible => setDesktopVisibility(saveDesktopVisibility(Object.fromEntries(DESKTOP_ITEMS.map(item => [item.id, visible]))))}
+        onReset={resetDesktop} onClose={() => setShowDesktopCustomize(false)} />}
+      {isMobileToolsOpen && <MobileToolsSheet actions={desktopActions} utilityActions={mobileUtilityActions}
+        onSelect={action => { setIsMobileToolsOpen(false); action.onSelect(); }} onClose={() => setIsMobileToolsOpen(false)}
+        onSettings={() => { setIsMobileToolsOpen(false); setIsExplorePanelOpen(false); setIsMobileControlsOpen(true); }} />}
 
       {/* Bottom Spatial Command Bar */}
       <footer 
@@ -2612,7 +2863,7 @@ export default function App() {
             className="bottom-spatial-attach-btn"
             onClick={() => setIsAttachmentMenuOpen(true)}
             title={t.footer.attachTooltip}
-            disabled={isThinking}
+            disabled={runInProgress}
             aria-label={t.footer.attachTooltip}
             aria-haspopup="dialog"
             aria-expanded={isAttachmentMenuOpen}
@@ -2637,7 +2888,7 @@ export default function App() {
             onKeyDown={(event) => {
               if (event.key === 'Enter' && !event.shiftKey) {
                 event.preventDefault();
-                if ((textInput.trim() || selectedFile) && !isThinking) {
+                if ((textInput.trim() || selectedFile) && !runInProgress) {
                   handleSendMessage();
                 }
               }
@@ -2646,7 +2897,7 @@ export default function App() {
           <button 
             type="submit" 
             className="bottom-submit-btn"
-            disabled={(!textInput.trim() && !selectedFile) || isThinking}
+            disabled={(!textInput.trim() && !selectedFile) || runInProgress}
             aria-label={t.footer.sendTooltip}
             title={t.footer.sendTooltip}
           >

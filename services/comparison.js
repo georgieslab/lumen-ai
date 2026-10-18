@@ -25,14 +25,10 @@ export function sanitizeOption(raw, index = 0, criteriaList = []) {
 
   // Values map
   const rawValues = raw.values && typeof raw.values === 'object' ? raw.values : {};
-  const values = {};
-  for (const crit of criteriaList) {
-    if (rawValues[crit] !== undefined) {
-      values[crit] = clip(rawValues[crit], 150);
-    } else {
-      values[crit] = '—';
-    }
-  }
+  const normalizedValues = new Map(Object.entries(rawValues).map(([key, value]) => [clip(key, COMPARISON_LIMITS.maxCriteriaChars), value]));
+  const values = Object.fromEntries(criteriaList.map((criterion) => [criterion,
+    normalizedValues.has(criterion) ? clip(normalizedValues.get(criterion), 150) : '—'
+  ]));
 
   // Pros & cons
   const rawPros = Array.isArray(raw.pros) ? raw.pros : [];

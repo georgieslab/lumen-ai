@@ -4,6 +4,7 @@
 const clip = (value, max) => String(value ?? '').replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
 
 export const BUDGET_LIMITS = {
+  maxAmount: 1_000_000_000_000,
   maxTitleChars: 120,
   maxCategoryNameChars: 60,
   maxSummaryChars: 300,
@@ -25,12 +26,10 @@ const DEFAULT_CATEGORY_COLORS = [
 ];
 
 export function parseAmount(val) {
-  if (typeof val === 'number') return isNaN(val) ? 0 : Math.max(0, val);
-  if (!val || typeof val !== 'string') return 0;
-  // Clean currency symbols, commas, and whitespace
-  const clean = val.replace(/[^0-9.-]/g, '');
-  const num = parseFloat(clean);
-  return isNaN(num) ? 0 : Math.max(0, num);
+  const num = typeof val === 'number' ? val : typeof val === 'string'
+    ? Number(val.replace(/[^0-9.-]/g, '')) : NaN;
+  if (!Number.isFinite(num) || num < 0 || num > BUDGET_LIMITS.maxAmount) return 0;
+  return Math.round((num + Number.EPSILON * Math.max(1, num)) * 100) / 100;
 }
 
 export function sanitizeBudgetCategory(raw, index = 0, total = 0) {
@@ -65,7 +64,8 @@ export function buildBudgetWidget(input = {}) {
   const rawCurrency = String(input.currency || input.symbol || '$').trim();
   const currency = rawCurrency.length <= 5 ? rawCurrency : '$';
 
-  let totalBudget = parseAmount(input.totalBudget ?? input.total ?? input.budget);
+  const suppliedTotal = input.totalBudget ?? input.total ?? input.budget;
+  let totalBudget = parseAmount(suppliedTotal);
 
   const rawCats = Array.isArray(input.categories) ? input.categories : (Array.isArray(input.items) ? input.items : []);
   let categories = [];
@@ -87,10 +87,10 @@ export function buildBudgetWidget(input = {}) {
   }
 
   // Compute sum of categories
-  const calculatedSum = categories.reduce((acc, c) => acc + c.allocated, 0);
-  if (totalBudget === 0) {
-    totalBudget = calculatedSum || 1000;
-  }
+  // Sum integer cents so decimal allocations have deterministic currency totals.
+  const allocatedCents = categories.reduce((acc, c) => acc + Math.round(c.allocated * 100), 0);
+  const calculatedSum = allocatedCents / 100;
+  if (suppliedTotal === undefined) totalBudget = calculatedSum;
 
   // Assign computed percentage to each category
   categories.forEach((cat) => {
@@ -111,7 +111,9 @@ export function buildBudgetWidget(input = {}) {
     summary,
     currency,
     totalBudget,
+    hasExplicitBudget: suppliedTotal !== undefined,
     allocatedTotal: calculatedSum,
+    remainingBudget: (Math.round(totalBudget * 100) - allocatedCents) / 100,
     categories,
     savingsTips: savingsTips.length > 0 ? savingsTips : undefined,
     createdAt: Date.now()

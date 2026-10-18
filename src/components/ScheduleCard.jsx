@@ -1,9 +1,12 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { generateIcsCalendar, getScheduleExportStatus } from '../../services/schedule.js';
 
-export default function ScheduleCard({ widget }) {
+export default function ScheduleCard({ widget, onUpdate }) {
   const [filterPeriod, setFilterPeriod] = useState('all');
-  const [completedEvents, setCompletedEvents] = useState(new Set());
+  const [localEvents, setLocalEvents] = useState(widget?.events || []);
   const [copied, setCopied] = useState(false);
+  useEffect(() => setLocalEvents(widget?.events || []), [widget]);
+  const exportStatus = useMemo(() => getScheduleExportStatus(widget), [widget]);
 
   if (!widget || !Array.isArray(widget.events)) return null;
 
@@ -11,19 +14,15 @@ export default function ScheduleCard({ widget }) {
     title = 'Daily Timeline & Schedule',
     date,
     summary,
-    events = []
+    timeZone
   } = widget;
+  const events = typeof onUpdate === 'function' ? widget.events : localEvents;
+  const completedEvents = new Set(events.filter((event) => event.completed).map((event) => event.id));
 
   const toggleEvent = (eventId) => {
-    setCompletedEvents((prev) => {
-      const next = new Set(prev);
-      if (next.has(eventId)) {
-        next.delete(eventId);
-      } else {
-        next.add(eventId);
-      }
-      return next;
-    });
+    const nextEvents = events.map((event) => event.id === eventId ? { ...event, completed: !event.completed } : event);
+    if (typeof onUpdate === 'function') onUpdate({ ...widget, events: nextEvents });
+    else setLocalEvents(nextEvents);
   };
 
   const filteredEvents = events.filter((ev) => {
@@ -49,7 +48,8 @@ export default function ScheduleCard({ widget }) {
 
       events.forEach((ev) => {
         const check = completedEvents.has(ev.id) ? '✓' : '•';
-        let line = `${check} ${ev.time}: ${ev.title}`;
+        const eventDate = ev.date || ev.start?.slice(0, 10);
+        let line = `${check} ${eventDate ? `${eventDate} ` : ''}${ev.time || 'Time not set'}${ev.endTime ? `–${ev.endTime}` : ''}: ${ev.title}`;
         if (ev.duration) line += ` [${ev.duration}]`;
         if (ev.location) line += ` (@ ${ev.location})`;
         lines.push(line);
@@ -65,36 +65,9 @@ export default function ScheduleCard({ widget }) {
   };
 
   const handleExportIcs = () => {
-    const pad = (n) => String(n).padStart(2, '0');
-    const now = new Date();
-    const dtStamp = `${now.getUTCFullYear()}${pad(now.getUTCMonth() + 1)}${pad(now.getUTCDate())}T${pad(now.getUTCHours())}${pad(now.getUTCMinutes())}00Z`;
-
-    const icsLines = [
-      'BEGIN:VCALENDAR',
-      'VERSION:2.0',
-      'PRODID:-//Lumen AI//Daily Schedule Planner//EN',
-      'CALSCALE:GREGORIAN',
-      'METHOD:PUBLISH',
-      `X-WR-CALNAME:${title.replace(/[,;]/g, '')}`
-    ];
-
-    events.forEach((ev, idx) => {
-      const uid = `lumen-${widget.scheduleId || 'sch'}-${idx}@lumen.ai`;
-      icsLines.push(
-        'BEGIN:VEVENT',
-        `UID:${uid}`,
-        `DTSTAMP:${dtStamp}`,
-        `SUMMARY:${ev.title.replace(/[,;]/g, '')}`,
-        `DESCRIPTION:${(ev.description || ev.time || '').replace(/\n/g, '\\n').replace(/[,;]/g, '')}`
-      );
-      if (ev.location) {
-        icsLines.push(`LOCATION:${ev.location.replace(/[,;]/g, '')}`);
-      }
-      icsLines.push('END:VEVENT');
-    });
-
-    icsLines.push('END:VCALENDAR');
-    const blob = new Blob([icsLines.join('\r\n')], { type: 'text/calendar;charset=utf-8' });
+    const ics = generateIcsCalendar(widget);
+    if (!ics) return;
+    const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
@@ -116,7 +89,7 @@ export default function ScheduleCard({ widget }) {
           <span className="schedule-badge-icon">📅</span>
           <span>Timeline & Schedule</span>
         </div>
-        {date && <span className="agent-schedule-date-tag">{date}</span>}
+        {(date || timeZone) && <span className="agent-schedule-date-tag">{[date, timeZone].filter(Boolean).join(' · ')}</span>}
       </div>
 
       <div className="agent-schedule-title-row">
@@ -202,7 +175,7 @@ export default function ScheduleCard({ widget }) {
               <div className="timeline-content-card">
                 <div className="timeline-event-header">
                   <div className="timeline-time-wrap">
-                    <span className="timeline-time-pill">{ev.time}</span>
+                    <span className="timeline-time-pill">{ev.date || ev.start?.slice(0, 10) ? `${ev.date || ev.start?.slice(0, 10)} · ` : ''}{ev.time || 'Time not set'}{ev.endTime ? `–${ev.endTime}` : ''}</span>
                     {ev.duration && <span className="timeline-duration-badge">⏱ {ev.duration}</span>}
                   </div>
                   <span className={`timeline-period-chip ${periodConfig.class}`}>
@@ -213,6 +186,12 @@ export default function ScheduleCard({ widget }) {
                 <div
                   className={`timeline-event-title ${isDone ? 'title-struck' : ''}`}
                   onClick={() => toggleEvent(ev.id)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      toggleEvent(ev.id);
+                    }
+                  }}
                   role="button"
                   tabIndex={0}
                 >
@@ -250,7 +229,9 @@ export default function ScheduleCard({ widget }) {
           type="button"
           className="agent-schedule-btn is-ics"
           onClick={handleExportIcs}
-          title="Download .ics Calendar file for Google Calendar, Apple Calendar, or Outlook"
+          disabled={!exportStatus.canExport}
+          aria-describedby={!exportStatus.canExport ? `calendar-export-help-${widget.scheduleId || 'schedule'}` : undefined}
+          title={exportStatus.canExport ? 'Download .ics Calendar file for Google Calendar, Apple Calendar, or Outlook' : exportStatus.reason}
         >
           <span>📥 Add to Calendar (.ics)</span>
         </button>
@@ -262,6 +243,11 @@ export default function ScheduleCard({ widget }) {
           <span>{copied ? '✓ Copied' : '📋 Copy Timeline'}</span>
         </button>
       </div>
+      {!exportStatus.canExport && (
+        <p className="agent-schedule-summary" id={`calendar-export-help-${widget.scheduleId || 'schedule'}`}>
+          Calendar export: {exportStatus.reason}
+        </p>
+      )}
     </div>
   );
 }

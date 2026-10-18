@@ -6,14 +6,45 @@ export const DEFAULT_REPLY_TOKENS = 1350;
 export const PAGE_REPLY_TOKENS = 5000;
 
 const BUILD_VERB = /\b(build|write|create|make|generate|design|code|craft|develop|redesign|improve|update|change|add|enhance|extend|polish)\b/i;
-const PAGE_NOUN = /\b(html|web\s?page|webpage|web\s?site|website|landing\s?page|mini[- ]?app|game|demo|animation|canvas|visuali[sz]ation|dashboard|interactive|aurora|particles?|shader|page)\b/i;
+const PAGE_NOUN = /\b(html|web\s?page|webpage|web\s?site|website|landing\s?page|mini[- ]?app|game|demo|animation|canvas|visuali[sz]ation|dashboard|aurora|particles?|shader|page)\b/i;
+const ARTIFACT_NOUN = /\b(budget|checklist|schedule|comparison|itinerary|briefing|daily\s+brief|decision\s+matrix|cards?)\b/i;
+const EXPLICIT_WEB_TARGET = /\b(html|web\s?page|webpage|web\s?site|website|landing\s?page|mini[- ]?app)\b/i;
 const HTML_FENCE_OPEN = /```html/i;
 
 const textOf = (item) => (typeof item === 'string' ? item : String(item?.text ?? ''));
 
+function artifactIntent(text) {
+  // Titles are data: even a title such as "Build a game demo" must not become
+  // another build command. Unquoted titles end where their contents begin.
+  const intentText = text.replace(/\b(?:titled|named|called|with\s+(?:the\s+)?title)\s+(?:"[^"]*"|'[^']*'|“[^”]*”|`[^`]*`|[\s\S]*?(?=\s+\b(?:with|containing|including)\b|\s+and\s+then\b|[.;:\n]|$))/gi, ' ')
+    .replace(/"[^"]*"|“[^”]*”|`[^`]*`|(?:^|\s)'[^']*'/g, ' ');
+  let artifact = false;
+  let page = false;
+  for (const match of intentText.matchAll(new RegExp(BUILD_VERB.source, 'gi'))) {
+    if (artifact && /\b(?:to|for)\s+$/i.test(intentText.slice(0, match.index))) continue;
+    // Look at the requested output before its title, contents, or purpose.
+    const command = intentText.slice(match.index + match[0].length);
+    const target = command.split(/\b(?:for|about|of|with|containing|including|using|that|which|to)\b|[.;:\n]/i)[0];
+    const artifactMatches = [...target.matchAll(new RegExp(ARTIFACT_NOUN.source, 'gi'))];
+    const pageMatches = [...target.matchAll(new RegExp(PAGE_NOUN.source, 'gi'))];
+    const hasArtifact = artifactMatches.length > 0;
+    const pageDestination = /\b(?:to|on|in)\s+(?:(?:the|my|this|a)\s+)?(?:web\s?page|webpage|website|page)\b/i
+      .test(command.split(/\b(?:for|about|of|with|containing|including|using|that|which)\b|[.;:\n]/i)[0]);
+    const hasPage = pageDestination || EXPLICIT_WEB_TARGET.test(target) || (pageMatches.length > 0
+      && (!hasArtifact || pageMatches.at(-1).index > artifactMatches.at(-1).index));
+    artifact ||= hasArtifact;
+    page ||= hasPage;
+  }
+  return { artifact, page };
+}
+
 // True when this message, or the page Lumen wrote just before it, is about building a page.
 export function isPageRequest(prompt, history = []) {
   const text = textOf(prompt);
+  const intent = artifactIntent(text);
+  // A new card request takes precedence over the previous website conversation.
+  // Explicit page targets still win, including a page that contains a checklist.
+  if (intent.artifact && !intent.page) return false;
   if (BUILD_VERB.test(text) && PAGE_NOUN.test(text)) return true;
   const recent = Array.isArray(history) ? history.slice(-3) : [];
   // A follow-up such as "make it glow more" belongs to the page Lumen just wrote.

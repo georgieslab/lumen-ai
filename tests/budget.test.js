@@ -51,6 +51,8 @@ test('buildBudgetWidget computes totals and category percentages correctly', () 
   assert.equal(widget.title, 'Tokyo 7-Day Travel Budget');
   assert.equal(widget.totalBudget, 2000);
   assert.equal(widget.allocatedTotal, 2000);
+  assert.equal(widget.remainingBudget, 0);
+  assert.equal(widget.hasExplicitBudget, true);
   assert.equal(widget.currency, '$');
   assert.equal(widget.categories.length, 4);
   assert.equal(widget.categories[0].percentage, 40); // 800 / 2000 = 40%
@@ -64,6 +66,16 @@ test('buildBudgetWidget supplies fallback categories when empty', () => {
   assert.equal(fallback.widgetType, 'budget');
   assert.ok(fallback.categories.length >= 3);
   assert.ok(fallback.totalBudget > 0);
+  assert.equal(fallback.hasExplicitBudget, false);
+});
+
+test('budgets round allocations to currency cents and preserve an explicit zero budget', () => {
+  const widget = buildBudgetWidget({ totalBudget: 0, categories: [{ name: 'A', allocated: 0.1 }, { name: 'B', allocated: 0.2 }, { name: 'C', allocated: 1.005 }] });
+  assert.equal(widget.totalBudget, 0);
+  assert.equal(widget.allocatedTotal, 1.31);
+  assert.equal(widget.categories[2].allocated, 1.01);
+  assert.ok(widget.categories.every((category) => Number.isFinite(category.percentage)));
+  for (const invalid of [NaN, Infinity, -Infinity, Number.MAX_VALUE]) assert.equal(parseAmount(invalid), 0);
 });
 
 test('extractBudgetFromMarkdown parses bullet lists with amounts into budget widget', () => {

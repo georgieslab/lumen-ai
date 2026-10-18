@@ -37,3 +37,20 @@ test('the abort signal can be handed to fetch-style APIs', () => {
   res.emit('close');
   assert.equal(fired, 1);
 });
+
+test('a request deadline cancels in-flight work', async () => {
+  const res = fakeResponse();
+  const run = watchClient(res, { timeoutMs: 5 });
+  await new Promise(resolve => setTimeout(resolve, 15));
+  assert.equal(run.signal.aborted, true);
+  assert.match(run.signal.reason.message, /deadline/);
+});
+
+test('finishing a response clears its deadline', async () => {
+  const res = fakeResponse();
+  const run = watchClient(res, { timeoutMs: 5 });
+  res.writableFinished = true;
+  res.emit('finish');
+  await new Promise(resolve => setTimeout(resolve, 15));
+  assert.equal(run.signal.aborted, false);
+});

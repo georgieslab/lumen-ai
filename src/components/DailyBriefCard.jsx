@@ -38,7 +38,7 @@ export default function DailyBriefCard({ widget }) {
       stories.forEach((s, idx) => {
         lines.push(`${idx + 1}. ${s.headline}`);
         if (s.publisher || s.publishedAt) {
-          lines.push(`   Source: ${s.publisher || 'Verified'} ${s.publishedAt ? `· ${s.publishedAt}` : ''}`);
+          lines.push(`   Source: ${s.publisher || 'Not supplied'} ${s.publishedAt ? `· ${s.publishedAt}` : ''}`);
         }
         lines.push(`   Summary: ${s.summary}`);
         if (s.whyItMatters) {
@@ -51,7 +51,7 @@ export default function DailyBriefCard({ widget }) {
       });
 
       if (weather && weather.city) {
-        lines.push(`Weather (${weather.city}): ${weather.temp || '--'} · ${weather.condition || 'Clear'}`);
+        lines.push(`Weather (${weather.city}): ${weather.temp || '--'} · ${weather.condition || 'Unavailable'}`);
       }
 
       await navigator.clipboard.writeText(lines.join('\n'));
@@ -236,7 +236,7 @@ export default function DailyBriefCard({ widget }) {
           </div>
           <div className="weather-footer-values">
             <span className="weather-footer-temp">{weather.temp || '--'}</span>
-            <span className="weather-footer-condition">{weather.condition || 'Clear'}</span>
+            <span className="weather-footer-condition">{weather.condition || 'Unavailable'}</span>
           </div>
         </div>
       )}

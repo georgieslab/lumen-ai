@@ -53,24 +53,21 @@ export function inferCategory(text = '') {
 }
 
 export function sanitizeBriefStory(raw, index = 0) {
-  if (!raw) return null;
-  const obj = typeof raw === 'string' ? { headline: raw } : raw;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const obj = raw;
 
-  const headline = clip(obj.headline || obj.title, DAILY_BRIEF_LIMITS.maxHeadlineChars) || `News Story ${index + 1}`;
-  const publisher = clip(obj.publisher || obj.source || obj.outlet, DAILY_BRIEF_LIMITS.maxPublisherChars) || 'Verified Source';
-  const publishedAt = clip(obj.publishedAt || obj.date || obj.time, DAILY_BRIEF_LIMITS.maxPublishedAtChars) || 'Latest';
+  const headline = clip(obj.headline || obj.title, DAILY_BRIEF_LIMITS.maxHeadlineChars);
+  const summary = clip(obj.summary || obj.description || obj.content, DAILY_BRIEF_LIMITS.maxSummaryChars);
+  const url = validBriefSourceUrl(obj.url || obj.link);
+  if (!headline || !summary || !url) return null;
+  const publisher = clip(obj.publisher || obj.source || obj.outlet, DAILY_BRIEF_LIMITS.maxPublisherChars) || new URL(url).hostname;
+  const publishedAt = clip(obj.publishedAt || obj.date || obj.time, DAILY_BRIEF_LIMITS.maxPublishedAtChars) || undefined;
   
   const rawCat = obj.category || inferCategory(`${headline} ${obj.summary || ''}`);
   const catKey = BRIEF_CATEGORIES[rawCat] ? rawCat : inferCategory(rawCat);
   const categoryMeta = BRIEF_CATEGORIES[catKey] || BRIEF_CATEGORIES['frontier-ai'];
 
-  const summary = clip(obj.summary || obj.description || obj.content, DAILY_BRIEF_LIMITS.maxSummaryChars) || 'Story details and verified factual reporting.';
   const whyItMatters = clip(obj.whyItMatters || obj.impact || obj.analysis, DAILY_BRIEF_LIMITS.maxWhyItMattersChars) || undefined;
-
-  let url = String(obj.url || obj.link || '').trim();
-  if (url && !/^https?:\/\//i.test(url)) {
-    url = `https://${url}`;
-  }
 
   return {
     id: `story-${index + 1}`,
@@ -83,8 +80,16 @@ export function sanitizeBriefStory(raw, index = 0) {
     categoryColor: categoryMeta.color,
     summary,
     whyItMatters,
-    url: url || undefined
+    url
   };
+}
+
+export function validBriefSourceUrl(value) {
+  if (typeof value !== 'string' || !/^https?:\/\//i.test(value.trim())) return null;
+  try {
+    const url = new URL(value.trim());
+    return url.hostname && !url.username && !url.password ? url.href : null;
+  } catch { return null; }
 }
 
 export function buildDailyBriefWidget(input = {}) {
@@ -102,43 +107,10 @@ export function buildDailyBriefWidget(input = {}) {
     if (stories.length >= DAILY_BRIEF_LIMITS.maxStories) break;
   }
 
-  // Fallback stories if empty
-  if (stories.length === 0) {
-    stories = [
-      sanitizeBriefStory({
-        headline: 'Frontier AI Labs Accelerate Test-Time Compute & Automated Reasoning',
-        publisher: 'AI Research Radar',
-        publishedAt: 'Today',
-        category: 'frontier-ai',
-        summary: 'Major AI laboratories globally report substantial gains in benchmark performance through adaptive reasoning and inference-time search algorithms.',
-        whyItMatters: 'Signals rapid evolution from static pattern prediction to autonomous problem-solving across STEM and coding.',
-        url: 'https://arxiv.org'
-      }, 0),
-      sanitizeBriefStory({
-        headline: 'Open-Weights Ecosystem Closes Capability Gap with Proprietary Models',
-        publisher: 'Hugging Face & Community',
-        publishedAt: 'Today',
-        category: 'open-source',
-        summary: 'The global open-source community released new high-density foundation weights optimized for consumer hardware and local agent runtimes.',
-        whyItMatters: 'Enables private, cost-effective on-premises deployment without reliance on closed API providers.',
-        url: 'https://huggingface.co'
-      }),
-      sanitizeBriefStory({
-        headline: 'Semiconductor Foundries Expand Next-Gen AI Accelerator Deployments',
-        publisher: 'Tech Industry Analysis',
-        publishedAt: 'Today',
-        category: 'chips',
-        summary: 'Cloud providers and data centers worldwide are scaling ultra-bandwidth GPU clusters to meet soaring demand for agentic workloads.',
-        whyItMatters: 'Underpins the infrastructure backbone powering autonomous agent deployments globally.',
-        url: 'https://reuters.com'
-      })
-    ];
-  }
-
   const weather = input.weather && typeof input.weather === 'object' ? {
-    city: clip(input.weather.city, 50) || 'Global',
-    condition: clip(input.weather.condition, 40) || 'Clear',
-    temp: clip(input.weather.temp, 20) || '--'
+    city: clip(input.weather.city, 50),
+    condition: clip(input.weather.condition, 40),
+    temp: clip(input.weather.temp, 20)
   } : undefined;
 
   return {
@@ -232,7 +204,8 @@ export function extractDailyBriefFromMarkdown(text) {
     foundStories.push(currentStory);
   }
 
-  if (foundStories.length < DAILY_BRIEF_LIMITS.minStoriesForExtraction) {
+  const sourcedStories = foundStories.filter((story, index) => sanitizeBriefStory(story, index));
+  if (sourcedStories.length < DAILY_BRIEF_LIMITS.minStoriesForExtraction) {
     return { cleanText: text, briefWidget: null };
   }
 
@@ -250,7 +223,7 @@ export function extractDailyBriefFromMarkdown(text) {
   const briefWidget = buildDailyBriefWidget({
     title,
     scope: 'Worldwide',
-    stories: foundStories
+    stories: sourcedStories
   });
 
   const beforeLines = lines.slice(0, briefStart);

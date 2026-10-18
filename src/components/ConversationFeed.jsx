@@ -5,11 +5,14 @@ import HtmlPageCard from './HtmlPageCard';
 import { MissionCard, MissionActivity, writingLabel } from './MissionCard';
 import PlanCard from './PlanCard';
 import BriefCard from './BriefCard';
+import MissionRunControls from './MissionRunControls';
 import ChecklistCard from './ChecklistCard';
 import ComparisonCard from './ComparisonCard';
 import ScheduleCard from './ScheduleCard';
 import BudgetCard from './BudgetCard';
 import DailyBriefCard from './DailyBriefCard';
+import EvidenceReportCard from './EvidenceReportCard';
+import { isTaskWidget, summarizeConversationWork, widgetCaption } from '../services/conversationWorkspace.js';
 import { hideStreamingHtml } from '../services/htmlPage';
 import { splitHtmlBlocks } from '../services/htmlPage';
 
@@ -879,10 +882,16 @@ export default function ConversationFeed({
   onExportPdf,
   onSendMessage,
   onStop,
+  onMissionAction,
   onPlanStart,
   onPlanCancel,
   onBriefBuild,
   onBriefSkip,
+  onBriefCancel,
+  onArtifactUpdate,
+  onPinArtifact,
+  currentProjectId,
+  projectName,
   onTriggerAgentAction,
   onClose,
   activeLanguage = 'en-US',
@@ -898,6 +907,10 @@ export default function ConversationFeed({
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeSearchIndex, setActiveSearchIndex] = useState(0);
+  const [feedView, setFeedView] = useState('chat');
+  const followLatestRef = useRef(true);
+  const latestMessageIdRef = useRef(null);
+  const work = useMemo(() => summarizeConversationWork(messages), [messages]);
 
   const searchMatches = useMemo(() => {
     const query = searchQuery.trim().toLocaleLowerCase();
@@ -944,6 +957,12 @@ export default function ConversationFeed({
 
   useEffect(() => {
     // A plan waiting for approval is read from its top; everything else follows the newest message.
+    const latest = messages[messages.length - 1];
+    if (latest?.id !== latestMessageIdRef.current) {
+      latestMessageIdRef.current = latest?.id;
+      if (latest?.role === 'user' || latest?.isStreaming) followLatestRef.current = true;
+    }
+    if (!followLatestRef.current || feedView !== 'chat') return;
     if (messages[messages.length - 1]?.planCard || messages[messages.length - 1]?.briefCard) {
       const cards = stageRef.current?.querySelectorAll('.plan-card');
       if (cards?.length) {
@@ -951,14 +970,16 @@ export default function ConversationFeed({
         return;
       }
     }
-    feedEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, liveTranscript, isThinking]);
+    const stage = stageRef.current;
+    if (stage) stage.scrollTo({ top: stage.scrollHeight, behavior: 'auto' });
+  }, [messages, liveTranscript, isThinking, feedView]);
+  useEffect(() => { if (feedView !== 'chat') stageRef.current?.scrollTo({ top: 0, behavior: 'instant' }); }, [feedView]);
 
   const lastMessage = messages[messages.length - 1];
   const showsOwnProgress = Boolean(lastMessage?.isStreaming && lastMessage.mission?.steps?.length);
 
-  const DEFAULT_CHAT_WIDTH = 540;
-  const DEFAULT_CHAT_HEIGHT = 420;
+  const DEFAULT_CHAT_WIDTH = 680;
+  const DEFAULT_CHAT_HEIGHT = 520;
   const MIN_CHAT_WIDTH = 380;
   const MIN_CHAT_HEIGHT = 240;
 
@@ -1235,7 +1256,7 @@ export default function ConversationFeed({
 
   return (
     <div 
-      className={`conversation-feed-card ${isResizing ? 'is-resizing' : ''} ${isWindowDragging ? 'is-window-dragging' : ''}`}
+      className={`conversation-feed-card conversation-workspace workspace-view-${feedView} ${isResizing ? 'is-resizing' : ''} ${isWindowDragging ? 'is-window-dragging' : ''}`}
       style={{
         width: `${panelSize.width}px`,
         height: `${panelSize.height}px`,
@@ -1284,7 +1305,7 @@ export default function ConversationFeed({
         onDoubleClick={handleResetPosition}
         title="Drag header to move chat window (double-click to center)"
       >
-        <span className="feed-title">{t.logTitle}</span>
+        <div className="feed-heading"><span className="feed-heading-mark" aria-hidden="true">✦</span><div><span className="feed-title">Conversation</span><span className="feed-context-name">{projectName || 'Personal workspace'}</span></div></div>
         <div className="feed-header-actions">
           {onTriggerAgentAction && (
             <div className="feed-agent-actions-dropdown-wrap">
@@ -1425,6 +1446,7 @@ export default function ConversationFeed({
             onClick={() => {
               if (isSearchOpen) closeSearch();
               else {
+                setFeedView('chat');
                 setIsSearchOpen(true);
                 setTimeout(() => searchInputRef.current?.focus(), 0);
               }
@@ -1435,7 +1457,8 @@ export default function ConversationFeed({
           >
             {isSearchOpen ? '×' : '⌕'}
           </button>
-          {messages.length > 1 && onExportPdf && (
+          {messages.length > 1 && <details className="feed-overflow-menu"><summary aria-label="More conversation options" title="Export and conversation options">•••</summary><div>
+          {onExportPdf && (
             <button 
               type="button" 
               className="feed-export-pdf-btn" 
@@ -1455,6 +1478,7 @@ export default function ConversationFeed({
               {t.clearLog}
             </button>
           )}
+          </div></details>}
           {onClose && (
             <button
               type="button"
@@ -1468,6 +1492,11 @@ export default function ConversationFeed({
           )}
         </div>
       </div>
+
+      <div className="feed-workspace-toolbar"><nav aria-label="Conversation views">
+        {[['chat', 'Chat', null], ['tasks', 'Tasks', work.taskCount], ['outputs', 'Outputs', work.outputCount]].map(([id, label, count]) => <button type="button" key={id} aria-pressed={feedView === id} onClick={() => { setFeedView(id); if (stageRef.current) stageRef.current.scrollTop = 0; }} className={feedView === id ? 'is-selected' : ''}>{label}{count !== null && <span>{count}</span>}</button>)}
+      </nav><button type="button" className="feed-latest-btn" onClick={() => { setFeedView('chat'); followLatestRef.current = true; requestAnimationFrame(() => feedEndRef.current?.scrollIntoView({ behavior: 'smooth' })); }}>↓ Latest</button></div>
+      {(work.activeCount > 0 || work.itemCount > 0) && <div className="feed-work-summary"><span className={work.activeCount ? 'is-working' : ''}><i aria-hidden="true" />{work.activeCount ? `${work.activeCount} mission${work.activeCount === 1 ? '' : 's'} working` : 'Work saved'}</span>{work.itemCount > 0 && <span>{work.completedCount}/{work.itemCount} items done <span className="feed-work-meter"><i style={{ width: `${work.completedCount / work.itemCount * 100}%` }} /></span></span>}</div>}
 
       {isSearchOpen && (
         <div className="feed-search-panel" role="search">
@@ -1502,8 +1531,11 @@ export default function ConversationFeed({
         </div>
       )}
 
-      <div className="feed-scroll-stage" ref={stageRef}>
+      <div className="feed-scroll-stage" ref={stageRef} onScroll={event => { const stage = event.currentTarget; followLatestRef.current = stage.scrollHeight - stage.scrollTop - stage.clientHeight < 100; }}>
+        {feedView !== 'chat' && !(feedView === 'tasks' ? work.taskCount : work.outputCount) && <div className="feed-empty-view"><span aria-hidden="true">{feedView === 'tasks' ? '☑' : '◇'}</span><strong>{feedView === 'tasks' ? 'Your tasks, in one place' : 'Room for your results'}</strong><p>{feedView === 'tasks' ? 'Checklists and schedules from this conversation appear here. Their checkboxes stay editable.' : 'Cards, comparisons, evidence reviews, and files appear here as Lumen creates them.'}</p></div>}
         {messages.map((msg, messageIndex) => {
+          const visibleWidgets = (msg.widgets || []).filter(widget => feedView !== 'tasks' || isTaskWidget(widget));
+          if (feedView !== 'chat' && !visibleWidgets.length) return null;
           const previousUserMessage = messages
             .slice(0, messageIndex)
             .reverse()
@@ -1557,11 +1589,13 @@ export default function ConversationFeed({
               </div>
             ) : null}
 
-            {msg.role === 'assistant' && !msg.isStreaming && /```html/i.test(msg.text || '')
+            <div className="message-prose">
+            {((msg.role === 'user' && (msg.text || '').length > 260) || (msg.role === 'assistant' && !msg.isStreaming && msg.widgets?.length && msg.text && !/```html/i.test(msg.text))) ? <details className="message-text-disclosure" open={searchQuery.trim() && searchMatches.includes(messageIndex) ? true : undefined}><summary><span>{msg.role === 'user' ? 'Request' : 'Response'}</span><span>{String(msg.displayTitle || msg.text || '').replace(/[#*`<>]/g, '').replace(/\s+/g, ' ').slice(0, 150)}{String(msg.text || '').length > 150 ? '…' : ''}</span><small>Read full</small></summary><FormattedBubbleText text={msg.text} /></details> : msg.role === 'assistant' && !msg.isStreaming && /```html/i.test(msg.text || '')
               ? splitHtmlBlocks(msg.text).map((seg, i) => seg.type === 'html'
                 ? <HtmlPageCard key={i} html={seg.content} />
                 : <FormattedBubbleText key={i} text={seg.content} />)
               : <FormattedBubbleText text={streamView ? streamView.text : msg.text} />}
+            </div>
             {streamView?.writing && (
               <div className="page-writing" role="status" aria-live="polite">
                 <span className="research-progress-beacon" />
@@ -1611,21 +1645,29 @@ export default function ConversationFeed({
                 onCancel={() => onBriefCancel?.(msg.id)}
               />
             )}
-            {msg.mission && <MissionCard mission={msg.mission} language={activeLanguage} />}
+            {(msg.serverMissionId || msg.missionRequest) && <MissionRunControls message={msg} onAction={onMissionAction} />}
+            {msg.mission && !msg.serverMissionId && <MissionCard mission={msg.mission} language={activeLanguage} />}
             {msg.isStreaming && !msg.mission?.steps?.length && (
               <span className="streaming-cursor-pulse" title={t.streamingAria} aria-hidden="true">▍</span>
             )}
-            {msg.isStreaming && onStop && (
+            {msg.isStreaming && !msg.serverMissionId && !msg.missionRequest && onStop && (
               <button type="button" className="mission-stop-btn" onClick={onStop} title="Esc">
                 <span aria-hidden="true">■</span> {stopLabel(activeLanguage)}
               </button>
             )}
-            {!msg.isStreaming && msg.activity && <MissionActivity activity={msg.activity} language={activeLanguage} />}
+            {feedView === 'chat' && !msg.isStreaming && msg.activity && !msg.serverMissionId && <MissionActivity activity={msg.activity} language={activeLanguage} />}
 
             {/* Real-Time Interactive Live Data & Document Widgets */}
+            {onPinArtifact && currentProjectId && msg.serverMission?.projectId === currentProjectId && !msg.isStreaming && msg.serverMissionId && <details className="project-output-pin-menu"><summary>＋ Save to project</summary><div className="project-output-pin-row">
+              <button type="button" onClick={() => onPinArtifact(msg.id, 'mission')}>Pin mission to project</button>
+              {(msg.widgets || []).map((widget, index) => <button type="button" key={index} onClick={() => onPinArtifact(msg.id, index)}>Pin {widget.title || String(widget.widgetType || 'output').replaceAll('_', ' ')}</button>)}
+              {msg.projectPinNotice && <span role="status">{msg.projectPinNotice}</span>}
+            </div></details>}
             {Array.isArray(msg.widgets) && msg.widgets.length > 0 && (
               <div className="bubble-widgets-wrap">
                 {msg.widgets.map((widget, wIdx) => {
+                  if (feedView === 'tasks' && !isTaskWidget(widget)) return null;
+                  const card = (() => {
                   if (widget.widgetType === 'weather') {
                     return <LiveWeatherCard key={wIdx} data={widget} activeLanguage={activeLanguage} />;
                   }
@@ -1639,13 +1681,13 @@ export default function ConversationFeed({
                     return <LiveJobsRadarCard key={wIdx} data={widget} activeLanguage={activeLanguage} />;
                   }
                   if (widget.widgetType === 'checklist') {
-                    return <ChecklistCard key={wIdx} widget={widget} />;
+                    return <ChecklistCard key={wIdx} widget={widget} onUpdate={(next) => onArtifactUpdate?.(msg.id, wIdx, next)} />;
                   }
                   if (widget.widgetType === 'comparison') {
                     return <ComparisonCard key={wIdx} widget={widget} />;
                   }
                   if (widget.widgetType === 'schedule') {
-                    return <ScheduleCard key={wIdx} widget={widget} />;
+                    return <ScheduleCard key={wIdx} widget={widget} onUpdate={(next) => onArtifactUpdate?.(msg.id, wIdx, next)} />;
                   }
                   if (widget.widgetType === 'budget') {
                     return <BudgetCard key={wIdx} widget={widget} />;
@@ -1653,14 +1695,20 @@ export default function ConversationFeed({
                   if (widget.widgetType === 'daily_brief') {
                     return <DailyBriefCard key={wIdx} widget={widget} />;
                   }
+                  if (widget.widgetType === 'evidence_report') {
+                    return <EvidenceReportCard key={wIdx} widget={widget} />;
+                  }
                   return null;
+                  })();
+                  if (!card) return null;
+                  const caption = widgetCaption(widget);
+                  return <details key={wIdx} className={`workspace-artifact workspace-artifact--${widget.widgetType}`} open={feedView !== 'outputs'}><summary title={widget.title}><span className="workspace-artifact-kind">{caption.kind}</span><span className="workspace-artifact-name">{widget.title || widget.city || widget.symbol || 'Result'}</span>{caption.detail && <span className="workspace-artifact-detail">{caption.detail}</span>}<span className="workspace-artifact-chevron" aria-hidden="true">⌄</span></summary><div className="workspace-artifact-content">{card}</div></details>;
                 })}
               </div>
             )}
 
             {msg.webSources && msg.webSources.length > 0 && (
-              <div className="bubble-web-sources">
-                <span className="sources-label">{t.webSources}</span>
+              <details className="bubble-web-sources"><summary className="sources-label">Sources <span>{msg.webSources.length}</span></summary>
                 <div className="sources-list">
                   {msg.webSources.map((source, sIdx) => {
                     let hostname = '';
@@ -1684,10 +1732,10 @@ export default function ConversationFeed({
                     );
                   })}
                 </div>
-              </div>
+              </details>
             )}
 
-            {followUpKeys.length > 0 && (
+            {feedView === 'chat' && followUpKeys.length > 0 && (
               <div className="follow-up-actions">
                 <span className="follow-up-title">{t.followUpsTitle}</span>
                 <div className="follow-up-options">

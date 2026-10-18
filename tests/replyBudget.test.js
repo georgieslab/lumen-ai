@@ -23,6 +23,66 @@ test('ordinary chat keeps the short budget', () => {
   assert.equal(replyTokenBudget('Research hydrogen and create a PDF report'), DEFAULT_REPLY_TOKENS);
 });
 
+test('interactive planning cards stay in chat instead of opening a website brief', () => {
+  for (const prompt of [
+    'Create an interactive budget card',
+    'Create an interactive checklist',
+    'Create four interactive cards: a $3000 budget, checklist, comparison, and schedule.',
+    'Create four interactive cards for my trip with a schedule, budget, checklist, and hotel comparison.'
+  ]) {
+    assert.equal(isPageRequest(prompt), false, prompt);
+    assert.equal(replyTokenBudget(prompt), DEFAULT_REPLY_TOKENS, prompt);
+  }
+});
+
+test('interactive requests with an explicit page or app target still use the website flow', () => {
+  for (const prompt of [
+    'Create an interactive HTML budget calculator',
+    'Build an interactive webpage for my trip',
+    'Create an interactive website',
+    'Make an interactive dashboard',
+    'Build an interactive game',
+    'Create an interactive demo'
+  ]) assert.equal(isPageRequest(prompt), true, prompt);
+});
+
+test('artifact titles and subjects cannot turn planning tools into website requests', () => {
+  const prompts = [
+    'Use compute to calculate 17 times 23, then create a checklist titled Saved checkpoint demo with Read plan and Check arithmetic. Summarize the result.',
+    'Create a checklist titled Game launch with Book venue and Check equipment.',
+    'Create a checklist named Launch page with Review copy and Publish.',
+    'Create a checklist titled "Build a game demo" with Read plan and Check arithmetic.',
+    'Create a checklist "Game demo" with Review and Publish.',
+    'Create four interactive cards: a budget titled Demo, checklist, comparison, and schedule.',
+    'Create a budget for my game launch.',
+    'Create a schedule for website launch day.',
+    'Create a comparison of landing page options.',
+    'Create a game launch checklist.',
+    'Create a checklist to build a game.'
+  ];
+  for (const prompt of prompts) {
+    assert.equal(isPageRequest(prompt), false, prompt);
+    assert.equal(replyTokenBudget(prompt), DEFAULT_REPLY_TOKENS, prompt);
+  }
+});
+
+test('an explicit page target still wins when it contains planning artifacts', () => {
+  for (const prompt of [
+    'Build a web page containing a checklist.',
+    'Create an HTML budget calculator.',
+    'Create a checklist page with editable items.',
+    'Create a game launch checklist, and then build a website for it.',
+    'Create a checklist titled Launch demo, and then build a web page containing it.'
+  ]) assert.equal(isPageRequest(prompt), true, prompt);
+});
+
+test('a new planning card request leaves a previous website conversation', () => {
+  const history = [{ role: 'assistant', text: '```html\n<h1>My website</h1>\n```' }];
+  assert.equal(isPageRequest('Create a checklist titled Game launch with Review plan and Publish.', history), false);
+  assert.equal(replyTokenBudget('Create a budget for the website launch.', history), DEFAULT_REPLY_TOKENS);
+  assert.equal(isPageRequest('Add a checklist to the web page.', history), true);
+});
+
 test('a follow-up on a page Lumen just wrote keeps the larger budget', () => {
   const history = [
     { role: 'user', text: 'build an aurora page' },
