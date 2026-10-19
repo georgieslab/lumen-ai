@@ -3,6 +3,7 @@ import { randomBytes } from 'node:crypto';
 import { getSession, requireTrustedOrigin } from './authSession.js';
 import { missionError } from './missionStore.js';
 import { normalizeDeskAction } from './deskActions.js';
+import { normalizeResponseStyle } from './responsePreferences.js';
 
 const OWNER_COOKIE = 'lumen_mission_owner';
 const REQUEST_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -62,7 +63,7 @@ export function normalizeMissionRequest(body) {
       ...normalizeDeskAction(body),
       language: boundedText(body.language || 'en-US', 30, 'Language'),
       tone: boundedText(body.tone || 'friendly', 30, 'Tone'),
-      responseStyle: boundedText(body.responseStyle || 'concise', 30, 'Response style'),
+      responseStyle: normalizeResponseStyle(boundedText(body.responseStyle || 'concise', 30, 'Response style')),
       voiceId: boundedText(body.voiceId, 50, 'Voice', true),
       timeZone
     }

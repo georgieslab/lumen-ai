@@ -5,11 +5,35 @@ import {
   DEFAULT_REPLY_TOKENS,
   LONG_MODEL_PAGE_TOKENS,
   PAGE_REPLY_TOKENS,
+  conversationTokenBudget,
   isPageRequest,
   pageModelId,
   replyTokenBudget,
   truncationTail
 } from '../services/replyBudget.js';
+
+test('text synthesis uses the selected reply depth and safely migrates older modes', () => {
+  const budget = mode => conversationTokenBudget('Explain how children learn through play.', [], mode, 'amazon.nova-lite-v1:0');
+  assert.ok(budget('concise') < budget('balanced'));
+  assert.ok(budget('balanced') < budget('deep'));
+  assert.equal(budget('detailed'), budget('deep'));
+  assert.equal(budget('narrative'), budget('balanced'));
+  assert.equal(budget('unknown'), budget('concise'));
+});
+
+test('reply depth preserves room for tool arguments and complete page output', () => {
+  for (const mode of ['concise', 'balanced', 'deep', 'bullets']) {
+    assert.ok(conversationTokenBudget('Create a detailed schedule and checklist.', [], mode, 'amazon.nova-lite-v1:0', true) >= 4096);
+    assert.equal(conversationTokenBudget('Build a game', [], mode, 'amazon.nova-lite-v1:0'), PAGE_REPLY_TOKENS);
+    assert.equal(conversationTokenBudget('Build a game', [], mode, 'gpt-4o-mini', true), LONG_MODEL_PAGE_TOKENS);
+  }
+});
+
+test('an explicit request for a full explanation has room even with a concise default', () => {
+  for (const prompt of ['Explain photosynthesis in detail.', 'Give a step-by-step explanation.', 'Bitte ausführlich erklären.', 'Explique en détail.', 'Spiega in dettaglio.', 'Explícalo en detalle.', '詳しく説明してください。']) {
+    assert.ok(conversationTokenBudget(prompt, [], 'concise') >= conversationTokenBudget(prompt, [], 'deep'), prompt);
+  }
+});
 
 test('requests to build a page get the larger budget', () => {
   assert.equal(replyTokenBudget('Create a stunning single-file HTML page: a living aurora'), PAGE_REPLY_TOKENS);

@@ -61,6 +61,14 @@ test('mission input is bounded and validates history, recovery IDs, attachments 
   }
 });
 
+test('saved missions preserve the normalized reply mode for execution and resume', () => {
+  for (const [supplied, expected] of [['concise', 'concise'], ['balanced', 'balanced'], ['deep', 'deep'], ['bullets', 'bullets'], ['detailed', 'deep'], ['narrative', 'balanced'], ['unknown', 'concise']]) {
+    const normalized = normalizeMissionRequest({ ...payload(), responseStyle: supplied });
+    assert.equal(JSON.parse(JSON.stringify(normalized)).input.responseStyle, expected);
+  }
+  assert.throws(() => normalizeMissionRequest({ ...payload(), responseStyle: 'x'.repeat(31) }), { status: 400 });
+});
+
 test('new project missions require an active owned project and researched actions require web access', async t => {
   const projectId = randomUUID(); let projectOwner; let archived = false;
   const { request, session, manager } = await fixture(t, undefined, { get: async (id, owner) => id === projectId && owner === projectOwner ? { id, archived } : null });

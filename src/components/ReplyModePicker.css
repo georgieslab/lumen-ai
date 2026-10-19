@@ -1,0 +1,142 @@
+.lumen-composer, .reply-mode-picker, .reply-mode-settings {
+  --reply-accent: var(--aura-accent, #818cf8);
+  --reply-depth: var(--aura-color-1, #0f0a2e);
+  --reply-surface: var(--aura-color-2, #1e1b4b);
+  --reply-light: var(--aura-color-3, #312e81);
+}
+.lumen-footer .lumen-composer {
+  position: relative; display: flex; flex-direction: column; align-items: stretch;
+  width: 100%; max-width: 540px; min-width: 0; pointer-events: none;
+  transition: transform .22s cubic-bezier(.16, 1, .3, 1);
+}
+.lumen-footer.is-chat-window-dragging .lumen-composer { transition: none; }
+.lumen-footer .bottom-input-form {
+  --composer-control-size: 48px;
+  position: relative; isolation: isolate; align-items: flex-end; gap: 8px; padding: 8px;
+  border-radius: 38px; overflow: visible;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--reply-depth) 93%, transparent), color-mix(in srgb, var(--reply-surface) 82%, transparent));
+  border-color: color-mix(in srgb, var(--reply-accent) 35%, transparent);
+  box-shadow: 0 16px 45px #0006, inset 0 1px 1px #ffffff26;
+}
+.lumen-footer .bottom-input-form:focus-within,
+.lumen-footer .bottom-input-form:has([aria-expanded="true"]) {
+  border-color: color-mix(in srgb, var(--reply-accent) 70%, transparent);
+  box-shadow: 0 16px 45px #0006, inset 0 1px 1px #ffffff35, inset 0 0 20px color-mix(in srgb, var(--reply-accent) 9%, transparent);
+}
+.lumen-footer .bottom-input-form::before {
+  content: ''; position: absolute; inset: 1px; z-index: 0; pointer-events: none; border-radius: inherit; opacity: 0;
+  background-image: radial-gradient(ellipse 170px 80px at var(--composer-glow-x, 50%) var(--composer-glow-y, 65%), color-mix(in srgb, var(--reply-accent) 25%, transparent), transparent 75%), radial-gradient(ellipse 150px 65px at 50% 110%, color-mix(in srgb, var(--reply-light) 30%, transparent), transparent 75%);
+  background-size: 100% 100%, 160% 100%; background-position: 0 0, 0% 50%; background-repeat: no-repeat;
+  box-shadow: inset 0 -1px 13px color-mix(in srgb, var(--reply-accent) 8%, transparent);
+  animation: composer-inner-drift 4.5s ease-in-out infinite alternate; animation-play-state: paused;
+  transition: opacity .25s ease;
+}
+.lumen-footer .bottom-input-form:focus-within::before,
+.lumen-footer .bottom-input-form:has([aria-expanded="true"])::before { opacity: 1; animation-play-state: running; }
+.lumen-footer .bottom-input-form > button,
+.lumen-footer .bottom-input-form > textarea { position: relative; z-index: 1; }
+.lumen-footer .bottom-input-form > button {
+  width: var(--composer-control-size); height: var(--composer-control-size); min-height: var(--composer-control-size);
+  margin: 0; padding: 0; border-radius: 999px; animation: none; transform: none;
+}
+.lumen-footer .bottom-input-form > button:hover:not(:disabled) { transform: none; }
+.lumen-footer .bottom-spatial-attach-btn {
+  color: #edf3fa; border-color: color-mix(in srgb, var(--reply-accent) 28%, transparent);
+  background: color-mix(in srgb, var(--reply-accent) 8%, transparent); box-shadow: inset 0 1px 0 #ffffff1a;
+}
+.lumen-footer .bottom-spatial-attach-btn:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--reply-accent) 50%, transparent);
+  background: color-mix(in srgb, var(--reply-accent) 16%, transparent); box-shadow: inset 0 1px 0 #ffffff26;
+}
+.lumen-footer .bottom-spatial-attach-btn[aria-expanded="true"] {
+  border-color: color-mix(in srgb, var(--reply-accent) 60%, transparent);
+  background: color-mix(in srgb, var(--reply-accent) 18%, transparent); box-shadow: inset 0 1px 0 #ffffff26;
+}
+.lumen-footer .bottom-input-form > .bottom-submit-btn,
+.lumen-footer .bottom-input-form > .bottom-submit-btn:hover:not(:disabled) {
+  color: #07110f; border: 1px solid color-mix(in srgb, var(--reply-accent) 75%, white);
+  background: linear-gradient(140deg, color-mix(in srgb, var(--reply-accent) 78%, white), var(--reply-accent));
+  box-shadow: inset 0 1px 0 #ffffff38;
+}
+.lumen-footer .bottom-input-form .attachment-trigger-plus { text-shadow: none; }
+.lumen-footer .bottom-input-form > textarea {
+  min-height: var(--composer-control-size); padding: 12px 5px; font-size: 16px; line-height: 24px;
+}
+.lumen-footer .bottom-input-form .reply-mode-picker { z-index: 2; }
+.lumen-footer .bottom-input-form .reply-mode-trigger {
+  height: var(--composer-control-size); min-height: var(--composer-control-size); padding: 0 12px;
+  border-radius: 999px; margin: 0;
+}
+.lumen-footer .bottom-input-form > .bottom-submit-btn svg { width: 20px; height: 20px; }
+@keyframes composer-inner-drift { to { background-position: 0 0, 100% 50%; } }
+.reply-mode-picker, .reply-mode-settings { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #e1ebf8; text-align: left; }
+.reply-mode-picker { position: relative; flex-shrink: 0; pointer-events: auto; }
+.reply-mode-picker button, .reply-mode-settings button { font-family: inherit; cursor: pointer; }
+.reply-mode-picker .reply-mode-trigger {
+  display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-height: 46px;
+  padding: 8px 14px; border: 1px solid color-mix(in srgb, var(--reply-accent) 25%, transparent); border-radius: 999px;
+  background: linear-gradient(145deg, color-mix(in srgb, var(--reply-accent) 8%, transparent), transparent), color-mix(in srgb, var(--reply-depth) 90%, transparent);
+  backdrop-filter: blur(32px) saturate(140%); -webkit-backdrop-filter: blur(32px) saturate(140%);
+  box-shadow: inset 0 1px 0 #ffffff18, 0 4px 16px #0002;
+  color: #e3ebf5; font-size: 16px; line-height: 1.35; transition: background .16s, border-color .16s;
+}
+.reply-mode-trigger > svg { width: 19px; height: 19px; flex-shrink: 0; color: color-mix(in srgb, var(--reply-accent) 55%, white); }
+.reply-mode-trigger > .reply-mode-chevron { width: 15px; height: 15px; color: #c1cbd8; }
+.reply-mode-picker .reply-mode-trigger:hover, .reply-mode-picker .reply-mode-trigger.is-open { background: color-mix(in srgb, var(--reply-surface) 94%, transparent); border-color: color-mix(in srgb, var(--reply-accent) 45%, transparent); color: #f2f6fc; }
+.bottom-input-form .reply-mode-picker { align-self: flex-end; }
+.bottom-input-form .bottom-text-field { min-width: 0; }
+.bottom-input-form .reply-mode-trigger {
+  gap: 6px; min-height: 46px; padding: 7px 9px; border-color: transparent; border-radius: 14px;
+  background: transparent; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none;
+  font-size: 15px;
+}
+.bottom-input-form .reply-mode-trigger > svg:first-child { display: none; }
+.bottom-input-form .reply-mode-trigger > span { max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bottom-input-form .reply-mode-trigger:hover, .bottom-input-form .reply-mode-trigger.is-open { background: color-mix(in srgb, var(--reply-accent) 11%, transparent); border-color: color-mix(in srgb, var(--reply-accent) 18%, transparent); }
+.reply-mode-picker button:focus-visible, .reply-mode-settings button:focus-visible { outline: 2px solid color-mix(in srgb, var(--reply-accent) 65%, white); outline-offset: 3px; }
+.reply-mode-popover {
+  position: absolute; bottom: calc(100% + 10px); right: 0; z-index: 3; width: min(360px, calc(100vw - 48px));
+  /* Match the app's 75% zoom compensation and leave room for the whole composer. */
+  max-height: max(80px, calc(133.333dvh - var(--lumen-composer-footer-height, 142px) - 28px));
+  overflow-y: auto; overscroll-behavior: contain; padding: 16px 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--reply-accent) 38%, transparent); border-radius: 26px;
+  background: linear-gradient(140deg, color-mix(in srgb, var(--reply-surface) 65%, transparent), transparent), color-mix(in srgb, var(--reply-depth) 95%, transparent);
+  backdrop-filter: blur(48px) saturate(155%); -webkit-backdrop-filter: blur(48px) saturate(155%);
+  box-shadow: 0 20px 65px #0008, inset 0 1px 0 #ffffff35; animation: reply-mode-in .16s ease-out;
+}
+.reply-mode-menu-title { display: block; padding: 0 11px 12px; font-size: 15px; font-weight: 600; color: #bccce0; }
+.reply-mode-options { display: grid; gap: 5px; }
+.reply-mode-picker .reply-mode-option, .reply-mode-settings .reply-mode-option {
+  display: flex; align-items: center; gap: 14px; width: 100%; min-width: 0; min-height: 78px;
+  text-align: left; padding: 13px 12px; border-radius: 16px; border: 1px solid transparent;
+  background: transparent; color: #dbe6f4; transition: background .16s, border-color .16s;
+}
+.reply-mode-picker .reply-mode-option:hover, .reply-mode-settings .reply-mode-option:hover { background: color-mix(in srgb, var(--reply-accent) 6%, transparent); border-color: color-mix(in srgb, var(--reply-accent) 12%, transparent); }
+.reply-mode-picker .reply-mode-option.is-selected, .reply-mode-settings .reply-mode-option.is-selected { background: linear-gradient(135deg, color-mix(in srgb, var(--reply-accent) 13%, transparent), color-mix(in srgb, var(--reply-accent) 5%, transparent)); border-color: color-mix(in srgb, var(--reply-accent) 30%, transparent); }
+.reply-mode-option-copy { display: grid; gap: 5px; flex: 1; min-width: 0; }
+.reply-mode-option-copy strong { color: inherit; font-size: 18px; line-height: 1.3; font-weight: 550; }
+.reply-mode-option-copy small { color: #adbed3; font-size: 15px; line-height: 1.4; font-weight: 400; }
+.reply-mode-option-check { display: grid; place-items: center; width: 23px; height: 23px; flex-shrink: 0; color: color-mix(in srgb, var(--reply-accent) 60%, white); }
+.reply-mode-option-check svg { width: 20px; height: 20px; }
+.reply-mode-popover .reply-mode-hint, .reply-mode-settings .reply-mode-hint { margin: 12px 11px 0; color: #92a7bf; font-size: 14px; line-height: 1.45; }
+.control-menu .reply-mode-settings { margin: 0 0 18px; padding: 0 0 18px; border-bottom: 1px solid #d7e8ff14; }
+.reply-mode-settings h3 { margin: 0; color: #e1ebf8; font-size: 19px; font-weight: 550; }
+.reply-mode-settings > p:not(.reply-mode-hint) { margin: 6px 0 14px; color: #a4b7ce; font-size: 15px; line-height: 1.45; }
+.reply-mode-settings .reply-mode-options { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.reply-mode-settings .reply-mode-option { border-color: #d7e8ff14; background: #ffffff03; }
+@keyframes reply-mode-in { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+@media (max-width: 768px) {
+  .lumen-footer .lumen-composer { max-width: none; transform: none !important; }
+  .lumen-footer .bottom-input-form { --composer-control-size: 59px; gap: 7px; }
+  .lumen-footer .bottom-input-form > textarea { padding-top: 17.5px; padding-bottom: 17.5px; }
+  .lumen-app-stage .conversation-feed-card.conversation-workspace { margin-bottom: var(--lumen-composer-footer-height, 142px); }
+  /* The app uses 75% scale: 59 CSS px preserves a 44px touch target. */
+  .bottom-input-form .reply-mode-trigger { min-height: 59px; padding: 10px 8px; font-size: 16px; }
+}
+@media (max-width: 600px) {
+  .reply-mode-popover { width: min(380px, calc(100vw - 38px)); }
+  .reply-mode-settings .reply-mode-options { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) { .lumen-footer .lumen-composer, .reply-mode-picker button, .reply-mode-settings button { transition: none; } .reply-mode-popover { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .lumen-footer .bottom-input-form::before { animation: none; transition: none; } }
+@media (prefers-reduced-transparency: reduce) { .reply-mode-popover, .reply-mode-picker .reply-mode-trigger, .lumen-footer .bottom-input-form { background: color-mix(in srgb, var(--reply-depth) 65%, var(--reply-surface)); backdrop-filter: none; -webkit-backdrop-filter: none; } }

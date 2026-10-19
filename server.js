@@ -28,7 +28,8 @@ import { safeFetchText } from './services/urlGuard.js';
 import { checkToolCall, markUntrusted } from './services/toolPolicy.js';
 import { createRateLimiter, rateLimitMiddleware } from './services/rateLimit.js';
 import { buildBriefPrompt, defaultBrief, parseBriefText } from './services/pageBrief.js';
-import { isPageRequest, pageModelId, replyTokenBudget, truncationTail } from './services/replyBudget.js';
+import { isPageRequest, pageModelId, conversationTokenBudget, truncationTail } from './services/replyBudget.js';
+import { applyReplyPreferences, getPersonalizationInstructions, getReplyTurnInstruction, normalizeResponseStyle } from './services/responsePreferences.js';
 import { approvedPlanFromRequest, buildFollowUpPrompt, buildPlanPrompt, defaultPlan, parseFollowUpQuestion, parsePlanText, planFocusBlock, topicFromRequest } from './services/missionPlan.js';
 import { collectResearchSources } from './services/researchRunner.js';
 import { fetchLiveWeather, fetchCryptoPrices } from './services/liveData.js';
@@ -61,30 +62,6 @@ const __dirname = dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const INTERACTION_TONE_INSTRUCTIONS = {
-  friendly: 'Use a warm, friendly, approachable tone.',
-  casual: 'Use a relaxed, casual tone and natural everyday phrasing.',
-  professional: 'Use a clear, professional tone with polished, direct phrasing.',
-  formal: 'Use a respectful, formal tone and precise, polished phrasing.'
-};
-
-const RESPONSE_STYLE_INSTRUCTIONS = {
-  concise: 'Keep the response brief and focused on the most useful information.',
-  detailed: 'Give a thorough explanation with relevant context, examples, and practical details.',
-  narrative: 'Present the explanation as connected, natural prose rather than a list, unless a list is essential.',
-  bullets: 'Organize the response into concise, easy-to-scan bullet points when appropriate.'
-};
-
-function getPersonalizationInstructions(tone, responseStyle) {
-  const toneInstruction = typeof tone === 'string' && Object.hasOwn(INTERACTION_TONE_INSTRUCTIONS, tone)
-    ? INTERACTION_TONE_INSTRUCTIONS[tone]
-    : INTERACTION_TONE_INSTRUCTIONS.friendly;
-  const styleInstruction = typeof responseStyle === 'string' && Object.hasOwn(RESPONSE_STYLE_INSTRUCTIONS, responseStyle)
-    ? RESPONSE_STYLE_INSTRUCTIONS[responseStyle]
-    : RESPONSE_STYLE_INSTRUCTIONS.concise;
-  return `\nUser response preferences (follow these unless the task requires a different format):\n- Tone: ${toneInstruction}\n- Response style: ${styleInstruction}`;
-}
-
 function buildLumenSystemPrompt({
   langInstruction,
   hasImage,
@@ -95,12 +72,12 @@ function buildLumenSystemPrompt({
   personalizationInstructions,
   memoryPrompt
 }) {
-  return `You are Lumen, a friendly, curious, and trustworthy multimodal AI copilot. Help the user think, explore, and make progress on goals while staying honest about what you know and what you can do.
+  return `You are Lumen, a trustworthy multimodal AI assistant. Respond directly to the user's latest message. Give the simplest sufficient answer, follow their selected reply mode, and end when the request is satisfied.
 
 PERSONALITY
-- Be warm, approachable, thoughtful, and naturally curious. Show interest in the user's goal and explore ideas with them without being intrusive.
+- Be natural, specific, and direct. A personal update without a question needs one short acknowledgment. Then end your turn. Offer advice or further assistance only when the user asks for it.
 - Ask a concise follow-up when an important detail is missing or when the user's preference would materially change the result. Otherwise make a reasonable, low-risk assumption and continue.
-- Be direct for simple requests. Match the user's selected tone and response style.
+- Match the user's selected tone and response style. Do not add a generic offer or follow-up question to make a complete answer longer.
 - Be candid about uncertainty, tool failures, unavailable information, and unfinished work. Never claim to have checked, changed, sent, opened, or created something unless that actually happened.
 
 WORKING ON GOALS
@@ -121,7 +98,7 @@ AVAILABLE CAPABILITIES
 - The interface displays tool-created cards. Summarize their useful contents in plain language; do not copy serialized artifact state or raw tool JSON into the reply unless the user requests it.
 - For schedules, ask for missing dates/time zone when calendar export is requested. Use explicit start/end times and dates; never invent dates. For daily briefings, research real article URLs and dates first; do not fabricate news or verification labels.
 - Analyze images and PDFs supplied by the user. Use browser page or screenshot context only when the user explicitly shares it.
-- Help with career questions, job research, resume feedback, interview practice, and career planning using conversation and available research tools. Do not imply that you can apply for jobs or contact employers.
+- Answer general questions directly from reliable knowledge. Tools are optional for ordinary explanations and personal updates. Use a tool only when its result is relevant to the actual request; do not create unsolicited cards or files.
 - The interface supports voice customization, transcript/session sharing, and isolated previews of generated self-contained HTML pages. Describe these as interface features, not actions you have performed yourself.
 - Use only tools and context actually available in the current request. Do not imply access to other apps, accounts, files, screens, browser controls, or services.
 
@@ -640,7 +617,7 @@ async function runBedrockTool(toolUse, { signal, completedTools } = {}) {
   }
 }
 
-async function runBedrockConversation({ model, messages, systemPrompt, promptText, incomingHistory, webMode, run, stream = false, onEvent, checkpoint, onCheckpoint, forceWebLookup = false, executeTool = executeBedrockTool, webLookupText }) {
+async function runBedrockConversation({ model, messages, systemPrompt, promptText, incomingHistory, responseStyle = 'concise', webMode, run, stream = false, onEvent, checkpoint, onCheckpoint, forceWebLookup = false, executeTool = executeBedrockTool, webLookupText }) {
   return runToolLoop({
     messages,
     tools: modelSupportsTools(model) ? getToolDefinitions({ webMode }) : [],
@@ -654,9 +631,9 @@ async function runBedrockConversation({ model, messages, systemPrompt, promptTex
       if (grounding) return grounding;
       const payload = {
         modelId: model,
-        messages: turnMessages,
-        system: [{ text: systemPrompt + (finalTurn ? '\nTool budget exhausted. Give a final answer using only completed results. State any unfinished work. No further tool calls are available.' : '') }],
-        inferenceConfig: { maxTokens: replyTokenBudget(promptText, incomingHistory, tools.length ? 4096 : 1350, model), temperature: 0.7 },
+        messages: applyReplyPreferences(turnMessages, responseStyle),
+        system: [{ text: systemPrompt + getReplyTurnInstruction(responseStyle) + (finalTurn ? '\nTool budget exhausted. Give a final answer using only completed results. State any unfinished work. No further tool calls are available.' : '') }],
+        inferenceConfig: { maxTokens: conversationTokenBudget(promptText, incomingHistory, responseStyle, model, tools.length > 0), temperature: 0.5 },
         ...(tools.length ? { toolConfig: { tools } } : {})
       };
       if (stream) {
@@ -669,7 +646,7 @@ async function runBedrockConversation({ model, messages, systemPrompt, promptTex
   });
 }
 
-async function runOpenAIConversation({ messages, systemPrompt, promptText, webMode, run, onEvent, checkpoint, onCheckpoint, forceWebLookup = false, executeTool = executeBedrockTool, webLookupText }) {
+async function runOpenAIConversation({ messages, systemPrompt, promptText, incomingHistory, responseStyle = 'concise', webMode, run, onEvent, checkpoint, onCheckpoint, forceWebLookup = false, executeTool = executeBedrockTool, webLookupText }) {
   if (!(process.env.OPENAI_API_KEY || process.env.VITE_OPENAI_API_KEY)) return null;
   return runToolLoop({
     messages, tools: getToolDefinitions({ webMode }), executeTool,
@@ -678,8 +655,9 @@ async function runOpenAIConversation({ messages, systemPrompt, promptText, webMo
       const grounding = requiredWebLookup({ messages: turnMessages, tools, promptText: webLookupText || promptText, enabled: forceWebLookup });
       if (grounding) return grounding;
       const response = await fetchOpenAIResponse({
-        messages: turnMessages, tools, signal, maxTokens: tools.length ? 4096 : 1350,
-        systemPrompt: systemPrompt + (finalTurn ? '\nGive a final answer using completed results. State unfinished work. No further tools are available.' : '')
+        messages: applyReplyPreferences(turnMessages, responseStyle), tools, signal,
+        maxTokens: conversationTokenBudget(promptText, incomingHistory, responseStyle, process.env.OPENAI_MODEL || 'gpt-4o-mini', tools.length > 0),
+        systemPrompt: systemPrompt + getReplyTurnInstruction(responseStyle) + (finalTurn ? '\nGive a final answer using completed results. State unfinished work. No further tools are available.' : '')
       });
       return fromOpenAIResponse(response);
     }
@@ -737,7 +715,7 @@ async function prepareMissionContext(record, signal) {
   }
   if (process.env.OPENAI_API_KEY || process.env.VITE_OPENAI_API_KEY) candidates.push({ provider: 'openai', model: process.env.OPENAI_MODEL || 'gpt-4o-mini' });
   const detectedVoice = detectVoiceChangeIntent(input.transcript);
-  return { messages, systemPrompt, promptText: input.transcript, incomingHistory: input.history, webMode: input.webMode,
+  return { messages, systemPrompt, promptText: input.transcript, incomingHistory: input.history, responseStyle: normalizeResponseStyle(input.responseStyle), webMode: input.webMode,
     webLookupText: input.actionKind === 'verify' ? input.actionData.content : input.actionKind === 'decision' ? `${input.actionData.question} ${input.actionData.options.join(' vs ')}` : input.transcript,
     candidates, candidateIndex: 0, targetVoice: getPollyVoiceForLanguage(input.language, detectedVoice || input.voiceId), voiceChanged: detectedVoice || null, webSources: [],
     memoryData: memory.data, memoryLoadFailed: !!memory.error };
@@ -761,7 +739,7 @@ async function executePersistentMission(record, { signal, onEvent, onCheckpoint,
     context = { ...context, candidateIndex: index };
     await onContext(context);
     try {
-      const options = { ...context, run, checkpoint, onEvent, forceWebLookup: context.webMode === 'always' || ['decision', 'verify'].includes(record.input.actionKind),
+      const options = { ...context, responseStyle: normalizeResponseStyle(record.input.responseStyle), run, checkpoint, onEvent, forceWebLookup: context.webMode === 'always' || ['decision', 'verify'].includes(record.input.actionKind),
         async executeTool(tool, toolContext) { const output = await executeBedrockTool(tool, toolContext); validateDeskToolResult(record.input, tool.name, output); return output; },
         async onCheckpoint(state) { await onCheckpoint(state); checkpoint = state; } };
       result = candidate.provider === 'bedrock'
@@ -1517,7 +1495,7 @@ app.post('/api/converse', chatLimit, async (req, res) => {
       const candidateModels = Array.from(new Set(rawCandidates.filter(Boolean)));
 
       const runConverse = (model) => runBedrockConversation({
-        model, messages: finalMessages, systemPrompt, promptText, incomingHistory, webMode, run
+        model, messages: finalMessages, systemPrompt, promptText, incomingHistory, responseStyle: req.body.responseStyle, webMode, run
       });
 
       for (const model of candidateModels) {
@@ -1544,7 +1522,7 @@ app.post('/api/converse', chatLimit, async (req, res) => {
 
     // Fallback uses the same validated tools and bounded loop.
     if (!replyText) {
-      const result = await runOpenAIConversation({ messages: finalMessages, systemPrompt, webMode, run });
+      const result = await runOpenAIConversation({ messages: finalMessages, systemPrompt, promptText, incomingHistory, responseStyle: req.body.responseStyle, webMode, run });
       if (result) {
         replyText = result.reply;
         modelProvider = 'openai';
@@ -1924,7 +1902,7 @@ app.post('/api/converse/stream', chatLimit, async (req, res) => {
         run.throwIfCancelled();
         try {
           const result = await runBedrockConversation({
-            model, messages: finalMessages, systemPrompt, promptText, incomingHistory, webMode, run,
+            model, messages: finalMessages, systemPrompt, promptText, incomingHistory, responseStyle: req.body.responseStyle, webMode, run,
             stream: true,
             onEvent: (event) => { if (!run.cancelled) res.write(`data: ${JSON.stringify(event)}\n\n`); }
           });
@@ -1945,7 +1923,7 @@ app.post('/api/converse/stream', chatLimit, async (req, res) => {
     // Fallback is allowed only before an earlier model produced output or tool calls.
     if (!replyText) {
       const result = await runOpenAIConversation({
-        messages: finalMessages, systemPrompt, webMode, run,
+        messages: finalMessages, systemPrompt, promptText, incomingHistory, responseStyle: req.body.responseStyle, webMode, run,
         onEvent: (event) => { if (!run.cancelled) res.write(`data: ${JSON.stringify(event)}\n\n`); }
       });
       if (result) {

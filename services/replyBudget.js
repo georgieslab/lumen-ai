@@ -1,3 +1,5 @@
+import { responseTokenBudget } from './responsePreferences.js';
+
 // How much room Lumen gets for one reply. Chat answers stay short and cheap; a request to write a
 // web page, game or demo needs several thousand tokens, and a page cut off in the middle cannot run.
 
@@ -58,6 +60,15 @@ export function replyTokenBudget(prompt, history = [], base = DEFAULT_REPLY_TOKE
   if (!isPageRequest(prompt, history)) return base;
   const isNova = !modelId || String(modelId).toLowerCase().includes('nova');
   return Math.max(base, isNova ? PAGE_REPLY_TOKENS : LONG_MODEL_PAGE_TOKENS);
+}
+
+// A tool call can contain an entire schedule, PDF, or several cards. Keep its
+// arguments intact even in Concise mode; the shared prompt governs prose length
+// on those turns. Text-only synthesis gets the selected mode's smaller budget.
+export function conversationTokenBudget(prompt, history = [], responseStyle = 'concise', modelId = '', toolsAvailable = false) {
+  const explicitlyDetailed = /\b(in detail|detailed (?:explanation|analysis|answer|report)|step[- ]by[- ]step|comprehensive|full (?:draft|report|code|text)|complete (?:draft|report|code|text)|ausf[uü]hrlich|detailliert|paso a paso|en detalle|en d[eé]tail|approfondi|in dettaglio|passo per passo)\b|詳しく|詳細に/u.test(textOf(prompt).toLowerCase());
+  const base = Math.max(responseTokenBudget(responseStyle), explicitlyDetailed ? responseTokenBudget('deep') : 0, toolsAvailable ? 4096 : 0);
+  return replyTokenBudget(prompt, history, base, modelId);
 }
 
 // The model that writes pages. Writing a polished page is much harder than chatting, so it can use a

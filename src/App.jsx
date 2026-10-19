@@ -19,6 +19,8 @@ import { MissionHistoryDrawer } from './components/MissionRunControls';
 import DeskWorkspace, { DeskIcon } from './components/DeskWorkspace';
 import DesktopCustomizeDialog from './components/DesktopCustomizeDialog';
 import MobileToolsSheet from './components/MobileToolsSheet';
+import ReplyModePicker from './components/ReplyModePicker';
+import { normalizeResponseStyle } from '../services/responsePreferences.js';
 import { DESKTOP_ITEMS, loadDesktopVisibility, saveDesktopVisibility, normalizeDesktopVisibility, clearDesktopPositions, desktopPillPosition } from './services/desktopLayout.js';
 import { DESK_ACTIONS, listProjects, listNotifications, pinProjectArtifact } from './services/deskWorkspace.js';
 import { conversationForProject } from './services/conversationHistory.js';
@@ -69,7 +71,6 @@ function isResearchReportRequest(prompt) {
 }
 
 const INTERACTION_TONES = ['friendly', 'casual', 'professional', 'formal'];
-const RESPONSE_STYLES = ['concise', 'detailed', 'narrative', 'bullets'];
 
 function loadPreference(key, options, fallback) {
   try {
@@ -77,6 +78,19 @@ function loadPreference(key, options, fallback) {
     return options.includes(saved) ? saved : fallback;
   } catch (_) {
     return fallback;
+  }
+}
+
+function loadResponseStyle() {
+  try {
+    const saved = localStorage.getItem('lumen_response_style');
+    const normalized = normalizeResponseStyle(saved);
+    if (saved && saved !== normalized) {
+      try { localStorage.setItem('lumen_response_style', normalized); } catch (_) {}
+    }
+    return normalized;
+  } catch (_) {
+    return 'concise';
   }
 }
 
@@ -127,9 +141,7 @@ export default function App() {
   const [interactionTone, setInteractionTone] = useState(() =>
     loadPreference('lumen_interaction_tone', INTERACTION_TONES, 'friendly')
   );
-  const [responseStyle, setResponseStyle] = useState(() =>
-    loadPreference('lumen_response_style', RESPONSE_STYLES, 'concise')
-  );
+  const [responseStyle, setResponseStyle] = useState(loadResponseStyle);
   const [showLogDrawer, setShowLogDrawer] = useState(false);
   const [showMissions, setShowMissions] = useState(false);
   const [savedMissions, setSavedMissions] = useState([]);
@@ -283,11 +295,30 @@ export default function App() {
   const suppressWeatherTileClickRef = useRef(false);
   const [showWelcomeGreeting, setShowWelcomeGreeting] = useState(false);
   const workspaceHeaderRef = useRef(null);
+  const composerFooterRef = useRef(null);
   const personaElementRef = useRef(null);
   const weatherElementRef = useRef(null);
 
   const t = getTranslations(activeLanguage);
   const feedbackCopy = getFeedbackCopy(activeLanguage);
+
+  // The fixed composer grows with its mode toolbar, attachments, and typed text.
+  // Reserve its actual height in the mobile transcript instead of a fixed gap.
+  useEffect(() => {
+    const footer = composerFooterRef.current;
+    const stage = footer?.closest('.lumen-app-stage');
+    if (!footer || !stage) return;
+    const measure = () => stage.style.setProperty('--lumen-composer-footer-height', `${footer.offsetHeight}px`);
+    const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(measure) : null;
+    observer?.observe(footer);
+    window.addEventListener('resize', measure);
+    measure();
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', measure);
+      stage.style.removeProperty('--lumen-composer-footer-height');
+    };
+  }, []);
 
   // Saved drag positions must remain usable after a resize or a taller header.
   useEffect(() => {
@@ -561,8 +592,8 @@ export default function App() {
     } catch (_) {}
   };
 
-  const handleCycleResponseStyle = () => {
-    const next = RESPONSE_STYLES[(RESPONSE_STYLES.indexOf(responseStyle) + 1) % RESPONSE_STYLES.length];
+  const handleResponseStyleChange = value => {
+    const next = normalizeResponseStyle(value);
     setResponseStyle(next);
     try {
       localStorage.setItem('lumen_response_style', next);
@@ -1814,13 +1845,6 @@ export default function App() {
       keepOpen: true
     },
     {
-      icon: '✍️',
-      label: t.personalization.responseStyle,
-      description: `${t.personalization.styles[responseStyle]} · ${t.personalization.styleHint}`,
-      onSelect: handleCycleResponseStyle,
-      keepOpen: true
-    },
-    {
       icon: '🎙️',
       label: activeVoice,
       description: formatString(t.header.voiceTooltip, { voice: activeVoice }),
@@ -2440,6 +2464,7 @@ export default function App() {
               </div>
             ) : (
               <>
+                <ReplyModePicker inline value={responseStyle} onChange={handleResponseStyleChange} copy={t.personalization} />
                 <section className="control-menu-nav-section" aria-labelledby="control-menu-nav-title">
                   <h3 id="control-menu-nav-title" className="control-menu-section-title">{t.header.navigationTitle}</h3>
                   <div className="control-menu-grid control-menu-nav-grid">
@@ -2840,73 +2865,90 @@ export default function App() {
 
       {/* Bottom Spatial Command Bar */}
       <footer 
+        ref={composerFooterRef}
         className={`lumen-footer ${isChatWindowDragging ? 'is-chat-window-dragging' : ''}`}
         style={{
           '--chat-window-drag-x': `${showLogDrawer ? chatWindowOffset.x : 0}px`,
           '--chat-window-drag-y': `${showLogDrawer ? chatWindowOffset.y : 0}px`
         }}
       >
-        <form 
-          className="bottom-input-form"
+        <div className="lumen-composer"
           style={{
             transform: (showLogDrawer && chatWindowOffset.x)
               ? `translateX(clamp(calc(-50vw + 290px), ${chatWindowOffset.x}px, calc(50vw - 290px)))`
               : undefined
           }}
-          onSubmit={(e) => {
-            e.preventDefault();
-            handleSendMessage();
-          }}
         >
-          <button
-            type="button"
-            className="bottom-spatial-attach-btn"
-            onClick={() => setIsAttachmentMenuOpen(true)}
-            title={t.footer.attachTooltip}
-            disabled={runInProgress}
-            aria-label={t.footer.attachTooltip}
-            aria-haspopup="dialog"
-            aria-expanded={isAttachmentMenuOpen}
+          <form
+            className="bottom-input-form"
+            onPointerMove={event => {
+              if (event.pointerType === 'touch' || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+              const form = event.currentTarget;
+              const rect = form.getBoundingClientRect();
+              if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) return;
+              form.style.setProperty('--composer-glow-x', `${Math.max(0, Math.min(100, (event.clientX - rect.left) / rect.width * 100))}%`);
+              form.style.setProperty('--composer-glow-y', `${Math.max(0, Math.min(100, (event.clientY - rect.top) / rect.height * 100))}%`);
+            }}
+            onPointerLeave={event => {
+              event.currentTarget.style.removeProperty('--composer-glow-x');
+              event.currentTarget.style.removeProperty('--composer-glow-y');
+            }}
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleSendMessage();
+            }}
           >
-            <span className="attachment-trigger-plus" aria-hidden="true">+</span>
-          </button>
+            <button
+              type="button"
+              className="bottom-spatial-attach-btn"
+              onClick={() => setIsAttachmentMenuOpen(true)}
+              title={t.footer.attachTooltip}
+              disabled={runInProgress}
+              aria-label={t.footer.attachTooltip}
+              aria-haspopup="dialog"
+              aria-expanded={isAttachmentMenuOpen}
+            >
+              <span className="attachment-trigger-plus" aria-hidden="true">+</span>
+            </button>
 
-          <textarea 
-            ref={textInputRef}
-            rows={1}
-            className="bottom-text-field"
-            placeholder={
-              selectedFile 
-                ? (selectedFile.isPdf ? t.footer.placeholderPdf : t.footer.placeholderImg) 
-                : t.footer.placeholderNormal
-            }
-            value={textInput}
-            onChange={(event) => {
-              setTextInput(event.target.value);
-              if (!event.target.value.trim()) setDecisionMissionDraft(false);
-            }}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault();
-                if ((textInput.trim() || selectedFile) && !runInProgress) {
-                  handleSendMessage();
-                }
+            <textarea
+              ref={textInputRef}
+              rows={1}
+              className="bottom-text-field"
+              placeholder={
+                selectedFile
+                  ? (selectedFile.isPdf ? t.footer.placeholderPdf : t.footer.placeholderImg)
+                  : t.footer.placeholderNormal
               }
-            }}
-          />
-          <button 
-            type="submit" 
-            className="bottom-submit-btn"
-            disabled={(!textInput.trim() && !selectedFile) || runInProgress}
-            aria-label={t.footer.sendTooltip}
-            title={t.footer.sendTooltip}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="22" y1="2" x2="11" y2="13"></line>
-              <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-            </svg>
-          </button>
-        </form>
+              value={textInput}
+              onChange={(event) => {
+                setTextInput(event.target.value);
+                if (!event.target.value.trim()) setDecisionMissionDraft(false);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && !event.shiftKey) {
+                  event.preventDefault();
+                  if ((textInput.trim() || selectedFile) && !runInProgress) {
+                    handleSendMessage();
+                  }
+                }
+              }}
+            />
+            <ReplyModePicker value={responseStyle} onChange={handleResponseStyleChange} copy={t.personalization} />
+            <button
+              type="submit"
+              className="bottom-submit-btn"
+              disabled={(!textInput.trim() && !selectedFile) || runInProgress}
+              aria-label={t.footer.sendTooltip}
+              title={t.footer.sendTooltip}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="22" y1="2" x2="11" y2="13"></line>
+                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+              </svg>
+            </button>
+          </form>
+        </div>
       </footer>
 
       {isAttachmentMenuOpen && (

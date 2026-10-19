@@ -75,9 +75,12 @@ export const TRANSLATIONS = {
       tone: "Conversation tone",
       toneHint: "Tap to cycle",
       tones: { friendly: "Friendly", casual: "Casual", professional: "Professional", formal: "Formal" },
-      responseStyle: "Response style",
-      styleHint: "Tap to cycle",
-      styles: { concise: "Concise", detailed: "Detailed", narrative: "Narrative", bullets: "Bullet points" }
+      responseStyle: "Reply style",
+      chooseStyle: "Choose reply style",
+      styleHint: "Choose how much detail Lumen gives.",
+      styles: { concise: "Concise", balanced: "Balanced", deep: "Deep dive", bullets: "Bullet points" },
+      styleDescriptions: { concise: "Short, direct answers. Just what you need.", balanced: "A clear answer with helpful context.", deep: "Thorough analysis with useful reasons and examples.", bullets: "Key points in a compact, scannable list." },
+      simpleUpdatesHint: "Simple updates stay brief in every style."
     },
     header: {
       atmosphere: "Atmosphere",
@@ -270,7 +273,7 @@ export const TRANSLATIONS = {
       chooseFile: "Choose a photo or PDF",
       cancel: "Cancel",
       sendTooltip: "Send message",
-      placeholderNormal: "Speak or type your thoughts to Lumen...",
+      placeholderNormal: "Type your thoughts",
       placeholderPdf: "Ask Lumen about this PDF document...",
       placeholderImg: "Ask Lumen about this image..."
     },
@@ -366,8 +369,11 @@ export const TRANSLATIONS = {
       toneHint: "Toca para cambiar",
       tones: { friendly: "Amable", casual: "Informal", professional: "Profesional", formal: "Formal" },
       responseStyle: "Estilo de respuesta",
-      styleHint: "Toca para cambiar",
-      styles: { concise: "Conciso", detailed: "Detallado", narrative: "Narrativo", bullets: "Viñetas" }
+      chooseStyle: "Elegir estilo de respuesta",
+      styleHint: "Elige cuánto detalle quieres de Lumen.",
+      styles: { concise: "Conciso", balanced: "Equilibrado", deep: "En profundidad", bullets: "Viñetas" },
+      styleDescriptions: { concise: "Respuestas breves y directas. Solo lo necesario.", balanced: "Una respuesta clara con contexto útil.", deep: "Análisis completo con razones y ejemplos útiles.", bullets: "Puntos clave en una lista breve y fácil de leer." },
+      simpleUpdatesHint: "Las actualizaciones sencillas son breves en todos los estilos."
     },
     header: {
       atmosphere: "Atmósfera",
@@ -560,7 +566,7 @@ export const TRANSLATIONS = {
       chooseFile: "Elegir una foto o PDF",
       cancel: "Cancelar",
       sendTooltip: "Enviar mensaje",
-      placeholderNormal: "Habla o escribe tus ideas para Lumen...",
+      placeholderNormal: "Escribe tus ideas",
       placeholderPdf: "Pregunta a Lumen sobre este documento PDF...",
       placeholderImg: "Pregunta a Lumen sobre esta imagen..."
     },
@@ -656,8 +662,11 @@ export const TRANSLATIONS = {
       toneHint: "Touchez pour changer",
       tones: { friendly: "Amical", casual: "Décontracté", professional: "Professionnel", formal: "Formel" },
       responseStyle: "Style de réponse",
-      styleHint: "Touchez pour changer",
-      styles: { concise: "Concis", detailed: "Détaillé", narrative: "Narratif", bullets: "À puces" }
+      chooseStyle: "Choisir le style de réponse",
+      styleHint: "Choisissez le niveau de détail des réponses de Lumen.",
+      styles: { concise: "Concis", balanced: "Équilibré", deep: "Approfondi", bullets: "Liste à puces" },
+      styleDescriptions: { concise: "Des réponses courtes et directes. Juste l’essentiel.", balanced: "Une réponse claire avec du contexte utile.", deep: "Une analyse détaillée avec des raisons et des exemples utiles.", bullets: "Les points clés dans une liste courte et facile à lire." },
+      simpleUpdatesHint: "Les mises à jour simples restent brèves dans tous les styles."
     },
     header: {
       atmosphere: "Atmosphère",
@@ -850,7 +859,7 @@ export const TRANSLATIONS = {
       chooseFile: "Choisir une photo ou un PDF",
       cancel: "Annuler",
       sendTooltip: "Envoyer le message",
-      placeholderNormal: "Parlez ou écrivez vos pensées à Lumen...",
+      placeholderNormal: "Écrivez vos pensées",
       placeholderPdf: "Posez une question sur ce document PDF...",
       placeholderImg: "Posez une question sur cette image..."
     },
@@ -946,8 +955,11 @@ export const TRANSLATIONS = {
       toneHint: "Zum Wechseln tippen",
       tones: { friendly: "Freundlich", casual: "Locker", professional: "Professionell", formal: "Förmlich" },
       responseStyle: "Antwortstil",
-      styleHint: "Zum Wechseln tippen",
-      styles: { concise: "Kurz", detailed: "Detailliert", narrative: "Erzählend", bullets: "Stichpunkte" }
+      chooseStyle: "Antwortstil wählen",
+      styleHint: "Wähle, wie ausführlich Lumen antwortet.",
+      styles: { concise: "Kurz", balanced: "Ausgewogen", deep: "Vertieft", bullets: "Stichpunkte" },
+      styleDescriptions: { concise: "Kurze, direkte Antworten. Nur das Wesentliche.", balanced: "Eine klare Antwort mit hilfreichem Kontext.", deep: "Eine gründliche Analyse mit hilfreichen Gründen und Beispielen.", bullets: "Die wichtigsten Punkte in einer übersichtlichen Liste." },
+      simpleUpdatesHint: "Einfache Mitteilungen bleiben bei jedem Stil kurz."
     },
     header: {
       atmosphere: "Atmosphäre",
@@ -1140,7 +1152,7 @@ export const TRANSLATIONS = {
       chooseFile: "Foto oder PDF auswählen",
       cancel: "Abbrechen",
       sendTooltip: "Nachricht senden",
-      placeholderNormal: "Sprechen oder schreiben Sie mit Lumen...",
+      placeholderNormal: "Schreib deine Gedanken",
       placeholderPdf: "Lumen zu diesem PDF-Dokument befragen...",
       placeholderImg: "Lumen zu diesem Bild befragen..."
     },
@@ -1236,8 +1248,11 @@ export const TRANSLATIONS = {
       toneHint: "タップして変更",
       tones: { friendly: "親しみやすい", casual: "カジュアル", professional: "プロフェッショナル", formal: "フォーマル" },
       responseStyle: "回答スタイル",
-      styleHint: "タップして変更",
-      styles: { concise: "簡潔", detailed: "詳細", narrative: "文章形式", bullets: "箇条書き" }
+      chooseStyle: "回答スタイルを選ぶ",
+      styleHint: "Lumenの回答の詳しさを選べます。",
+      styles: { concise: "簡潔", balanced: "バランス", deep: "掘り下げ", bullets: "箇条書き" },
+      styleDescriptions: { concise: "必要なことだけを短く、直接的に。", balanced: "役立つ背景情報を添えた、わかりやすい回答。", deep: "理由や具体例を含めた、詳しい分析。", bullets: "要点を読みやすい短いリストで。" },
+      simpleUpdatesHint: "簡単な近況報告には、どのスタイルでも短く答えます。"
     },
     header: {
       atmosphere: "環境の雰囲気",
@@ -1430,7 +1445,7 @@ export const TRANSLATIONS = {
       chooseFile: "写真またはPDFを選択",
       cancel: "キャンセル",
       sendTooltip: "送信",
-      placeholderNormal: "Lumenに話しかけるか、入力してください...",
+      placeholderNormal: "考えを入力してください",
       placeholderPdf: "このPDF文書について質問する...",
       placeholderImg: "この画像について質問する..."
     },
@@ -1526,8 +1541,11 @@ export const TRANSLATIONS = {
       toneHint: "Tocca per cambiare",
       tones: { friendly: "Amichevole", casual: "Informale", professional: "Professionale", formal: "Formale" },
       responseStyle: "Stile di risposta",
-      styleHint: "Tocca per cambiare",
-      styles: { concise: "Conciso", detailed: "Dettagliato", narrative: "Narrativo", bullets: "Elenchi puntati" }
+      chooseStyle: "Scegli lo stile di risposta",
+      styleHint: "Scegli quanti dettagli vuoi da Lumen.",
+      styles: { concise: "Conciso", balanced: "Equilibrato", deep: "Approfondito", bullets: "Punti elenco" },
+      styleDescriptions: { concise: "Risposte brevi e dirette. Solo ciò che serve.", balanced: "Una risposta chiara con contesto utile.", deep: "Un’analisi completa con motivazioni ed esempi utili.", bullets: "Punti chiave in un elenco compatto e facile da leggere." },
+      simpleUpdatesHint: "Gli aggiornamenti semplici restano brevi in ogni stile."
     },
     header: {
       atmosphere: "Atmosfera",
@@ -1720,7 +1738,7 @@ export const TRANSLATIONS = {
       chooseFile: "Scegli una foto o un PDF",
       cancel: "Annulla",
       sendTooltip: "Invia messaggio",
-      placeholderNormal: "Parla o scrivi a Lumen...",
+      placeholderNormal: "Scrivi i tuoi pensieri",
       placeholderPdf: "Chiedi a Lumen di questo documento PDF...",
       placeholderImg: "Chiedi a Lumen di questa immagine..."
     },
